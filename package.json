@@ -1,11 +1,23 @@
 {
-  "name": "btc-miner-valuation-app",
-  "version": "6.0.0",
-  "description": "BTC Miner Valuation Web App with HPC/AI Lease DCF Model",
+  "name": "btc-miner-valuation-terminal-v7",
+  "version": "7.0.0",
+  "description": "BTC Miner Valuation Terminal with Rule-of-Thumb HPC/AI Lease Valuation Engine",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
+  "keywords": [
+    "btc",
+    "bitcoin",
+    "mining",
+    "valuation",
+    "hpc",
+    "ai",
+    "datacenter"
+  ],
+  "author": "",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2"
   }

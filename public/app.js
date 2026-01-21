@@ -1,27 +1,122 @@
-// BTC Miner Valuation App v6 - Comprehensive Edition
+// BTC Miner Valuation App v7 - Rule-of-Thumb Valuation Engine
 // ============================================================
 
-// Global state
+// ============================================================
+// GLOBAL STATE
+// ============================================================
 let btcPrice = 89668;
 let ethPrice = 2994;
-let minerOverrides = {};
-let projectFidoodles = {}; // Per-project fidoodle factors
-let countryFactors = {};
 let map = null;
 let markers = [];
+
+// User data (persisted)
+let projectOverrides = {};  // Per-project overrides
+let customProjects = [];    // User-added projects
+let savedFactors = null;    // User-saved global factors
 
 // ============================================================
 // HYPERSCALER TENANTS (includes AMD per user request)
 // ============================================================
 const HYPERSCALER_TENANTS = [
     'CoreWeave', 'Microsoft', 'AWS', 'Google', 'Meta', 'Oracle',
-    'Anthropic', 'AMD', 'Fluidstack/Google', 'Fluidstack/Anthropic'
+    'Anthropic', 'AMD', 'Fluidstack/Google', 'Fluidstack/Anthropic',
+    'Fluidstack', 'Core42', 'G42'
 ];
 
 function isHyperscaler(tenant) {
     if (!tenant) return false;
     return HYPERSCALER_TENANTS.some(h => tenant.toLowerCase().includes(h.toLowerCase()));
 }
+
+// ============================================================
+// DEFAULT GLOBAL FACTORS
+// ============================================================
+const DEFAULT_FACTORS = {
+    // Global Valuation Parameters
+    baseNoiPerMw: 1.40,      // $M per MW per year
+    baseCapRate: 12.0,       // %
+    hyperscalerPremium: 1.10, // multiplier
+    defaultTerm: 15,          // years
+    escalator: 2.5,           // % annual rent growth
+    pue: 1.30,                // Gross-to-IT conversion
+    fidoodleDefault: 1.00,    // Default fidoodle
+
+    // Credit Quality (Cap Rate Adders in %)
+    credit: {
+        hyperscaler: -2.0,
+        ig: -1.0,
+        spec: 1.0,
+        unrated: 2.0
+    },
+
+    // Lease Structure Multipliers
+    lease: {
+        nnn: 1.00,
+        gross: 0.95,
+        hosting: 0.85
+    },
+
+    // Ownership Multipliers
+    ownership: {
+        fee: 1.00,
+        ground: 0.90,
+        jv: 0.80,
+        nopower: 0.70
+    },
+
+    // Build/Energization Multipliers
+    build: {
+        operational: 1.00,
+        contracted: 0.85,
+        development: 0.60,
+        pipeline: 0.40
+    },
+
+    // Concentration Multipliers
+    concentration: {
+        multi: 1.00,
+        'single-hyper': 0.95,
+        'single-ig': 0.90,
+        bespoke: 0.80
+    },
+
+    // Size Band Multipliers
+    size: {
+        500: 1.15,
+        250: 1.05,
+        100: 1.00,
+        50: 0.90,
+        0: 0.80
+    },
+
+    // Country Multipliers
+    country: {
+        'United States': 1.00,
+        'USA': 1.00,
+        'Canada': 0.90,
+        'Norway': 0.85,
+        'Paraguay': 0.70,
+        'Bhutan': 0.50,
+        'Ethiopia': 0.00,
+        'UAE': 0.80,
+        'Multiple': 0.80
+    },
+
+    // Grid Multipliers
+    grid: {
+        'ERCOT': 1.05,
+        'PJM': 1.00,
+        'MISO': 0.95,
+        'NYISO': 0.90,
+        'SPP': 0.95,
+        'other-us': 0.90,
+        'canada': 0.90,
+        'intl': 0.75
+    }
+};
+
+// Active factors (merge of defaults and user saved)
+let factors = JSON.parse(JSON.stringify(DEFAULT_FACTORS));
 
 // ============================================================
 // MINER DATA - From HODL Value sheet
@@ -221,145 +316,346 @@ const MINER_DATA = {
 // ============================================================
 const ALL_PROJECTS = [
     // APLD Projects
-    { id: 1, ticker: 'APLD', name: 'Ellendale, ND (Polaris Forge 1) - CoreWeave Bldg 1', phase: 'Capacity Online', country: 'United States', state: 'ND', gross_mw: 130, it_mw: 100, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_value: 2750, lease_years: 15, annual_rev: 183, noi_pct: 85, source_url: 'https://drive.google.com/file/d/1UhQsQqkob2KHu0I-jjosxlQqi854LSSD/view', lat: 46.002750, lng: -98.527046 },
-    { id: 2, ticker: 'APLD', name: 'Ellendale, ND (Polaris Forge 1) - CoreWeave Bldg 2', phase: 'Power under construction', country: 'United States', state: 'ND', gross_mw: 195, it_mw: 150, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_value: 4125, lease_years: 15, annual_rev: 275, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases/detail/142', lat: 46.002750, lng: -98.527046 },
-    { id: 3, ticker: 'APLD', name: 'Ellendale, ND (Polaris Forge 1) - CoreWeave Bldg 3', phase: 'Power under construction', country: 'United States', state: 'ND', gross_mw: 195, it_mw: 150, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_value: 4125, lease_years: 15, annual_rev: 275, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases/detail/142', lat: 46.002750, lng: -98.527046 },
-    { id: 4, ticker: 'APLD', name: 'Harwood, ND (Polaris Forge 2) - Hyperscaler Bldg 1', phase: 'Power under construction', country: 'United States', state: 'ND', gross_mw: 130, it_mw: 100, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'IG Hyperscaler (TBA)', lease_value: 2500, lease_years: 15, annual_rev: 167, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.979411, lng: -96.880638 },
-    { id: 5, ticker: 'APLD', name: 'Harwood, ND (Polaris Forge 2) - Hyperscaler Bldg 2', phase: 'Power under construction', country: 'United States', state: 'ND', gross_mw: 130, it_mw: 100, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'IG Hyperscaler (TBA)', lease_value: 2500, lease_years: 15, annual_rev: 167, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.979411, lng: -96.880638 },
-    { id: 6, ticker: 'APLD', name: 'Harwood, ND (Polaris Forge 2) - ROFR Expansion', phase: 'Pipeline', country: 'United States', state: 'ND', gross_mw: 1040, it_mw: 800, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'US Hyperscaler (IG)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.979411, lng: -96.880638 },
-    { id: 7, ticker: 'APLD', name: '3 NEW sites - Advanced Discussions', phase: 'Pipeline', country: 'United States', state: '', gross_mw: 1170, it_mw: 900, pue: 1.3, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'IG Hyperscaler (TBD)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 85, source_url: '', lat: null, lng: null },
-    { id: 8, ticker: 'APLD', name: 'Jamestown, ND - BTC Mining (legacy)', phase: 'Operational', country: 'United States', state: 'ND', gross_mw: 106, it_mw: 82, pue: 1.3, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.910556, lng: -98.708056 },
-    { id: 9, ticker: 'APLD', name: 'Ellendale, ND - BTC Hosting (legacy)', phase: 'Operational', country: 'United States', state: 'ND', gross_mw: 207, it_mw: 159, pue: 1.3, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: 'Self/hosting', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.002750, lng: -98.527046 },
+    { id: 1, ticker: 'APLD', name: 'Ellendale, ND (Polaris Forge 1) - CoreWeave Bldg 1', country: 'United States', state: 'ND', gross_mw: 130, it_mw: 100, grid: 'MISO', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 15, annual_rev: 183, noi_pct: 85, source_url: 'https://drive.google.com/file/d/1UhQsQqkob2KHu0I-jjosxlQqi854LSSD/view', lat: 46.002750, lng: -98.527046 },
+    { id: 2, ticker: 'APLD', name: 'Ellendale, ND (Polaris Forge 1) - CoreWeave Bldg 2', country: 'United States', state: 'ND', gross_mw: 195, it_mw: 150, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 275, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases/detail/142', lat: 46.002750, lng: -98.527046 },
+    { id: 3, ticker: 'APLD', name: 'Ellendale, ND (Polaris Forge 1) - CoreWeave Bldg 3', country: 'United States', state: 'ND', gross_mw: 195, it_mw: 150, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 275, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases/detail/142', lat: 46.002750, lng: -98.527046 },
+    { id: 4, ticker: 'APLD', name: 'Harwood, ND (Polaris Forge 2) - Hyperscaler Bldg 1', country: 'United States', state: 'ND', gross_mw: 130, it_mw: 100, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'IG Hyperscaler (TBA)', lease_years: 15, annual_rev: 167, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.979411, lng: -96.880638 },
+    { id: 5, ticker: 'APLD', name: 'Harwood, ND (Polaris Forge 2) - Hyperscaler Bldg 2', country: 'United States', state: 'ND', gross_mw: 130, it_mw: 100, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'IG Hyperscaler (TBA)', lease_years: 15, annual_rev: 167, noi_pct: 85, source_url: 'https://ir.applieddigital.com/news-events/press-releases', lat: 46.979411, lng: -96.880638 },
+    { id: 6, ticker: 'APLD', name: 'Harwood, ND (Polaris Forge 2) - ROFR Expansion', country: 'United States', state: 'ND', gross_mw: 1040, it_mw: 800, grid: 'MISO', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'US Hyperscaler (IG)', lease_years: 0, annual_rev: 0, noi_pct: 85, source_url: '', lat: 46.979411, lng: -96.880638 },
+    { id: 7, ticker: 'APLD', name: '3 NEW sites - Advanced Discussions', country: 'United States', state: '', gross_mw: 1170, it_mw: 900, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'IG Hyperscaler (TBD)', lease_years: 0, annual_rev: 0, noi_pct: 85, source_url: '', lat: null, lng: null },
+    { id: 8, ticker: 'APLD', name: 'Jamestown, ND - BTC Mining (legacy)', country: 'United States', state: 'ND', gross_mw: 106, it_mw: 82, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 46.910556, lng: -98.708056 },
+    { id: 9, ticker: 'APLD', name: 'Ellendale, ND - BTC Hosting (legacy)', country: 'United States', state: 'ND', gross_mw: 207, it_mw: 159, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: 'Self/hosting', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 46.002750, lng: -98.527046 },
 
     // BITF Projects
-    { id: 10, ticker: 'BITF', name: 'Scrubgrass Plant, PA (Stronghold)', phase: 'Operational', country: 'United States', state: 'PA', gross_mw: 85, it_mw: 65, pue: 1.3, grid: 'PJM', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001858293', lat: 41.211870, lng: -79.779720 },
-    { id: 11, ticker: 'BITF', name: 'Panther Creek, PA (HPC/AI campus)', phase: 'Development', country: 'United States', state: 'PA', gross_mw: 307, it_mw: 275, pue: 1.12, grid: 'PJM', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001858293', lat: 40.631480, lng: -76.192722 },
-    { id: 12, ticker: 'BITF', name: 'Quebec portfolio (6 sites)', phase: 'Operational', country: 'Canada', state: 'QC', gross_mw: 70, it_mw: 54, pue: 1.3, grid: 'HQ', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001858293', lat: 53.000000, lng: -70.000000 },
-    { id: 13, ticker: 'BITF', name: 'Sharon, PA', phase: 'Operational', country: 'United States', state: 'PA', gross_mw: 25, it_mw: 19, pue: 1.3, grid: 'PJM', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 41.233112, lng: -80.493403 },
-    { id: 14, ticker: 'BITF', name: 'Baie-Comeau, Quebec', phase: 'Operational', country: 'Canada', state: 'QC', gross_mw: 34, it_mw: 26, pue: 1.3, grid: 'HQ', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 49.221242, lng: -68.150162 },
-    { id: 15, ticker: 'BITF', name: 'Washington State (Stronghold)', phase: 'Operational', country: 'United States', state: 'WA', gross_mw: 10, it_mw: 8, pue: 1.3, grid: 'BPA', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 47.391700, lng: -121.570800 },
+    { id: 10, ticker: 'BITF', name: 'Scrubgrass Plant, PA (Stronghold)', country: 'United States', state: 'PA', gross_mw: 85, it_mw: 65, grid: 'PJM', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 41.211870, lng: -79.779720 },
+    { id: 11, ticker: 'BITF', name: 'Panther Creek, PA (HPC/AI campus)', country: 'United States', state: 'PA', gross_mw: 307, it_mw: 275, grid: 'PJM', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 40.631480, lng: -76.192722 },
+    { id: 12, ticker: 'BITF', name: 'Quebec portfolio (6 sites)', country: 'Canada', state: 'QC', gross_mw: 70, it_mw: 54, grid: 'HQ', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 53.000000, lng: -70.000000 },
+    { id: 13, ticker: 'BITF', name: 'Sharon, PA', country: 'United States', state: 'PA', gross_mw: 25, it_mw: 19, grid: 'PJM', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 41.233112, lng: -80.493403 },
+    { id: 14, ticker: 'BITF', name: 'Baie-Comeau, Quebec', country: 'Canada', state: 'QC', gross_mw: 34, it_mw: 26, grid: 'HQ', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 49.221242, lng: -68.150162 },
+    { id: 15, ticker: 'BITF', name: 'Washington State (Stronghold)', country: 'United States', state: 'WA', gross_mw: 10, it_mw: 8, grid: 'BPA', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 47.391700, lng: -121.570800 },
 
     // BTDR Projects
-    { id: 16, ticker: 'BTDR', name: 'Clarington, OH - 570MW', phase: 'Operational', country: 'United States', state: 'OH', gross_mw: 570, it_mw: 456, pue: 1.25, grid: 'PJM', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001936702', lat: 39.765631, lng: -80.871206 },
-    { id: 17, ticker: 'BTDR', name: 'Rockdale, TX', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 623, it_mw: 498, pue: 1.25, grid: 'ERCOT', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.655628, lng: -97.001389 },
-    { id: 18, ticker: 'BTDR', name: 'Jigmeling, Bhutan - 500MW', phase: 'Operational', country: 'Bhutan', state: '', gross_mw: 500, it_mw: 442, pue: 1.13, grid: 'BTN', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 26.912150, lng: 90.390260 },
-    { id: 19, ticker: 'BTDR', name: 'Niles, OH - 300MW', phase: 'Operational', country: 'United States', state: 'OH', gross_mw: 300, it_mw: 240, pue: 1.25, grid: 'PJM', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 41.182778, lng: -80.765556 },
-    { id: 20, ticker: 'BTDR', name: 'Tydal, Norway - 50MW', phase: 'Operational', country: 'Norway', state: '', gross_mw: 50, it_mw: 44, pue: 1.13, grid: 'NOR', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 63.044800, lng: 11.650400 },
-    { id: 21, ticker: 'BTDR', name: 'Tydal, Norway - 175MW', phase: 'Operational', country: 'Norway', state: '', gross_mw: 175, it_mw: 155, pue: 1.13, grid: 'NOR', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 63.044800, lng: 11.650400 },
-    { id: 22, ticker: 'BTDR', name: 'Fox Creek, Alberta - 101MW', phase: 'Operational', country: 'Canada', state: 'AB', gross_mw: 101, it_mw: 89, pue: 1.13, grid: 'AESO', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 54.402168, lng: -116.808907 },
-    { id: 23, ticker: 'BTDR', name: 'Gedu, Bhutan', phase: 'Operational', country: 'Bhutan', state: '', gross_mw: 100, it_mw: 88, pue: 1.13, grid: 'BTN', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 26.922624, lng: 89.523811 },
-    { id: 24, ticker: 'BTDR', name: 'Molde, Norway', phase: 'Operational', country: 'Norway', state: '', gross_mw: 84, it_mw: 74, pue: 1.13, grid: 'NOR', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 62.733333, lng: 7.183333 },
-    { id: 25, ticker: 'BTDR', name: 'Knoxville, TN', phase: 'Operational', country: 'United States', state: 'TN', gross_mw: 95, it_mw: 76, pue: 1.25, grid: 'TVA', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.960100, lng: -83.920557 },
-    { id: 26, ticker: 'BTDR', name: 'Ethiopia - Phase 1', phase: 'Operational', country: 'Ethiopia', state: '', gross_mw: 40, it_mw: 35, pue: 1.13, grid: 'ETH', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 8.000000, lng: 39.000000 },
-    { id: 27, ticker: 'BTDR', name: 'Ethiopia - Phase 2', phase: 'Development', country: 'Ethiopia', state: '', gross_mw: 10, it_mw: 9, pue: 1.13, grid: 'ETH', current_use: 'Mixed', status: 'Development', lessee: 'Self/mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 8.000000, lng: 39.000000 },
+    { id: 16, ticker: 'BTDR', name: 'Clarington, OH - 570MW', country: 'United States', state: 'OH', gross_mw: 570, it_mw: 456, grid: 'PJM', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 39.765631, lng: -80.871206 },
+    { id: 17, ticker: 'BTDR', name: 'Rockdale, TX', country: 'United States', state: 'TX', gross_mw: 623, it_mw: 498, grid: 'ERCOT', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.655628, lng: -97.001389 },
+    { id: 18, ticker: 'BTDR', name: 'Jigmeling, Bhutan - 500MW', country: 'Bhutan', state: '', gross_mw: 500, it_mw: 442, grid: 'BTN', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 26.912150, lng: 90.390260 },
+    { id: 19, ticker: 'BTDR', name: 'Niles, OH - 300MW', country: 'United States', state: 'OH', gross_mw: 300, it_mw: 240, grid: 'PJM', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 41.182778, lng: -80.765556 },
+    { id: 20, ticker: 'BTDR', name: 'Tydal, Norway - 50MW', country: 'Norway', state: '', gross_mw: 50, it_mw: 44, grid: 'NOR', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 63.044800, lng: 11.650400 },
+    { id: 21, ticker: 'BTDR', name: 'Tydal, Norway - 175MW', country: 'Norway', state: '', gross_mw: 175, it_mw: 155, grid: 'NOR', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 63.044800, lng: 11.650400 },
+    { id: 22, ticker: 'BTDR', name: 'Fox Creek, Alberta - 101MW', country: 'Canada', state: 'AB', gross_mw: 101, it_mw: 89, grid: 'AESO', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 54.402168, lng: -116.808907 },
+    { id: 23, ticker: 'BTDR', name: 'Gedu, Bhutan', country: 'Bhutan', state: '', gross_mw: 100, it_mw: 88, grid: 'BTN', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 26.922624, lng: 89.523811 },
+    { id: 24, ticker: 'BTDR', name: 'Molde, Norway', country: 'Norway', state: '', gross_mw: 84, it_mw: 74, grid: 'NOR', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 62.733333, lng: 7.183333 },
+    { id: 25, ticker: 'BTDR', name: 'Knoxville, TN', country: 'United States', state: 'TN', gross_mw: 95, it_mw: 76, grid: 'TVA', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.960100, lng: -83.920557 },
+    { id: 26, ticker: 'BTDR', name: 'Ethiopia - Phase 1', country: 'Ethiopia', state: '', gross_mw: 40, it_mw: 35, grid: 'ETH', current_use: 'Mixed', status: 'Operational', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 8.000000, lng: 39.000000 },
+    { id: 27, ticker: 'BTDR', name: 'Ethiopia - Phase 2', country: 'Ethiopia', state: '', gross_mw: 10, it_mw: 9, grid: 'ETH', current_use: 'Mixed', status: 'Development', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 8.000000, lng: 39.000000 },
 
     // CIFR Projects
-    { id: 28, ticker: 'CIFR', name: 'AWS AI Hosting Contract', phase: 'Contracted', country: 'United States', state: '', gross_mw: 278, it_mw: 214, pue: 1.3, grid: '', current_use: 'AI/HPC', status: 'Contracted', lessee: 'AWS', lease_value: 5500, lease_years: 15, annual_rev: 367, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001819989', lat: null, lng: null },
-    { id: 29, ticker: 'CIFR', name: 'Barber Lake (TX) - Fluidstack/Google', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_value: 3000, lease_years: 10, annual_rev: 300, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001819989', lat: 32.420474, lng: -100.913205 },
-    { id: 30, ticker: 'CIFR', name: 'Barber Lake Fluidstack Additional Site', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 51, it_mw: 39, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack', lease_value: 830, lease_years: 10, annual_rev: 83, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001819989', lat: 32.420474, lng: -100.913205 },
-    { id: 31, ticker: 'CIFR', name: 'Colchis (West TX) - 1 GW JV', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 1000, it_mw: 800, pue: 1.25, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (future HPC)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 32, ticker: 'CIFR', name: 'McLennan (Riesel, TX)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 75, it_mw: 58, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.474892, lng: -96.923326 },
-    { id: 33, ticker: 'CIFR', name: 'Mikeska (Doole, TX)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 13, it_mw: 10, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.395717, lng: -99.598953 },
-    { id: 34, ticker: 'CIFR', name: 'Odessa (TX)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 103, it_mw: 79, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.845556, lng: -102.367222 },
-    { id: 35, ticker: 'CIFR', name: 'Bear (Andrews, TX) - JV', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 45, it_mw: 35, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV (~49% Cipher)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.318611, lng: -102.545278 },
-    { id: 36, ticker: 'CIFR', name: 'Chief (Andrews, TX) - JV', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 45, it_mw: 35, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV (~49% Cipher)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.318611, lng: -102.545278 },
+    { id: 28, ticker: 'CIFR', name: 'AWS AI Hosting Contract', country: 'United States', state: '', gross_mw: 278, it_mw: 214, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'AWS', lease_years: 15, annual_rev: 367, noi_pct: 85, source_url: '', lat: null, lng: null },
+    { id: 29, ticker: 'CIFR', name: 'Barber Lake (TX) - Fluidstack/Google', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_years: 10, annual_rev: 300, noi_pct: 85, source_url: '', lat: 32.420474, lng: -100.913205 },
+    { id: 30, ticker: 'CIFR', name: 'Barber Lake Fluidstack Additional Site', country: 'United States', state: 'TX', gross_mw: 51, it_mw: 39, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack', lease_years: 10, annual_rev: 83, noi_pct: 85, source_url: '', lat: 32.420474, lng: -100.913205 },
+    { id: 31, ticker: 'CIFR', name: 'Colchis (West TX) - 1 GW JV', country: 'United States', state: 'TX', gross_mw: 1000, it_mw: 800, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (future HPC)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 32, ticker: 'CIFR', name: 'McLennan (Riesel, TX)', country: 'United States', state: 'TX', gross_mw: 75, it_mw: 58, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.474892, lng: -96.923326 },
+    { id: 33, ticker: 'CIFR', name: 'Mikeska (Doole, TX)', country: 'United States', state: 'TX', gross_mw: 13, it_mw: 10, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.395717, lng: -99.598953 },
+    { id: 34, ticker: 'CIFR', name: 'Odessa (TX)', country: 'United States', state: 'TX', gross_mw: 103, it_mw: 79, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.845556, lng: -102.367222 },
+    { id: 35, ticker: 'CIFR', name: 'Bear (Andrews, TX) - JV', country: 'United States', state: 'TX', gross_mw: 45, it_mw: 35, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV (~49% Cipher)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.318611, lng: -102.545278 },
+    { id: 36, ticker: 'CIFR', name: 'Chief (Andrews, TX) - JV', country: 'United States', state: 'TX', gross_mw: 45, it_mw: 35, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV (~49% Cipher)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.318611, lng: -102.545278 },
 
     // CLSK Projects
-    { id: 37, ticker: 'CLSK', name: 'Georgia portfolio (12 locations)', phase: 'Operational', country: 'United States', state: 'GA', gross_mw: 300, it_mw: 231, pue: 1.3, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001844701', lat: 32.986600, lng: -83.648700 },
-    { id: 38, ticker: 'CLSK', name: 'Houston/Austin County, TX - AI DC', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 200, it_mw: 154, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 29.950181, lng: -96.256976 },
-    { id: 39, ticker: 'CLSK', name: 'Tennessee portfolio (13 locations)', phase: 'Operational', country: 'United States', state: 'TN', gross_mw: 250, it_mw: 192, pue: 1.3, grid: 'TVA', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.744900, lng: -86.748900 },
-    { id: 40, ticker: 'CLSK', name: 'Wyoming portfolio (2 locations)', phase: 'Operational', country: 'United States', state: 'WY', gross_mw: 90, it_mw: 69, pue: 1.3, grid: 'WECC', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 42.747500, lng: -107.208500 },
-    { id: 41, ticker: 'CLSK', name: 'Mississippi portfolio (5 locations)', phase: 'Operational', country: 'United States', state: 'MS', gross_mw: 150, it_mw: 115, pue: 1.3, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.767300, lng: -89.681200 },
+    { id: 37, ticker: 'CLSK', name: 'Georgia portfolio (12 locations)', country: 'United States', state: 'GA', gross_mw: 300, it_mw: 231, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.986600, lng: -83.648700 },
+    { id: 38, ticker: 'CLSK', name: 'Houston/Austin County, TX - AI DC', country: 'United States', state: 'TX', gross_mw: 200, it_mw: 154, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 29.950181, lng: -96.256976 },
+    { id: 39, ticker: 'CLSK', name: 'Tennessee portfolio (13 locations)', country: 'United States', state: 'TN', gross_mw: 250, it_mw: 192, grid: 'TVA', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.744900, lng: -86.748900 },
+    { id: 40, ticker: 'CLSK', name: 'Wyoming portfolio (2 locations)', country: 'United States', state: 'WY', gross_mw: 90, it_mw: 69, grid: 'WECC', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 42.747500, lng: -107.208500 },
+    { id: 41, ticker: 'CLSK', name: 'Mississippi portfolio (5 locations)', country: 'United States', state: 'MS', gross_mw: 150, it_mw: 115, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.767300, lng: -89.681200 },
 
     // CORZ Projects
-    { id: 42, ticker: 'CORZ', name: 'CoreWeave - Denton TX (full site)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 338, it_mw: 260, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_value: 3835, lease_years: 12, annual_rev: 320, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001894630', lat: 33.215536, lng: -97.132481 },
-    { id: 43, ticker: 'CORZ', name: 'CoreWeave - 5 other sites combined', phase: 'Contracted', country: 'United States', state: '', gross_mw: 429, it_mw: 330, pue: 1.3, grid: '', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_value: 4865, lease_years: 12, annual_rev: 405, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001894630', lat: null, lng: null },
-    { id: 44, ticker: 'CORZ', name: 'Cottonwood / Pecos, TX', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, pue: 1.3, grid: 'ERCOT', current_use: 'Mixed', status: 'Operational', lessee: 'Mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.422962, lng: -103.492988 },
-    { id: 45, ticker: 'CORZ', name: 'Dalton, GA campus', phase: 'Operational', country: 'United States', state: 'GA', gross_mw: 104, it_mw: 80, pue: 1.3, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 34.769861, lng: -84.969160 },
-    { id: 46, ticker: 'CORZ', name: 'Marble, NC - HPC conversion', phase: 'Pipeline', country: 'United States', state: 'NC', gross_mw: 135, it_mw: 104, pue: 1.3, grid: 'SERC', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.174265, lng: -83.926521 },
-    { id: 47, ticker: 'CORZ', name: 'Calvert City, KY', phase: 'Operational', country: 'United States', state: 'KY', gross_mw: 130, it_mw: 100, pue: 1.3, grid: 'TVA', current_use: 'Mixed', status: 'Operational', lessee: 'Mixed', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 37.033123, lng: -88.350280 },
-    { id: 48, ticker: 'CORZ', name: 'Muskogee, OK - CoreWeave', phase: 'Pipeline', country: 'United States', state: 'OK', gross_mw: 91, it_mw: 70, pue: 1.3, grid: 'SPP', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.747868, lng: -95.369414 },
-    { id: 49, ticker: 'CORZ', name: 'Grand Forks, ND', phase: 'Operational', country: 'United States', state: 'ND', gross_mw: 52, it_mw: 40, pue: 1.3, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 47.925136, lng: -97.032699 },
-    { id: 50, ticker: 'CORZ', name: 'Austin, TX - CoreWeave', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 21, it_mw: 16, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.267118, lng: -97.743130 },
+    { id: 42, ticker: 'CORZ', name: 'CoreWeave - Denton TX (full site)', country: 'United States', state: 'TX', gross_mw: 338, it_mw: 260, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 12, annual_rev: 320, noi_pct: 85, source_url: '', lat: 33.215536, lng: -97.132481 },
+    { id: 43, ticker: 'CORZ', name: 'CoreWeave - 5 other sites combined', country: 'United States', state: '', gross_mw: 429, it_mw: 330, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 12, annual_rev: 405, noi_pct: 85, source_url: '', lat: null, lng: null },
+    { id: 44, ticker: 'CORZ', name: 'Cottonwood / Pecos, TX', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'Mixed', status: 'Operational', lessee: 'Mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.422962, lng: -103.492988 },
+    { id: 45, ticker: 'CORZ', name: 'Dalton, GA campus', country: 'United States', state: 'GA', gross_mw: 104, it_mw: 80, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 34.769861, lng: -84.969160 },
+    { id: 46, ticker: 'CORZ', name: 'Marble, NC - HPC conversion', country: 'United States', state: 'NC', gross_mw: 135, it_mw: 104, grid: 'SERC', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.174265, lng: -83.926521 },
+    { id: 47, ticker: 'CORZ', name: 'Calvert City, KY', country: 'United States', state: 'KY', gross_mw: 130, it_mw: 100, grid: 'TVA', current_use: 'Mixed', status: 'Operational', lessee: 'Mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 37.033123, lng: -88.350280 },
+    { id: 48, ticker: 'CORZ', name: 'Muskogee, OK - CoreWeave', country: 'United States', state: 'OK', gross_mw: 91, it_mw: 70, grid: 'SPP', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.747868, lng: -95.369414 },
+    { id: 49, ticker: 'CORZ', name: 'Grand Forks, ND', country: 'United States', state: 'ND', gross_mw: 52, it_mw: 40, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 47.925136, lng: -97.032699 },
+    { id: 50, ticker: 'CORZ', name: 'Austin, TX - CoreWeave', country: 'United States', state: 'TX', gross_mw: 21, it_mw: 16, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.267118, lng: -97.743130 },
 
     // GLXY Projects
-    { id: 51, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase I', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_value: 5714, lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001886894', lat: 33.781408, lng: -100.879051 },
-    { id: 52, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase II', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_value: 5714, lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
-    { id: 53, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase III', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 164, it_mw: 126, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_value: 3572, lease_years: 15, annual_rev: 238, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
-    { id: 54, ticker: 'GLXY', name: 'Helios, TX - Expansion', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 250, it_mw: 192, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 33.781408, lng: -100.879051 },
+    { id: 51, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase I', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
+    { id: 52, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase II', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
+    { id: 53, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase III', country: 'United States', state: 'TX', gross_mw: 164, it_mw: 126, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 238, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
+    { id: 54, ticker: 'GLXY', name: 'Helios, TX - Expansion', country: 'United States', state: 'TX', gross_mw: 250, it_mw: 192, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 33.781408, lng: -100.879051 },
 
     // HUT Projects
-    { id: 55, ticker: 'HUT', name: 'River Bend (LA) - Fluidstack/Anthropic lease', phase: 'Contracted', country: 'United States', state: 'LA', gross_mw: 319, it_mw: 245, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Anthropic', lease_value: 7000, lease_years: 15, annual_rev: 467, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001964789', lat: 30.757000, lng: -91.332700 },
-    { id: 56, ticker: 'HUT', name: 'River Bend (LA) - ROFO expansion', phase: 'Pipeline', country: 'United States', state: 'LA', gross_mw: 1300, it_mw: 1000, pue: 1.3, grid: 'MISO', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.757000, lng: -91.332700 },
-    { id: 57, ticker: 'HUT', name: 'Anthropic partnership - other sites option', phase: 'Pipeline', country: 'United States', state: '', gross_mw: 1092, it_mw: 840, pue: 1.3, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Anthropic', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
-    { id: 58, ticker: 'HUT', name: 'Ontario power gen sites (4)', phase: 'Operational', country: 'Canada', state: 'ON', gross_mw: 210, it_mw: 162, pue: 1.3, grid: 'IESO', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.000000, lng: -85.000000 },
-    { id: 59, ticker: 'HUT', name: 'King Mountain, TX (JV)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 310, it_mw: 248, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.284588, lng: -102.274029 },
-    { id: 60, ticker: 'HUT', name: 'Vega, TX', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 80, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.243034, lng: -102.428431 },
-    { id: 61, ticker: 'HUT', name: 'Medicine Hat, AB', phase: 'Operational', country: 'Canada', state: 'AB', gross_mw: 101, it_mw: 78, pue: 1.3, grid: 'AESO', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.041668, lng: -110.677498 },
+    { id: 55, ticker: 'HUT', name: 'River Bend (LA) - Fluidstack/Anthropic lease', country: 'United States', state: 'LA', gross_mw: 319, it_mw: 245, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Anthropic', lease_years: 15, annual_rev: 467, noi_pct: 85, source_url: '', lat: 30.757000, lng: -91.332700 },
+    { id: 56, ticker: 'HUT', name: 'River Bend (LA) - ROFO expansion', country: 'United States', state: 'LA', gross_mw: 1300, it_mw: 1000, grid: 'MISO', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.757000, lng: -91.332700 },
+    { id: 57, ticker: 'HUT', name: 'Anthropic partnership - other sites option', country: 'United States', state: '', gross_mw: 1092, it_mw: 840, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Anthropic', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
+    { id: 58, ticker: 'HUT', name: 'Ontario power gen sites (4)', country: 'Canada', state: 'ON', gross_mw: 210, it_mw: 162, grid: 'IESO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.000000, lng: -85.000000 },
+    { id: 59, ticker: 'HUT', name: 'King Mountain, TX (JV)', country: 'United States', state: 'TX', gross_mw: 310, it_mw: 248, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.284588, lng: -102.274029 },
+    { id: 60, ticker: 'HUT', name: 'Vega, TX', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 80, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.243034, lng: -102.428431 },
+    { id: 61, ticker: 'HUT', name: 'Medicine Hat, AB', country: 'Canada', state: 'AB', gross_mw: 101, it_mw: 78, grid: 'AESO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.041668, lng: -110.677498 },
 
     // IREN Projects
-    { id: 62, ticker: 'IREN', name: 'Childress (TX) - Microsoft Horizon 1-4', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Microsoft', lease_value: 9700, lease_years: 5, annual_rev: 1940, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001878848', lat: 34.426427, lng: -100.204444 },
-    { id: 63, ticker: 'IREN', name: 'Childress (TX) - Full 750MW', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 975, it_mw: 750, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 34.426427, lng: -100.204444 },
-    { id: 64, ticker: 'IREN', name: 'Sweetwater 1 (TX)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 77, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.471109, lng: -100.406268 },
-    { id: 65, ticker: 'IREN', name: 'Sweetwater 2 (TX)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 77, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.471109, lng: -100.406268 },
-    { id: 66, ticker: 'IREN', name: 'Mackenzie (BC)', phase: 'Operational', country: 'Canada', state: 'BC', gross_mw: 64, it_mw: 49, pue: 1.3, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 55.336167, lng: -123.090000 },
-    { id: 67, ticker: 'IREN', name: 'Prince George (BC)', phase: 'Operational', country: 'Canada', state: 'BC', gross_mw: 64, it_mw: 49, pue: 1.3, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 53.916943, lng: -122.749443 },
-    { id: 68, ticker: 'IREN', name: 'Canal Flats (BC)', phase: 'Operational', country: 'Canada', state: 'BC', gross_mw: 51, it_mw: 39, pue: 1.3, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.150000, lng: -115.833331 },
+    { id: 62, ticker: 'IREN', name: 'Childress (TX) - Microsoft Horizon 1-4', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Microsoft', lease_years: 5, annual_rev: 1940, noi_pct: 85, source_url: '', lat: 34.426427, lng: -100.204444 },
+    { id: 63, ticker: 'IREN', name: 'Childress (TX) - Full 750MW', country: 'United States', state: 'TX', gross_mw: 975, it_mw: 750, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 34.426427, lng: -100.204444 },
+    { id: 64, ticker: 'IREN', name: 'Sweetwater 1 (TX)', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 77, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.471109, lng: -100.406268 },
+    { id: 65, ticker: 'IREN', name: 'Sweetwater 2 (TX)', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 77, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.471109, lng: -100.406268 },
+    { id: 66, ticker: 'IREN', name: 'Mackenzie (BC)', country: 'Canada', state: 'BC', gross_mw: 64, it_mw: 49, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 55.336167, lng: -123.090000 },
+    { id: 67, ticker: 'IREN', name: 'Prince George (BC)', country: 'Canada', state: 'BC', gross_mw: 64, it_mw: 49, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 53.916943, lng: -122.749443 },
+    { id: 68, ticker: 'IREN', name: 'Canal Flats (BC)', country: 'Canada', state: 'BC', gross_mw: 51, it_mw: 39, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.150000, lng: -115.833331 },
 
     // MARA Projects
-    { id: 69, ticker: 'MARA', name: 'MPLX Delaware Basin (LOI - up to 1.5GW)', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 1500, it_mw: 1200, pue: 1.25, grid: 'ERCOT', current_use: 'Mixed', status: 'Development', lessee: 'Self/TBD', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001507605', lat: 31.422962, lng: -103.492988 },
-    { id: 70, ticker: 'MARA', name: 'UAE operations (Zero Two JV)', phase: 'Operational', country: 'UAE', state: '', gross_mw: 250, it_mw: 221, pue: 1.13, grid: 'UAE', current_use: 'BTC', status: 'Operational', lessee: 'JV', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
-    { id: 71, ticker: 'MARA', name: 'Granbury, TX', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 230, it_mw: 184, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.448431, lng: -97.787659 },
-    { id: 72, ticker: 'MARA', name: 'McCamey, TX (hosted)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 239, it_mw: 191, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'Hosted', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.132376, lng: -102.222910 },
-    { id: 73, ticker: 'MARA', name: 'Ellendale, ND (hosted)', phase: 'Operational', country: 'United States', state: 'ND', gross_mw: 207, it_mw: 159, pue: 1.3, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: 'Hosted', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 46.002750, lng: -98.527046 },
-    { id: 74, ticker: 'MARA', name: 'Garden City, TX', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 182, it_mw: 146, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.864022, lng: -101.481231 },
-    { id: 75, ticker: 'MARA', name: 'Jamestown, ND (hosted)', phase: 'Operational', country: 'United States', state: 'ND', gross_mw: 106, it_mw: 82, pue: 1.3, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: 'Hosted', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 46.910556, lng: -98.708056 },
-    { id: 76, ticker: 'MARA', name: 'Kearney, NE', phase: 'Operational', country: 'United States', state: 'NE', gross_mw: 64, it_mw: 51, pue: 1.25, grid: 'SPP', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 40.699331, lng: -99.081636 },
+    { id: 69, ticker: 'MARA', name: 'MPLX Delaware Basin (LOI - up to 1.5GW)', country: 'United States', state: 'TX', gross_mw: 1500, it_mw: 1200, grid: 'ERCOT', current_use: 'Mixed', status: 'Development', lessee: 'Self/TBD', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.422962, lng: -103.492988 },
+    { id: 70, ticker: 'MARA', name: 'UAE operations (Zero Two JV)', country: 'UAE', state: '', gross_mw: 250, it_mw: 221, grid: 'UAE', current_use: 'BTC', status: 'Operational', lessee: 'JV', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
+    { id: 71, ticker: 'MARA', name: 'Granbury, TX', country: 'United States', state: 'TX', gross_mw: 230, it_mw: 184, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.448431, lng: -97.787659 },
+    { id: 72, ticker: 'MARA', name: 'McCamey, TX (hosted)', country: 'United States', state: 'TX', gross_mw: 239, it_mw: 191, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'Hosted', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.132376, lng: -102.222910 },
+    { id: 73, ticker: 'MARA', name: 'Ellendale, ND (hosted)', country: 'United States', state: 'ND', gross_mw: 207, it_mw: 159, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: 'Hosted', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 46.002750, lng: -98.527046 },
+    { id: 74, ticker: 'MARA', name: 'Garden City, TX', country: 'United States', state: 'TX', gross_mw: 182, it_mw: 146, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.864022, lng: -101.481231 },
+    { id: 75, ticker: 'MARA', name: 'Jamestown, ND (hosted)', country: 'United States', state: 'ND', gross_mw: 106, it_mw: 82, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: 'Hosted', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 46.910556, lng: -98.708056 },
+    { id: 76, ticker: 'MARA', name: 'Kearney, NE', country: 'United States', state: 'NE', gross_mw: 64, it_mw: 51, grid: 'SPP', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 40.699331, lng: -99.081636 },
 
     // WULF Projects
-    { id: 77, ticker: 'WULF', name: 'Lake Mariner (NY) - Fluidstack/Google (CB-1 to CB-5)', phase: 'Contracted', country: 'United States', state: 'NY', gross_mw: 476, it_mw: 366, pue: 1.3, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_value: 6700, lease_years: 10, annual_rev: 670, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001916076', lat: 43.359730, lng: -78.605270 },
-    { id: 78, ticker: 'WULF', name: 'Lake Mariner (NY) - Core42/G42', phase: 'Contracted', country: 'United States', state: 'NY', gross_mw: 78, it_mw: 60, pue: 1.3, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Core42 (G42)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 43.359730, lng: -78.605270 },
-    { id: 79, ticker: 'WULF', name: 'Abernathy, TX - Fluidstack/Google JV', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 112, it_mw: 86, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack (51% JV)', lease_value: 4800, lease_years: 25, annual_rev: 192, noi_pct: 85, source_url: '', lat: 33.832304, lng: -101.842949 },
-    { id: 80, ticker: 'WULF', name: 'Fluidstack JV Option - Abernathy Phase II', phase: 'Pipeline', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 33.832304, lng: -101.842949 },
-    { id: 81, ticker: 'WULF', name: 'Fluidstack JV Option - New Site TBD', phase: 'Pipeline', country: 'United States', state: '', gross_mw: 218, it_mw: 168, pue: 1.3, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
-    { id: 82, ticker: 'WULF', name: 'Lake Mariner (NY) - BTC Mining', phase: 'Operational', country: 'United States', state: 'NY', gross_mw: 200, it_mw: 154, pue: 1.3, grid: 'NYISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 43.359730, lng: -78.605270 },
+    { id: 77, ticker: 'WULF', name: 'Lake Mariner (NY) - Fluidstack/Google (CB-1 to CB-5)', country: 'United States', state: 'NY', gross_mw: 476, it_mw: 366, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_years: 10, annual_rev: 670, noi_pct: 85, source_url: '', lat: 43.359730, lng: -78.605270 },
+    { id: 78, ticker: 'WULF', name: 'Lake Mariner (NY) - Core42/G42', country: 'United States', state: 'NY', gross_mw: 78, it_mw: 60, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Core42 (G42)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 43.359730, lng: -78.605270 },
+    { id: 79, ticker: 'WULF', name: 'Abernathy, TX - Fluidstack/Google JV', country: 'United States', state: 'TX', gross_mw: 112, it_mw: 86, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack (51% JV)', lease_years: 25, annual_rev: 192, noi_pct: 85, source_url: '', lat: 33.832304, lng: -101.842949 },
+    { id: 80, ticker: 'WULF', name: 'Fluidstack JV Option - Abernathy Phase II', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 33.832304, lng: -101.842949 },
+    { id: 81, ticker: 'WULF', name: 'Fluidstack JV Option - New Site TBD', country: 'United States', state: '', gross_mw: 218, it_mw: 168, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
+    { id: 82, ticker: 'WULF', name: 'Lake Mariner (NY) - BTC Mining', country: 'United States', state: 'NY', gross_mw: 200, it_mw: 154, grid: 'NYISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 43.359730, lng: -78.605270 },
 
     // RIOT Projects
-    { id: 83, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - BTC', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 750, it_mw: 600, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001167419', lat: 30.655628, lng: -97.001389 },
-    { id: 84, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - AMD', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 33, it_mw: 25, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'AMD', lease_value: 311, lease_years: 10, annual_rev: 31, noi_pct: 85, source_url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001167419', lat: 30.655628, lng: -97.001389 },
-    { id: 85, ticker: 'RIOT', name: 'Corsicana, TX - Phase 1', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 400, it_mw: 320, pue: 1.25, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.095564, lng: -96.469432 },
-    { id: 86, ticker: 'RIOT', name: 'Corsicana, TX - Full Build', phase: 'Pipeline', country: 'United States', state: 'TX', gross_mw: 600, it_mw: 462, pue: 1.3, grid: 'ERCOT', current_use: 'Mixed', status: 'Pipeline', lessee: 'TBD (Evaluation)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.095564, lng: -96.469432 },
+    { id: 83, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - BTC', country: 'United States', state: 'TX', gross_mw: 750, it_mw: 600, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.655628, lng: -97.001389 },
+    { id: 84, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - AMD', country: 'United States', state: 'TX', gross_mw: 33, it_mw: 25, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'AMD', lease_years: 10, annual_rev: 31, noi_pct: 85, source_url: '', lat: 30.655628, lng: -97.001389 },
+    { id: 85, ticker: 'RIOT', name: 'Corsicana, TX - Phase 1', country: 'United States', state: 'TX', gross_mw: 400, it_mw: 320, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.095564, lng: -96.469432 },
+    { id: 86, ticker: 'RIOT', name: 'Corsicana, TX - Full Build', country: 'United States', state: 'TX', gross_mw: 600, it_mw: 462, grid: 'ERCOT', current_use: 'Mixed', status: 'Pipeline', lessee: 'TBD (Evaluation)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.095564, lng: -96.469432 },
 
     // SLNH Projects
-    { id: 87, ticker: 'SLNH', name: 'Project Dorothy 1A (TX)', phase: 'Operational', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 88, ticker: 'SLNH', name: 'Project Dorothy 1B (TX)', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, pue: 1.3, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 89, ticker: 'SLNH', name: 'Project Kati 1 (TX)', phase: 'Contracted', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Galaxy Digital (48MW)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 90, ticker: 'SLNH', name: 'Project Kati 2 (TX)', phase: 'Development', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, pue: 1.3, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (AI/HPC)', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 87, ticker: 'SLNH', name: 'Project Dorothy 1A (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 88, ticker: 'SLNH', name: 'Project Dorothy 1B (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 89, ticker: 'SLNH', name: 'Project Kati 1 (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Galaxy Digital (48MW)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 90, ticker: 'SLNH', name: 'Project Kati 2 (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (AI/HPC)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
 
     // HIVE Projects
-    { id: 91, ticker: 'HIVE', name: 'Yguazu, Paraguay (ex-Bitfarms)', phase: 'Operational', country: 'Paraguay', state: '', gross_mw: 100, it_mw: 77, pue: 1.3, grid: 'ANDE', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: -25.450000, lng: -55.000000 },
+    { id: 91, ticker: 'HIVE', name: 'Yguazu, Paraguay (ex-Bitfarms)', country: 'Paraguay', state: '', gross_mw: 100, it_mw: 77, grid: 'ANDE', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: -25.450000, lng: -55.000000 },
 
     // FUFU Projects
-    { id: 92, ticker: 'FUFU', name: 'Global hosting capacity', phase: 'Operational', country: 'Multiple', state: '', gross_mw: 635, it_mw: 488, pue: 1.3, grid: '', current_use: 'BTC', status: 'Operational', lessee: 'Self/hosting', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
-    { id: 93, ticker: 'FUFU', name: 'Oklahoma - 51MW', phase: 'Operational', country: 'United States', state: 'OK', gross_mw: 66, it_mw: 51, pue: 1.3, grid: 'SPP', current_use: 'BTC', status: 'Operational', lessee: '', lease_value: 0, lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.537600, lng: -96.924700 }
+    { id: 92, ticker: 'FUFU', name: 'Global hosting capacity', country: 'Multiple', state: '', gross_mw: 635, it_mw: 488, grid: '', current_use: 'BTC', status: 'Operational', lessee: 'Self/hosting', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
+    { id: 93, ticker: 'FUFU', name: 'Oklahoma - 51MW', country: 'United States', state: 'OK', gross_mw: 66, it_mw: 51, grid: 'SPP', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.537600, lng: -96.924700 }
 ];
 
 // ============================================================
-// DEFAULT COUNTRY FACTORS
+// RULE-OF-THUMB VALUATION ENGINE
 // ============================================================
-const DEFAULT_COUNTRY_FACTORS = {
-    'United States': 1.0,
-    'USA': 1.0,
-    'Canada': 0.9,
-    'Norway': 0.85,
-    'Paraguay': 0.7,
-    'Bhutan': 0.5,
-    'Ethiopia': 0.0,
-    'UAE': 0.8,
-    'Multiple': 0.8,
-    'US / Canada': 0.95,
-    'US/Canada': 0.95
-};
+
+/**
+ * Calculate the term factor: 1 - ((1+g)/(1+Cap_eff+g))^T
+ * @param {number} T - Lease term in years
+ * @param {number} g - Rent escalator (decimal, e.g., 0.025 for 2.5%)
+ * @param {number} capEff - Effective cap rate (decimal, e.g., 0.10 for 10%)
+ * @returns {number} Term factor
+ */
+function calculateTermFactor(T, g, capEff) {
+    if (T <= 0 || capEff <= 0) return 0;
+    const ratio = (1 + g) / (1 + capEff + g);
+    return 1 - Math.pow(ratio, T);
+}
+
+/**
+ * Get the effective cap rate based on project attributes and factors
+ * @param {Object} project - Project data
+ * @param {Object} overrides - Per-project overrides
+ * @returns {number} Effective cap rate as decimal
+ */
+function getEffectiveCapRate(project, overrides = {}) {
+    // Check for direct override
+    if (overrides.capOverride) {
+        return overrides.capOverride / 100;
+    }
+
+    // Start with base cap rate
+    let capRate = factors.baseCapRate;
+
+    // Credit quality adjustment
+    const creditTier = overrides.credit || getCreditTier(project);
+    capRate += factors.credit[creditTier] || 0;
+
+    // Ensure cap rate doesn't go negative
+    return Math.max(capRate, 4) / 100;
+}
+
+/**
+ * Get credit tier based on tenant
+ */
+function getCreditTier(project) {
+    if (isHyperscaler(project.lessee)) return 'hyperscaler';
+    if (project.lessee && project.lessee.toLowerCase().includes('ig')) return 'ig';
+    if (!project.lessee || project.lessee === '') return 'unrated';
+    return 'spec';
+}
+
+/**
+ * Get size multiplier based on IT MW
+ */
+function getSizeMultiplier(itMw, override = null) {
+    if (override !== null && override !== undefined) return override;
+
+    if (itMw >= 500) return factors.size[500];
+    if (itMw >= 250) return factors.size[250];
+    if (itMw >= 100) return factors.size[100];
+    if (itMw >= 50) return factors.size[50];
+    return factors.size[0];
+}
+
+/**
+ * Get country multiplier
+ */
+function getCountryMultiplier(country, override = null) {
+    if (override !== null && override !== undefined) return override;
+    return factors.country[country] ?? 1.0;
+}
+
+/**
+ * Get grid multiplier
+ */
+function getGridMultiplier(grid, country, override = null) {
+    if (override !== null && override !== undefined) return override;
+
+    // Check specific grids
+    if (factors.grid[grid]) return factors.grid[grid];
+
+    // Country-based defaults
+    if (country === 'Canada') return factors.grid['canada'];
+    if (country === 'United States') return factors.grid['other-us'];
+    return factors.grid['intl'];
+}
+
+/**
+ * Get build/energization multiplier based on status
+ */
+function getBuildMultiplier(status, override = null) {
+    if (override !== null && override !== undefined) {
+        return factors.build[override] || 1.0;
+    }
+    const normalizedStatus = status.toLowerCase();
+    if (normalizedStatus === 'operational') return factors.build.operational;
+    if (normalizedStatus === 'contracted') return factors.build.contracted;
+    if (normalizedStatus === 'development') return factors.build.development;
+    return factors.build.pipeline;
+}
+
+/**
+ * Get lease structure multiplier
+ */
+function getLeaseMultiplier(leaseType) {
+    if (!leaseType) return factors.lease.nnn;  // Default to NNN
+    return factors.lease[leaseType] || factors.lease.nnn;
+}
+
+/**
+ * Get ownership multiplier
+ */
+function getOwnershipMultiplier(ownership) {
+    if (!ownership) return factors.ownership.fee;  // Default to fee simple
+    return factors.ownership[ownership] || factors.ownership.fee;
+}
+
+/**
+ * Get concentration multiplier
+ */
+function getConcentrationMultiplier(concentration, project) {
+    if (concentration) return factors.concentration[concentration] || 1.0;
+    // Default based on tenant type
+    if (isHyperscaler(project.lessee)) return factors.concentration['single-hyper'];
+    if (project.lessee) return factors.concentration['single-ig'];
+    return factors.concentration.multi;
+}
+
+/**
+ * Calculate project NOI
+ */
+function calculateNOI(project, overrides = {}) {
+    // Direct NOI override
+    if (overrides.noi !== undefined && overrides.noi !== null && overrides.noi !== '') {
+        return parseFloat(overrides.noi);
+    }
+
+    // Calculate from rent per kW if provided
+    if (overrides.rentKw && overrides.passthrough) {
+        const mw = overrides.itMw || project.it_mw || 0;
+        const annualRent = overrides.rentKw * 1000 * mw * 12 / 1000000;  // Convert to $M
+        return annualRent * (overrides.passthrough / 100);
+    }
+
+    // Use project's stated annual rev and NOI %
+    if (project.annual_rev && project.noi_pct) {
+        return project.annual_rev * (project.noi_pct / 100);
+    }
+
+    // Default: Base NOI per MW * IT MW
+    const itMw = overrides.itMw || project.it_mw || 0;
+    return factors.baseNoiPerMw * itMw;
+}
+
+/**
+ * Main valuation function - Rule of Thumb formula
+ * Value_project = NOI1 / Cap_eff × TermFactor × F_credit × F_lease × F_ownership × F_build × F_concentration × Fidoodle
+ */
+function calculateProjectValue(project, overrides = {}) {
+    const itMw = overrides.itMw || project.it_mw || 0;
+    if (itMw <= 0) return { value: 0, components: {} };
+
+    // 1. Calculate NOI
+    const noi = calculateNOI(project, overrides);
+
+    // 2. Get effective cap rate
+    const capEff = getEffectiveCapRate(project, overrides);
+
+    // 3. Get term parameters
+    const T = overrides.term || project.lease_years || factors.defaultTerm;
+    const g = (overrides.escalator ?? factors.escalator) / 100;
+
+    // 4. Calculate term factor
+    const termFactor = calculateTermFactor(T, g, capEff);
+
+    // 5. Get all multipliers
+    const fCredit = isHyperscaler(project.lessee) ? factors.hyperscalerPremium : 1.0;
+    const fLease = getLeaseMultiplier(overrides.leaseType);
+    const fOwnership = getOwnershipMultiplier(overrides.ownership);
+    const fBuild = getBuildMultiplier(project.status, overrides.buildStatus);
+    const fConcentration = getConcentrationMultiplier(overrides.concentration, project);
+    const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
+    const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
+    const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
+
+    // 6. Get fidoodle
+    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
+
+    // 7. Combined multiplier
+    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid;
+
+    // 8. Calculate value
+    // Value = (NOI / Cap_eff) * TermFactor * CombinedMultipliers * Fidoodle
+    const baseValue = capEff > 0 ? noi / capEff : 0;
+    const value = baseValue * termFactor * combinedMult * fidoodle;
+
+    return {
+        value: value,
+        components: {
+            noi: noi,
+            capEff: capEff,
+            T: T,
+            g: g,
+            termFactor: termFactor,
+            fCredit: fCredit,
+            fLease: fLease,
+            fOwnership: fOwnership,
+            fBuild: fBuild,
+            fConcentration: fConcentration,
+            fSize: fSize,
+            fCountry: fCountry,
+            fGrid: fGrid,
+            combinedMult: combinedMult,
+            fidoodle: fidoodle,
+            baseValue: baseValue
+        }
+    };
+}
 
 // ============================================================
 // INITIALIZATION
@@ -369,6 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     fetchPrices();
     setInterval(fetchPrices, 60000);
+    setupEventListeners();
 });
 
 function initializeTabs() {
@@ -379,7 +676,6 @@ function initializeTabs() {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
 
-            // Handle map tab special case
             if (tabId === 'map') {
                 document.getElementById('map-tab').classList.add('active');
                 if (!map) {
@@ -395,6 +691,51 @@ function initializeTabs() {
     });
 }
 
+function setupEventListeners() {
+    // Project form
+    document.getElementById('project-form').addEventListener('submit', saveProjectOverrides);
+
+    // Fidoodle slider sync
+    const fidoodleSlider = document.getElementById('project-fidoodle-slider');
+    const fidoodleInput = document.getElementById('project-fidoodle');
+    const fidoodleDisplay = document.getElementById('project-fidoodle-display');
+
+    fidoodleSlider.addEventListener('input', () => {
+        const val = parseFloat(fidoodleSlider.value).toFixed(2);
+        fidoodleInput.value = val;
+        fidoodleDisplay.textContent = val;
+        updateValuationPreview();
+    });
+
+    fidoodleInput.addEventListener('input', () => {
+        const val = parseFloat(fidoodleInput.value) || 1.0;
+        fidoodleSlider.value = val;
+        fidoodleDisplay.textContent = val.toFixed(2);
+        updateValuationPreview();
+    });
+
+    // Live preview on any input change
+    const modalInputs = document.querySelectorAll('#project-form input, #project-form select');
+    modalInputs.forEach(input => {
+        input.addEventListener('change', updateValuationPreview);
+        input.addEventListener('input', updateValuationPreview);
+    });
+
+    // Add project form
+    document.getElementById('add-project-form').addEventListener('submit', addNewProject);
+
+    // Filters
+    ['project-ticker-filter', 'project-status-filter', 'project-use-filter', 'project-country-filter'].forEach(id => {
+        document.getElementById(id).addEventListener('change', renderProjectsTable);
+    });
+
+    document.getElementById('hpc-ticker-filter').addEventListener('change', renderHpcTable);
+
+    ['map-ticker-filter', 'map-status-filter', 'map-mw-filter'].forEach(id => {
+        document.getElementById(id).addEventListener('change', updateMapMarkers);
+    });
+}
+
 // ============================================================
 // DATA LOADING & SAVING
 // ============================================================
@@ -402,15 +743,30 @@ async function loadData() {
     try {
         const response = await fetch('/api/data');
         const data = await response.json();
-        minerOverrides = data.minerOverrides || {};
-        projectFidoodles = data.projectFidoodles || {};
-        countryFactors = data.countryFactors || { ...DEFAULT_COUNTRY_FACTORS };
+        projectOverrides = data.projectOverrides || {};
+        customProjects = data.customProjects || [];
+        if (data.factors) {
+            factors = mergeFactors(DEFAULT_FACTORS, data.factors);
+            savedFactors = data.factors;
+        }
     } catch (error) {
         console.error('Error loading data:', error);
-        countryFactors = { ...DEFAULT_COUNTRY_FACTORS };
     }
 
     renderAll();
+    loadFactorsToUI();
+}
+
+function mergeFactors(defaults, saved) {
+    const merged = JSON.parse(JSON.stringify(defaults));
+    for (const key in saved) {
+        if (typeof saved[key] === 'object' && !Array.isArray(saved[key])) {
+            merged[key] = { ...merged[key], ...saved[key] };
+        } else {
+            merged[key] = saved[key];
+        }
+    }
+    return merged;
 }
 
 async function saveData() {
@@ -419,9 +775,9 @@ async function saveData() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                minerOverrides,
-                projectFidoodles,
-                countryFactors
+                projectOverrides,
+                customProjects,
+                factors
             })
         });
     } catch (error) {
@@ -435,6 +791,7 @@ function renderAll() {
     renderHpcTable();
     renderCountryFactors();
     populateFilters();
+    updateHpcBaseCap();
 }
 
 // ============================================================
@@ -459,79 +816,8 @@ function updatePriceDisplay() {
     document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
 }
 
-// ============================================================
-// VALUATION HELPERS
-// ============================================================
-function getCountryFactor(country) {
-    if (!country) return 1.0;
-    // Normalize country name
-    const normalized = country.trim();
-    return countryFactors[normalized] ?? 1.0;
-}
-
-function getSizeFactor(mw) {
-    if (mw >= 500) return 1.10;
-    if (mw >= 250) return 1.00;
-    if (mw >= 100) return 0.95;
-    return 0.85;
-}
-
-function getProjectValue(project) {
-    const countryFactor = getCountryFactor(project.country);
-    const sizeFactor = getSizeFactor(project.it_mw || 0);
-    const fidoodle = projectFidoodles[project.id] ?? 1.0;
-
-    // Base value calculation
-    let baseValue = (project.it_mw || 0) * 1.4 / 0.12; // NOI/MW / cap rate
-
-    // Apply factors
-    return baseValue * countryFactor * sizeFactor * fidoodle;
-}
-
-function calculateHpcDcfValue(project) {
-    if (!project.annual_rev || project.annual_rev === 0) {
-        if (project.it_mw && project.it_mw > 0 && isHyperscaler(project.lessee)) {
-            const estimatedRev = project.it_mw * 1.5;
-            const noi = estimatedRev * 0.85;
-            const capRate = 0.10; // Hyperscaler rate
-            return noi / capRate * getCountryFactor(project.country);
-        }
-        return 0;
-    }
-
-    const annualNoi = project.annual_rev * (project.noi_pct || 85) / 100;
-    let capRate = 0.12;
-
-    // Credit quality adjustments
-    if (isHyperscaler(project.lessee)) {
-        capRate -= 0.02;
-    }
-
-    const years = project.lease_years || 10;
-    let dcfValue = annualNoi / capRate;
-
-    if (years < 10) {
-        dcfValue *= (years / 10);
-    }
-
-    // Status adjustment
-    if (project.status === 'Pipeline') {
-        dcfValue *= 0.5;
-    } else if (project.status === 'Development') {
-        dcfValue *= 0.7;
-    } else if (project.status === 'Contracted') {
-        dcfValue *= 0.85;
-    }
-
-    return dcfValue * getCountryFactor(project.country);
-}
-
-function hasHyperscalerLease(ticker) {
-    return ALL_PROJECTS.some(p =>
-        p.ticker === ticker &&
-        isHyperscaler(p.lessee) &&
-        (p.status === 'Operational' || p.status === 'Contracted')
-    );
+function updateHpcBaseCap() {
+    document.getElementById('hpc-base-cap-display').textContent = factors.baseCapRate.toFixed(1) + '%';
 }
 
 // ============================================================
@@ -545,169 +831,121 @@ function renderDashboard() {
     let totalBtc = 0;
     let totalHpcContracted = 0;
     let totalHpcPipeline = 0;
-    let totalHpcValue = 0;
+    let totalFairValue = 0;
+
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
 
     // Calculate per-ticker metrics
-    const tickerMetrics = {};
-
     Object.keys(MINER_DATA).forEach(ticker => {
-        const projects = ALL_PROJECTS.filter(p => p.ticker === ticker);
+        const miner = MINER_DATA[ticker];
+        const projects = allProjects.filter(p => p.ticker === ticker);
 
-        let contractedMw = 0;
-        let pipelineMw = 0;
-        let contractedEv = 0;
-        let pipelineEv = 0;
+        let contractedMw = 0, pipelineMw = 0;
+        let contractedEv = 0, pipelineEv = 0;
         let miningMw = 0;
 
         projects.forEach(p => {
+            const overrides = projectOverrides[p.id] || {};
+            const valuation = calculateProjectValue(p, overrides);
             const isHpc = p.current_use === 'AI/HPC' || isHyperscaler(p.lessee);
-            const dcf = calculateHpcDcfValue(p);
 
             if (isHpc && (p.status === 'Operational' || p.status === 'Contracted')) {
                 contractedMw += p.it_mw || 0;
-                contractedEv += dcf;
-            } else if (isHpc && (p.status === 'Pipeline' || p.status === 'Development')) {
+                contractedEv += valuation.value;
+            } else if (isHpc) {
                 pipelineMw += p.it_mw || 0;
-                pipelineEv += dcf;
-            } else if (p.current_use === 'BTC' || p.current_use === 'Mixed') {
+                pipelineEv += valuation.value;
+            } else {
                 miningMw += p.it_mw || 0;
             }
         });
 
-        tickerMetrics[ticker] = { contractedMw, pipelineMw, contractedEv, pipelineEv, miningMw, projects };
-    });
+        const hodlValue = miner.btc * btcPrice / 1e6;
+        const miningEV = miningMw * factors.baseNoiPerMw / (factors.baseCapRate / 100);
+        const totalEV = miningEV + contractedEv + pipelineEv;
+        const equityValue = totalEV + hodlValue + miner.cash - miner.debt;
+        const fairValue = equityValue / miner.fdShares;
+        const hasHyperscaler = projects.some(p => isHyperscaler(p.lessee) && (p.status === 'Operational' || p.status === 'Contracted'));
 
-    Object.keys(MINER_DATA).forEach(ticker => {
-        const miner = MINER_DATA[ticker];
-        const metrics = tickerMetrics[ticker];
-        const overrides = minerOverrides[ticker] || {};
+        totalBtc += miner.btc;
+        totalHpcContracted += contractedEv;
+        totalHpcPipeline += pipelineEv;
+        totalFairValue += equityValue;
 
-        const btc = overrides.btc ?? miner.btc;
-        const cash = overrides.cash ?? miner.cash;
-        const debt = overrides.debt ?? miner.debt;
-        const fdShares = overrides.fdShares ?? miner.fdShares;
-
-        const hodlValue = btc * btcPrice / 1e6;
-        const hasHyperscaler = hasHyperscalerLease(ticker);
-
-        // Mining EV
-        const miningEV = metrics.miningMw * 1.4 / 0.12;
-
-        // Total EV
-        const totalEV = miningEV + metrics.contractedEv + metrics.pipelineEv;
-        const equityValue = totalEV + hodlValue + cash - debt;
-        const fairValue = equityValue / fdShares;
-
-        // Mock price
-        const currentPrice = fairValue * (0.7 + Math.random() * 0.6);
-        const mcap = currentPrice * fdShares;
-        const upside = ((fairValue / currentPrice) - 1) * 100;
-
-        totalMcap += mcap;
-        totalBtc += btc;
-        totalHpcContracted += metrics.contractedMw;
-        totalHpcPipeline += metrics.pipelineMw;
-        totalHpcValue += metrics.contractedEv;
-
-        // Create expandable row
-        const row = document.createElement('tr');
-        row.className = 'expandable-row';
-        row.dataset.ticker = ticker;
-        row.onclick = () => toggleExpandedRow(ticker);
-
-        const hyperscalerBadge = hasHyperscaler ? '<span class="hyperscaler-badge">⚡ HPC</span>' : '';
-
-        row.innerHTML = `
-            <td><span class="expand-icon">▶</span></td>
-            <td class="ticker">${ticker}${hyperscalerBadge}</td>
-            <td>$${currentPrice.toFixed(2)}</td>
-            <td>$${(mcap / 1000).toFixed(1)}B</td>
-            <td class="has-tooltip" data-tooltip="${miner.snippets?.hodl || 'N/A'}">
-                <a href="${miner.sourceUrl}" target="_blank" class="source-link">$${hodlValue.toFixed(0)}M</a>
+        // Main row
+        const tr = document.createElement('tr');
+        tr.className = 'expandable-row';
+        tr.dataset.ticker = ticker;
+        tr.innerHTML = `
+            <td class="text-left"><span class="expand-icon">&#9654;</span></td>
+            <td class="col-ticker">
+                <span class="ticker">${ticker}</span>
+                ${hasHyperscaler ? '<span class="hyperscaler-badge">HPC</span>' : ''}
             </td>
-            <td class="has-tooltip" data-tooltip="${miner.snippets?.cash || 'N/A'}">
-                <a href="${miner.sourceUrl}" target="_blank" class="source-link">$${cash.toFixed(0)}M</a>
+            <td>--</td>
+            <td>--</td>
+            <td class="has-tooltip" data-tooltip="${miner.snippets.hodl}">
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(hodlValue, 1)}M</a>
             </td>
-            <td class="has-tooltip" data-tooltip="${miner.snippets?.debt || 'N/A'}">
-                <a href="${miner.sourceUrl}" target="_blank" class="source-link">$${debt.toFixed(0)}M</a>
+            <td class="has-tooltip" data-tooltip="${miner.snippets.cash}">
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(miner.cash, 1)}M</a>
             </td>
-            <td class="has-tooltip" data-tooltip="${miner.snippets?.shares || 'N/A'}">
-                <a href="${miner.sourceUrl}" target="_blank" class="source-link">${fdShares.toFixed(0)}M</a>
+            <td class="has-tooltip" data-tooltip="${miner.snippets.debt}">
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(miner.debt, 1)}M</a>
             </td>
-            <td>${metrics.miningMw.toFixed(0)}</td>
-            <td>${(metrics.contractedMw + metrics.pipelineMw).toFixed(0)}</td>
-            <td>$${miningEV.toFixed(0)}M</td>
-            <td class="positive">$${metrics.contractedEv.toFixed(0)}M</td>
-            <td class="neutral">$${metrics.pipelineEv.toFixed(0)}M</td>
-            <td class="positive">$${fairValue.toFixed(2)}</td>
-            <td class="${upside >= 0 ? 'positive' : 'negative'}">${upside >= 0 ? '+' : ''}${upside.toFixed(1)}%</td>
+            <td class="has-tooltip" data-tooltip="${miner.snippets.shares}">
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(miner.fdShares, 0)}M</a>
+            </td>
+            <td>${miningMw.toLocaleString()}</td>
+            <td>${(contractedMw + pipelineMw).toLocaleString()}</td>
+            <td>${formatNumber(miningEV, 1)}M</td>
+            <td class="positive">${formatNumber(contractedEv, 1)}M</td>
+            <td class="neutral">${formatNumber(pipelineEv, 1)}M</td>
+            <td class="positive">${formatNumber(fairValue, 2)}</td>
+            <td class="positive">--</td>
         `;
-        tbody.appendChild(row);
+        tbody.appendChild(tr);
 
-        // Create expanded content row
-        const expandedRow = document.createElement('tr');
-        expandedRow.className = 'expanded-content';
-        expandedRow.id = `expanded-${ticker}`;
-        expandedRow.innerHTML = `<td colspan="15">${renderProjectSummary(metrics.projects)}</td>`;
-        tbody.appendChild(expandedRow);
+        // Expanded row
+        const expandedTr = document.createElement('tr');
+        expandedTr.className = 'expanded-content';
+        expandedTr.dataset.ticker = ticker;
+        expandedTr.innerHTML = `
+            <td colspan="15">
+                <div class="project-summary">
+                    ${projects.map(p => {
+                        const overrides = projectOverrides[p.id] || {};
+                        const val = calculateProjectValue(p, overrides);
+                        const isContracted = p.status === 'Operational' || p.status === 'Contracted';
+                        return `
+                            <div class="project-item ${isContracted ? 'contracted' : 'pipeline'}">
+                                <div class="project-name">${p.name}</div>
+                                <div class="project-details">
+                                    ${p.it_mw || 0} MW | ${p.current_use} | ${p.status}
+                                    ${p.lessee ? ` | ${p.lessee}` : ''}
+                                    | Value: $${formatNumber(val.value, 1)}M
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </td>
+        `;
+        tbody.appendChild(expandedTr);
+
+        // Click to expand
+        tr.addEventListener('click', () => {
+            tr.classList.toggle('expanded');
+            expandedTr.classList.toggle('show');
+        });
     });
 
     // Update summary cards
-    document.getElementById('total-mcap').textContent = '$' + (totalMcap / 1000).toFixed(1) + 'B';
     document.getElementById('total-btc').textContent = totalBtc.toLocaleString();
-    document.getElementById('total-btc-value').textContent = '$' + (totalBtc * btcPrice / 1e9).toFixed(2) + 'B';
-    document.getElementById('total-hpc-contracted').textContent = totalHpcContracted.toFixed(0) + ' MW';
-    document.getElementById('total-hpc-pipeline').textContent = totalHpcPipeline.toFixed(0) + ' MW';
-    document.getElementById('total-hpc-value').textContent = '$' + (totalHpcValue / 1000).toFixed(1) + 'B';
-}
-
-function toggleExpandedRow(ticker) {
-    const row = document.querySelector(`tr[data-ticker="${ticker}"]`);
-    const expandedRow = document.getElementById(`expanded-${ticker}`);
-
-    if (row.classList.contains('expanded')) {
-        row.classList.remove('expanded');
-        expandedRow.classList.remove('show');
-    } else {
-        row.classList.add('expanded');
-        expandedRow.classList.add('show');
-    }
-}
-
-function renderProjectSummary(projects) {
-    if (!projects || projects.length === 0) {
-        return '<div style="color: #888;">No projects</div>';
-    }
-
-    let html = '<div class="project-summary">';
-
-    // Sort: contracted first, then by MW
-    projects.sort((a, b) => {
-        const aContracted = a.status === 'Operational' || a.status === 'Contracted';
-        const bContracted = b.status === 'Operational' || b.status === 'Contracted';
-        if (aContracted !== bContracted) return bContracted - aContracted;
-        return (b.it_mw || 0) - (a.it_mw || 0);
-    });
-
-    projects.forEach(p => {
-        const isContracted = p.status === 'Operational' || p.status === 'Contracted';
-        const statusClass = isContracted ? 'contracted' : 'pipeline';
-        const dcf = calculateHpcDcfValue(p);
-
-        html += `
-            <div class="project-item ${statusClass}">
-                <div class="project-name">${p.name.substring(0, 40)}${p.name.length > 40 ? '...' : ''}</div>
-                <div class="project-details">
-                    ${p.it_mw || 0} MW | ${p.current_use} | ${p.status}
-                    ${p.lessee ? ` | ${p.lessee}` : ''}
-                    ${dcf > 0 ? ` | DCF: $${dcf.toFixed(0)}M` : ''}
-                </div>
-            </div>
-        `;
-    });
-
-    html += '</div>';
-    return html;
+    document.getElementById('total-btc-value').textContent = '$' + formatNumber(totalBtc * btcPrice / 1e6, 0) + 'M';
+    document.getElementById('total-hpc-contracted').textContent = '$' + formatNumber(totalHpcContracted / 1000, 2) + 'B';
+    document.getElementById('total-hpc-pipeline').textContent = '$' + formatNumber(totalHpcPipeline / 1000, 2) + 'B';
+    document.getElementById('total-fair-value').textContent = '$' + formatNumber(totalFairValue / 1000, 2) + 'B';
 }
 
 // ============================================================
@@ -717,148 +955,431 @@ function renderProjectsTable() {
     const tbody = document.querySelector('#projects-table tbody');
     tbody.innerHTML = '';
 
-    const tickerFilter = document.getElementById('project-ticker-filter')?.value || '';
-    const statusFilter = document.getElementById('project-status-filter')?.value || '';
-    const useFilter = document.getElementById('project-use-filter')?.value || '';
-    const countryFilter = document.getElementById('project-country-filter')?.value || '';
+    const tickerFilter = document.getElementById('project-ticker-filter').value;
+    const statusFilter = document.getElementById('project-status-filter').value;
+    const useFilter = document.getElementById('project-use-filter').value;
+    const countryFilter = document.getElementById('project-country-filter').value;
 
-    let filtered = ALL_PROJECTS.filter(p => {
-        if (tickerFilter && p.ticker !== tickerFilter) return false;
-        if (statusFilter && p.status !== statusFilter) return false;
-        if (useFilter && p.current_use !== useFilter) return false;
-        if (countryFilter && p.country !== countryFilter) return false;
-        return true;
-    });
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
 
-    filtered.forEach(project => {
-        const fidoodle = projectFidoodles[project.id] ?? 1.0;
-        const adjValue = getProjectValue(project);
-        const statusClass = project.status === 'Operational' ? 'status-operational' :
-                          project.status === 'Contracted' ? 'status-contracted' : 'status-pipeline';
+    allProjects
+        .filter(p => {
+            if (tickerFilter && p.ticker !== tickerFilter) return false;
+            if (statusFilter && p.status !== statusFilter) return false;
+            if (useFilter && p.current_use !== useFilter) return false;
+            if (countryFilter && p.country !== countryFilter) return false;
+            return true;
+        })
+        .forEach(project => {
+            const overrides = projectOverrides[project.id] || {};
+            const valuation = calculateProjectValue(project, overrides);
+            const hasOverrides = Object.keys(overrides).length > 0;
 
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="ticker">${project.ticker}</td>
-            <td>${project.name}</td>
-            <td>${project.state || '-'}</td>
-            <td>${project.country || '-'}</td>
-            <td>${project.gross_mw || 0}</td>
-            <td>${project.it_mw || 0}</td>
-            <td>${project.current_use || '-'}</td>
-            <td><span class="status-badge ${statusClass}">${project.status || '-'}</span></td>
-            <td>${project.lessee || '-'}</td>
-            <td>
-                <input type="number" class="editable-input" value="${fidoodle}"
-                       min="0" max="2" step="0.05" style="width: 50px;"
-                       onchange="updateProjectFidoodle(${project.id}, this.value)">
-            </td>
-            <td>$${(adjValue / 1000).toFixed(1)}B</td>
-            <td>${project.source_url ? `<a href="${project.source_url}" target="_blank" class="source-link">Source</a>` : '-'}</td>
-        `;
-        tbody.appendChild(row);
-    });
-}
+            const tr = document.createElement('tr');
+            tr.className = 'project-row';
+            tr.dataset.projectId = project.id;
 
-function updateProjectFidoodle(projectId, value) {
-    projectFidoodles[projectId] = parseFloat(value) || 1.0;
-    saveData();
-    renderDashboard();
+            const location = project.state ? `${project.state}, ${project.country}` : project.country;
+
+            tr.innerHTML = `
+                <td class="col-ticker">
+                    <span class="ticker">${project.ticker}</span>
+                    ${hasOverrides ? '<span class="override-dot"></span>' : ''}
+                </td>
+                <td class="col-name">${project.name}</td>
+                <td class="col-location">${location}</td>
+                <td>${project.it_mw || 0}</td>
+                <td class="col-status">${project.current_use}</td>
+                <td class="col-status">
+                    <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
+                </td>
+                <td class="col-tenant">${project.lessee || '-'}</td>
+                <td>${formatNumber(valuation.components.noi, 1)}</td>
+                <td>${(valuation.components.capEff * 100).toFixed(1)}%</td>
+                <td>${valuation.components.termFactor.toFixed(3)}</td>
+                <td class="has-tooltip" data-tooltip="Credit: ${valuation.components.fCredit.toFixed(2)}
+Size: ${valuation.components.fSize.toFixed(2)}
+Country: ${valuation.components.fCountry.toFixed(2)}
+Grid: ${valuation.components.fGrid.toFixed(2)}
+Build: ${valuation.components.fBuild.toFixed(2)}">${valuation.components.combinedMult.toFixed(3)}</td>
+                <td class="${hasOverrides && overrides.fidoodle ? 'has-override' : ''}">${(overrides.fidoodle || factors.fidoodleDefault).toFixed(2)}</td>
+                <td class="positive">${formatNumber(valuation.value, 1)}</td>
+            `;
+
+            tr.addEventListener('click', () => openProjectModal(project));
+            tbody.appendChild(tr);
+        });
 }
 
 // ============================================================
-// HPC TABLE RENDERING
+// HPC VAL TABLE RENDERING
 // ============================================================
 function renderHpcTable() {
     const tbody = document.querySelector('#hpc-table tbody');
     tbody.innerHTML = '';
 
-    const filterTicker = document.getElementById('hpc-ticker-filter')?.value || '';
+    const tickerFilter = document.getElementById('hpc-ticker-filter').value;
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
 
-    // Filter to HPC projects
-    let hpcProjects = ALL_PROJECTS.filter(p =>
-        p.current_use === 'AI/HPC' || isHyperscaler(p.lessee)
-    );
+    let totalProjects = 0;
+    let contractedMw = 0, pipelineMw = 0;
+    let contractedValue = 0, pipelineValue = 0;
 
-    if (filterTicker) {
-        hpcProjects = hpcProjects.filter(p => p.ticker === filterTicker);
-    }
+    allProjects
+        .filter(p => {
+            if (p.current_use !== 'AI/HPC' && !isHyperscaler(p.lessee)) return false;
+            if (tickerFilter && p.ticker !== tickerFilter) return false;
+            return true;
+        })
+        .forEach(project => {
+            const overrides = projectOverrides[project.id] || {};
+            const valuation = calculateProjectValue(project, overrides);
+            const c = valuation.components;
 
-    let contractedMw = 0;
-    let pipelineMw = 0;
-    let totalContract = 0;
-    let totalDcf = 0;
-    let leaseCount = 0;
+            totalProjects++;
+            const isContracted = project.status === 'Operational' || project.status === 'Contracted';
 
-    hpcProjects.forEach(project => {
-        const dcfValue = calculateHpcDcfValue(project);
-        const isContracted = project.status === 'Operational' || project.status === 'Contracted';
+            if (isContracted) {
+                contractedMw += project.it_mw || 0;
+                contractedValue += valuation.value;
+            } else {
+                pipelineMw += project.it_mw || 0;
+                pipelineValue += valuation.value;
+            }
 
-        if (isContracted) {
-            contractedMw += project.it_mw || 0;
-            leaseCount++;
-        } else {
-            pipelineMw += project.it_mw || 0;
-        }
+            const tr = document.createElement('tr');
+            tr.className = 'project-row';
+            tr.dataset.projectId = project.id;
 
-        totalContract += project.lease_value || 0;
-        totalDcf += dcfValue;
+            tr.innerHTML = `
+                <td class="col-ticker"><span class="ticker">${project.ticker}</span></td>
+                <td class="col-name">${project.name}</td>
+                <td class="col-tenant">${project.lessee || '-'}</td>
+                <td>${project.it_mw || 0}</td>
+                <td>${formatNumber(c.noi, 1)}</td>
+                <td>${(c.capEff * 100).toFixed(1)}%</td>
+                <td>${c.T}</td>
+                <td>${c.termFactor.toFixed(3)}</td>
+                <td class="col-status">
+                    <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
+                </td>
+                <td class="has-tooltip" data-tooltip="F_credit: ${c.fCredit.toFixed(2)}
+F_lease: ${c.fLease.toFixed(2)}
+F_ownership: ${c.fOwnership.toFixed(2)}
+F_build: ${c.fBuild.toFixed(2)}
+F_concentration: ${c.fConcentration.toFixed(2)}
+F_size: ${c.fSize.toFixed(2)}
+F_country: ${c.fCountry.toFixed(2)}
+F_grid: ${c.fGrid.toFixed(2)}
+Fidoodle: ${c.fidoodle.toFixed(2)}">${c.combinedMult.toFixed(3)} x ${c.fidoodle.toFixed(2)}</td>
+                <td class="positive">$${formatNumber(valuation.value, 1)}M</td>
+                <td class="col-source">
+                    ${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank">Link</a>` : '-'}
+                </td>
+            `;
 
-        const statusClass = project.status === 'Operational' ? 'status-operational' :
-                           project.status === 'Contracted' ? 'status-contracted' : 'status-pipeline';
-
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="ticker">${project.ticker}</td>
-            <td>${project.name}</td>
-            <td>${project.lessee || '-'}</td>
-            <td>${project.it_mw || 0}</td>
-            <td>${project.lease_value ? '$' + project.lease_value.toLocaleString() + 'M' : '-'}</td>
-            <td>${project.lease_years || '-'}</td>
-            <td>${project.annual_rev ? '$' + project.annual_rev + 'M' : '-'}</td>
-            <td>${project.noi_pct || 85}%</td>
-            <td><span class="status-badge ${statusClass}">${project.status || 'Unknown'}</span></td>
-            <td class="positive">$${dcfValue.toFixed(0)}M</td>
-            <td>${project.source_url ? `<a href="${project.source_url}" target="_blank" class="source-link">Source</a>` : '-'}</td>
-            <td>-</td>
-        `;
-        tbody.appendChild(row);
-    });
+            tr.addEventListener('click', () => openProjectModal(project));
+            tbody.appendChild(tr);
+        });
 
     // Update summary cards
-    document.getElementById('hpc-lease-count').textContent = leaseCount;
-    document.getElementById('hpc-contracted-mw').textContent = contractedMw.toFixed(0) + ' MW';
-    document.getElementById('hpc-pipeline-mw').textContent = pipelineMw.toFixed(0) + ' MW';
-    document.getElementById('hpc-total-contract').textContent = '$' + (totalContract / 1000).toFixed(1) + 'B';
-    document.getElementById('hpc-dcf-value').textContent = '$' + (totalDcf / 1000).toFixed(1) + 'B';
+    document.getElementById('hpc-project-count').textContent = totalProjects;
+    document.getElementById('hpc-contracted-mw').textContent = contractedMw.toLocaleString() + ' MW';
+    document.getElementById('hpc-pipeline-mw').textContent = pipelineMw.toLocaleString() + ' MW';
+    document.getElementById('hpc-contracted-value').textContent = '$' + formatNumber(contractedValue / 1000, 2) + 'B';
+    document.getElementById('hpc-pipeline-value').textContent = '$' + formatNumber(pipelineValue / 1000, 2) + 'B';
 }
 
 // ============================================================
-// COUNTRY FACTORS RENDERING
+// PROJECT MODAL
 // ============================================================
-function renderCountryFactors() {
-    const tbody = document.querySelector('#country-factors-table tbody');
-    if (!tbody) return;
+function openProjectModal(project) {
+    const modal = document.getElementById('project-modal');
+    const overrides = projectOverrides[project.id] || {};
 
-    tbody.innerHTML = '';
+    document.getElementById('project-modal-title').textContent = `Project Overrides: ${project.name}`;
+    document.getElementById('project-id').value = project.id;
+    document.getElementById('project-ticker').value = project.ticker;
+    document.getElementById('project-name').value = project.name;
+    document.getElementById('project-country').value = project.country;
+    document.getElementById('project-grid').value = project.grid || '';
+    document.getElementById('project-it-mw').value = overrides.itMw || project.it_mw || '';
 
-    Object.entries(countryFactors).sort((a, b) => a[0].localeCompare(b[0])).forEach(([country, factor]) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${country}</td>
-            <td>
-                <input type="number" class="editable-input" value="${factor}"
-                       min="0" max="2" step="0.1" data-country="${country}"
-                       onchange="updateCountryFactor('${country}', this.value)">
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
+    // NOI & Revenue
+    document.getElementById('project-noi').value = overrides.noi || '';
+    document.getElementById('project-rent-kw').value = overrides.rentKw || '';
+    document.getElementById('project-passthrough').value = overrides.passthrough || 85;
+
+    // Cap Rate Components
+    document.getElementById('project-credit').value = overrides.credit || '';
+    document.getElementById('project-lease-type').value = overrides.leaseType || '';
+    document.getElementById('project-concentration').value = overrides.concentration || '';
+    document.getElementById('project-ownership').value = overrides.ownership || '';
+    document.getElementById('project-build-status').value = overrides.buildStatus || '';
+    document.getElementById('project-cap-override').value = overrides.capOverride || '';
+
+    // Term & Escalation
+    document.getElementById('project-term').value = overrides.term || '';
+    document.getElementById('project-escalator').value = overrides.escalator || '';
+    document.getElementById('project-delay').value = overrides.delay || 0;
+
+    // Multiplier Overrides
+    document.getElementById('project-size-mult').value = overrides.sizeMult || '';
+    document.getElementById('project-country-mult').value = overrides.countryMult || '';
+    document.getElementById('project-grid-mult').value = overrides.gridMult || '';
+
+    // Fidoodle
+    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
+    document.getElementById('project-fidoodle').value = fidoodle;
+    document.getElementById('project-fidoodle-slider').value = fidoodle;
+    document.getElementById('project-fidoodle-display').textContent = fidoodle.toFixed(2);
+
+    updateValuationPreview();
+    modal.classList.add('active');
 }
 
-function updateCountryFactor(country, value) {
-    countryFactors[country] = parseFloat(value) || 1.0;
+function closeProjectModal() {
+    document.getElementById('project-modal').classList.remove('active');
+}
+
+function updateValuationPreview() {
+    const projectId = parseInt(document.getElementById('project-id').value);
+    const project = [...ALL_PROJECTS, ...customProjects].find(p => p.id === projectId);
+    if (!project) return;
+
+    const overrides = getOverridesFromForm();
+    const valuation = calculateProjectValue(project, overrides);
+    const c = valuation.components;
+
+    document.getElementById('preview-noi').textContent = '$' + formatNumber(c.noi, 1) + 'M';
+    document.getElementById('preview-cap').textContent = (c.capEff * 100).toFixed(1) + '%';
+    document.getElementById('preview-term').textContent = c.termFactor.toFixed(3);
+    document.getElementById('preview-mult').textContent = c.combinedMult.toFixed(3);
+    document.getElementById('preview-fidoodle').textContent = c.fidoodle.toFixed(3);
+    document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+}
+
+function getOverridesFromForm() {
+    return {
+        itMw: parseFloatOrNull(document.getElementById('project-it-mw').value),
+        noi: parseFloatOrNull(document.getElementById('project-noi').value),
+        rentKw: parseFloatOrNull(document.getElementById('project-rent-kw').value),
+        passthrough: parseFloatOrNull(document.getElementById('project-passthrough').value),
+        credit: document.getElementById('project-credit').value || null,
+        leaseType: document.getElementById('project-lease-type').value || null,
+        concentration: document.getElementById('project-concentration').value || null,
+        ownership: document.getElementById('project-ownership').value || null,
+        buildStatus: document.getElementById('project-build-status').value || null,
+        capOverride: parseFloatOrNull(document.getElementById('project-cap-override').value),
+        term: parseFloatOrNull(document.getElementById('project-term').value),
+        escalator: parseFloatOrNull(document.getElementById('project-escalator').value),
+        delay: parseFloatOrNull(document.getElementById('project-delay').value),
+        sizeMult: parseFloatOrNull(document.getElementById('project-size-mult').value),
+        countryMult: parseFloatOrNull(document.getElementById('project-country-mult').value),
+        gridMult: parseFloatOrNull(document.getElementById('project-grid-mult').value),
+        fidoodle: parseFloatOrNull(document.getElementById('project-fidoodle').value)
+    };
+}
+
+function parseFloatOrNull(val) {
+    if (val === '' || val === null || val === undefined) return null;
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? null : parsed;
+}
+
+function saveProjectOverrides(e) {
+    e.preventDefault();
+    const projectId = parseInt(document.getElementById('project-id').value);
+    const overrides = getOverridesFromForm();
+
+    // Clean up null values
+    const cleanOverrides = {};
+    for (const key in overrides) {
+        if (overrides[key] !== null) {
+            cleanOverrides[key] = overrides[key];
+        }
+    }
+
+    if (Object.keys(cleanOverrides).length > 0) {
+        projectOverrides[projectId] = cleanOverrides;
+    } else {
+        delete projectOverrides[projectId];
+    }
+
+    saveData();
+    closeProjectModal();
+    renderAll();
+}
+
+function clearProjectOverrides() {
+    const projectId = parseInt(document.getElementById('project-id').value);
+    delete projectOverrides[projectId];
+    saveData();
+    closeProjectModal();
+    renderAll();
+}
+
+// ============================================================
+// FACTORS PAGE
+// ============================================================
+function loadFactorsToUI() {
+    // Global parameters
+    document.getElementById('factor-base-noi').value = factors.baseNoiPerMw;
+    document.getElementById('factor-base-cap').value = factors.baseCapRate;
+    document.getElementById('factor-hyperscaler-premium').value = factors.hyperscalerPremium;
+    document.getElementById('factor-default-term').value = factors.defaultTerm;
+    document.getElementById('factor-escalator').value = factors.escalator;
+    document.getElementById('factor-pue').value = factors.pue;
+    document.getElementById('factor-fidoodle-default').value = factors.fidoodleDefault;
+
+    // Credit
+    document.getElementById('credit-hyperscaler').value = factors.credit.hyperscaler;
+    document.getElementById('credit-ig').value = factors.credit.ig;
+    document.getElementById('credit-spec').value = factors.credit.spec;
+    document.getElementById('credit-unrated').value = factors.credit.unrated;
+
+    // Lease
+    document.getElementById('lease-nnn').value = factors.lease.nnn;
+    document.getElementById('lease-gross').value = factors.lease.gross;
+    document.getElementById('lease-hosting').value = factors.lease.hosting;
+
+    // Ownership
+    document.getElementById('own-fee').value = factors.ownership.fee;
+    document.getElementById('own-ground').value = factors.ownership.ground;
+    document.getElementById('own-jv').value = factors.ownership.jv;
+    document.getElementById('own-nopower').value = factors.ownership.nopower;
+
+    // Build
+    document.getElementById('build-operational').value = factors.build.operational;
+    document.getElementById('build-contracted').value = factors.build.contracted;
+    document.getElementById('build-development').value = factors.build.development;
+    document.getElementById('build-pipeline').value = factors.build.pipeline;
+
+    // Concentration
+    document.getElementById('conc-multi').value = factors.concentration.multi;
+    document.getElementById('conc-single-hyper').value = factors.concentration['single-hyper'];
+    document.getElementById('conc-single-ig').value = factors.concentration['single-ig'];
+    document.getElementById('conc-bespoke').value = factors.concentration.bespoke;
+
+    // Size
+    document.getElementById('size-500').value = factors.size[500];
+    document.getElementById('size-250').value = factors.size[250];
+    document.getElementById('size-100').value = factors.size[100];
+    document.getElementById('size-50').value = factors.size[50];
+    document.getElementById('size-0').value = factors.size[0];
+
+    // Grid
+    document.getElementById('grid-ercot').value = factors.grid.ERCOT;
+    document.getElementById('grid-pjm').value = factors.grid.PJM;
+    document.getElementById('grid-miso').value = factors.grid.MISO;
+    document.getElementById('grid-nyiso').value = factors.grid.NYISO;
+    document.getElementById('grid-spp').value = factors.grid.SPP;
+    document.getElementById('grid-other-us').value = factors.grid['other-us'];
+    document.getElementById('grid-canada').value = factors.grid.canada;
+    document.getElementById('grid-intl').value = factors.grid.intl;
+}
+
+function saveAllFactors() {
+    // Global parameters
+    factors.baseNoiPerMw = parseFloat(document.getElementById('factor-base-noi').value);
+    factors.baseCapRate = parseFloat(document.getElementById('factor-base-cap').value);
+    factors.hyperscalerPremium = parseFloat(document.getElementById('factor-hyperscaler-premium').value);
+    factors.defaultTerm = parseInt(document.getElementById('factor-default-term').value);
+    factors.escalator = parseFloat(document.getElementById('factor-escalator').value);
+    factors.pue = parseFloat(document.getElementById('factor-pue').value);
+    factors.fidoodleDefault = parseFloat(document.getElementById('factor-fidoodle-default').value);
+
+    // Credit
+    factors.credit.hyperscaler = parseFloat(document.getElementById('credit-hyperscaler').value);
+    factors.credit.ig = parseFloat(document.getElementById('credit-ig').value);
+    factors.credit.spec = parseFloat(document.getElementById('credit-spec').value);
+    factors.credit.unrated = parseFloat(document.getElementById('credit-unrated').value);
+
+    // Lease
+    factors.lease.nnn = parseFloat(document.getElementById('lease-nnn').value);
+    factors.lease.gross = parseFloat(document.getElementById('lease-gross').value);
+    factors.lease.hosting = parseFloat(document.getElementById('lease-hosting').value);
+
+    // Ownership
+    factors.ownership.fee = parseFloat(document.getElementById('own-fee').value);
+    factors.ownership.ground = parseFloat(document.getElementById('own-ground').value);
+    factors.ownership.jv = parseFloat(document.getElementById('own-jv').value);
+    factors.ownership.nopower = parseFloat(document.getElementById('own-nopower').value);
+
+    // Build
+    factors.build.operational = parseFloat(document.getElementById('build-operational').value);
+    factors.build.contracted = parseFloat(document.getElementById('build-contracted').value);
+    factors.build.development = parseFloat(document.getElementById('build-development').value);
+    factors.build.pipeline = parseFloat(document.getElementById('build-pipeline').value);
+
+    // Concentration
+    factors.concentration.multi = parseFloat(document.getElementById('conc-multi').value);
+    factors.concentration['single-hyper'] = parseFloat(document.getElementById('conc-single-hyper').value);
+    factors.concentration['single-ig'] = parseFloat(document.getElementById('conc-single-ig').value);
+    factors.concentration.bespoke = parseFloat(document.getElementById('conc-bespoke').value);
+
+    // Size
+    factors.size[500] = parseFloat(document.getElementById('size-500').value);
+    factors.size[250] = parseFloat(document.getElementById('size-250').value);
+    factors.size[100] = parseFloat(document.getElementById('size-100').value);
+    factors.size[50] = parseFloat(document.getElementById('size-50').value);
+    factors.size[0] = parseFloat(document.getElementById('size-0').value);
+
+    // Grid
+    factors.grid.ERCOT = parseFloat(document.getElementById('grid-ercot').value);
+    factors.grid.PJM = parseFloat(document.getElementById('grid-pjm').value);
+    factors.grid.MISO = parseFloat(document.getElementById('grid-miso').value);
+    factors.grid.NYISO = parseFloat(document.getElementById('grid-nyiso').value);
+    factors.grid.SPP = parseFloat(document.getElementById('grid-spp').value);
+    factors.grid['other-us'] = parseFloat(document.getElementById('grid-other-us').value);
+    factors.grid.canada = parseFloat(document.getElementById('grid-canada').value);
+    factors.grid.intl = parseFloat(document.getElementById('grid-intl').value);
+
+    // Save country factors
+    saveCountryFactorsFromUI();
+
     saveData();
     renderAll();
+    alert('Factors saved successfully!');
+}
+
+function resetAllFactors() {
+    if (!confirm('Reset all factors to defaults? This cannot be undone.')) return;
+    factors = JSON.parse(JSON.stringify(DEFAULT_FACTORS));
+    loadFactorsToUI();
+    renderCountryFactors();
+    saveData();
+    renderAll();
+    alert('Factors reset to defaults.');
+}
+
+// ============================================================
+// COUNTRY FACTORS
+// ============================================================
+function renderCountryFactors() {
+    const container = document.getElementById('country-factors-container');
+    container.innerHTML = '';
+
+    for (const [country, factor] of Object.entries(factors.country)) {
+        const div = document.createElement('div');
+        div.className = 'factor-row';
+        div.innerHTML = `
+            <span class="factor-label">${country}</span>
+            <div>
+                <input type="number" class="factor-input country-factor-input" data-country="${country}" value="${factor}" step="0.1" min="0" max="2">
+                <span class="factor-unit">x</span>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+}
+
+function saveCountryFactorsFromUI() {
+    const inputs = document.querySelectorAll('.country-factor-input');
+    inputs.forEach(input => {
+        const country = input.dataset.country;
+        factors.country[country] = parseFloat(input.value);
+    });
 }
 
 function addCountryFactor() {
@@ -871,49 +1392,94 @@ function closeCountryModal() {
 
 function saveNewCountryFactor() {
     const name = document.getElementById('new-country-name').value.trim();
-    const factor = parseFloat(document.getElementById('new-country-factor').value) || 1.0;
+    const factor = parseFloat(document.getElementById('new-country-factor').value);
 
-    if (name) {
-        countryFactors[name] = factor;
-        saveData();
-        renderCountryFactors();
-        closeCountryModal();
+    if (!name) {
+        alert('Please enter a country name');
+        return;
     }
-}
 
-function saveFactors() {
-    saveData();
-    alert('Factors saved!');
-    renderAll();
-}
-
-function resetFactors() {
-    countryFactors = { ...DEFAULT_COUNTRY_FACTORS };
-    saveData();
+    factors.country[name] = factor;
     renderCountryFactors();
-    renderAll();
+    closeCountryModal();
+    saveData();
+
+    document.getElementById('new-country-name').value = '';
+    document.getElementById('new-country-factor').value = '1.0';
 }
 
 // ============================================================
-// MAP TAB
+// ADD PROJECT MODAL
+// ============================================================
+function openAddProjectModal() {
+    const modal = document.getElementById('add-project-modal');
+    const tickerSelect = document.getElementById('add-ticker');
+    tickerSelect.innerHTML = Object.keys(MINER_DATA).map(t => `<option value="${t}">${t}</option>`).join('');
+    modal.classList.add('active');
+}
+
+function closeAddProjectModal() {
+    document.getElementById('add-project-modal').classList.remove('active');
+}
+
+function addNewProject(e) {
+    e.preventDefault();
+
+    const newId = Math.max(...ALL_PROJECTS.map(p => p.id), ...customProjects.map(p => p.id), 0) + 1;
+
+    const project = {
+        id: newId,
+        ticker: document.getElementById('add-ticker').value,
+        name: document.getElementById('add-name').value,
+        country: document.getElementById('add-country').value,
+        state: '',
+        gross_mw: 0,
+        it_mw: parseInt(document.getElementById('add-it-mw').value) || 0,
+        grid: document.getElementById('add-grid').value,
+        current_use: 'AI/HPC',
+        status: document.getElementById('add-status').value,
+        lessee: document.getElementById('add-tenant').value,
+        lease_years: parseInt(document.getElementById('add-term').value) || 15,
+        annual_rev: parseFloat(document.getElementById('add-noi').value) || 0,
+        noi_pct: 85,
+        source_url: document.getElementById('add-source').value,
+        lat: null,
+        lng: null
+    };
+
+    customProjects.push(project);
+    saveData();
+    closeAddProjectModal();
+    renderAll();
+
+    // Clear form
+    document.getElementById('add-project-form').reset();
+}
+
+// ============================================================
+// MAP
 // ============================================================
 function initMap() {
-    if (map) return;
+    map = L.map('map').setView([39.8283, -98.5795], 4);
 
-    map = L.map('map', {
-        center: [39.8283, -98.5795], // US center
-        zoom: 4,
-        scrollWheelZoom: true
-    });
-
-    // Dark tile layer
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
-        subdomains: 'abcd',
+        attribution: '&copy; CARTO',
         maxZoom: 19
     }).addTo(map);
 
+    populateMapFilters();
     updateMapMarkers();
+}
+
+function populateMapFilters() {
+    const tickerFilter = document.getElementById('map-ticker-filter');
+    const tickers = [...new Set(ALL_PROJECTS.map(p => p.ticker))].sort();
+    tickers.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        tickerFilter.appendChild(opt);
+    });
 }
 
 function updateMapMarkers() {
@@ -923,62 +1489,61 @@ function updateMapMarkers() {
     markers.forEach(m => map.removeLayer(m));
     markers = [];
 
-    const tickerFilter = document.getElementById('map-ticker-filter')?.value || '';
-    const statusFilter = document.getElementById('map-status-filter')?.value || '';
-    const mwFilter = parseFloat(document.getElementById('map-mw-filter')?.value) || 0;
+    const tickerFilter = document.getElementById('map-ticker-filter').value;
+    const statusFilter = document.getElementById('map-status-filter').value;
+    const minMw = parseInt(document.getElementById('map-mw-filter').value) || 0;
 
-    ALL_PROJECTS.filter(p => p.lat && p.lng).forEach(project => {
-        // Apply filters
-        if (tickerFilter && project.ticker !== tickerFilter) return;
-        if (mwFilter && (project.it_mw || 0) < mwFilter) return;
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
 
-        const isHpc = project.current_use === 'AI/HPC' || isHyperscaler(project.lessee);
-        const isContracted = project.status === 'Operational' || project.status === 'Contracted';
+    allProjects
+        .filter(p => p.lat && p.lng)
+        .filter(p => {
+            if (tickerFilter && p.ticker !== tickerFilter) return false;
+            if (minMw && (p.it_mw || 0) < minMw) return false;
+            if (statusFilter) {
+                const isHpc = p.current_use === 'AI/HPC' || isHyperscaler(p.lessee);
+                const isContracted = p.status === 'Operational' || p.status === 'Contracted';
+                if (statusFilter === 'contracted' && !(isHpc && isContracted)) return false;
+                if (statusFilter === 'pipeline' && !(isHpc && !isContracted)) return false;
+                if (statusFilter === 'btc' && isHpc) return false;
+            }
+            return true;
+        })
+        .forEach(p => {
+            const isHpc = p.current_use === 'AI/HPC' || isHyperscaler(p.lessee);
+            const isContracted = p.status === 'Operational' || p.status === 'Contracted';
 
-        if (statusFilter === 'contracted' && !(isHpc && isContracted)) return;
-        if (statusFilter === 'pipeline' && !(isHpc && !isContracted)) return;
-        if (statusFilter === 'btc' && project.current_use !== 'BTC') return;
+            let color = '#888';
+            if (isHpc && isContracted) color = '#00ff00';
+            else if (isHpc) color = '#ff8c00';
+            else if (p.current_use === 'BTC') color = '#00bfff';
 
-        // Determine color
-        let color = '#888';
-        if (isHpc && isContracted) {
-            color = '#00ff00';
-        } else if (isHpc) {
-            color = '#ff8c00';
-        } else if (project.current_use === 'BTC') {
-            color = '#00bfff';
-        }
+            const marker = L.circleMarker([p.lat, p.lng], {
+                radius: Math.min(Math.max((p.it_mw || 50) / 30, 5), 20),
+                fillColor: color,
+                color: '#fff',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.7
+            });
 
-        // Size based on MW
-        const radius = Math.max(6, Math.min(20, Math.sqrt(project.it_mw || 10) * 2));
+            const overrides = projectOverrides[p.id] || {};
+            const valuation = calculateProjectValue(p, overrides);
 
-        const marker = L.circleMarker([project.lat, project.lng], {
-            radius: radius,
-            fillColor: color,
-            color: '#fff',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-        });
-
-        const statusClass = isContracted ? 'background: #003300; color: #00ff00;' : 'background: #330033; color: #ff88ff;';
-
-        marker.bindPopup(`
-            <div style="min-width: 200px;">
-                <div class="popup-ticker">${project.ticker}</div>
-                <span class="popup-status" style="${statusClass}">${project.status}</span>
-                <div style="margin-top: 8px;"><strong>${project.name}</strong></div>
-                <div style="margin-top: 5px; color: #888;">
-                    ${project.it_mw || 0} MW IT | ${project.current_use}
-                    ${project.lessee ? `<br>Tenant: ${project.lessee}` : ''}
-                    ${project.lease_value ? `<br>Contract: $${project.lease_value}M` : ''}
+            marker.bindPopup(`
+                <div>
+                    <strong class="popup-ticker">${p.ticker}</strong>
+                    <span class="status-badge status-${p.status.toLowerCase()}" style="margin-left: 8px;">${p.status}</span>
+                    <br><strong>${p.name}</strong>
+                    <br>${p.it_mw || 0} MW | ${p.current_use}
+                    ${p.lessee ? `<br>Tenant: ${p.lessee}` : ''}
+                    <br>Value: <strong style="color: #00ff00;">$${formatNumber(valuation.value, 1)}M</strong>
                 </div>
-            </div>
-        `);
+            `);
 
-        marker.addTo(map);
-        markers.push(marker);
-    });
+            marker.addTo(map);
+            markers.push(marker);
+        });
 }
 
 function resetMapFilters() {
@@ -988,113 +1553,109 @@ function resetMapFilters() {
     updateMapMarkers();
 }
 
-// Add map filter event listeners
-document.getElementById('map-ticker-filter')?.addEventListener('change', updateMapMarkers);
-document.getElementById('map-status-filter')?.addEventListener('change', updateMapMarkers);
-document.getElementById('map-mw-filter')?.addEventListener('change', updateMapMarkers);
-
 // ============================================================
 // FILTERS
 // ============================================================
 function populateFilters() {
-    const tickers = [...new Set(ALL_PROJECTS.map(p => p.ticker))].sort();
-    const countries = [...new Set(ALL_PROJECTS.map(p => p.country).filter(Boolean))].sort();
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
+    const tickers = [...new Set(allProjects.map(p => p.ticker))].sort();
+    const countries = [...new Set(allProjects.map(p => p.country))].sort();
 
-    // Populate all ticker filters
-    ['project-ticker-filter', 'hpc-ticker-filter', 'map-ticker-filter', 'hpc-ticker'].forEach(id => {
-        const select = document.getElementById(id);
-        if (select) {
-            const currentVal = select.value;
-            if (id === 'hpc-ticker') {
-                select.innerHTML = '';
-            } else {
-                select.innerHTML = '<option value="">All</option>';
-            }
-            tickers.forEach(ticker => {
-                select.innerHTML += `<option value="${ticker}">${ticker}</option>`;
-            });
-            if (currentVal) select.value = currentVal;
-        }
+    // Project filters
+    const tickerFilter = document.getElementById('project-ticker-filter');
+    const countryFilter = document.getElementById('project-country-filter');
+    const hpcTickerFilter = document.getElementById('hpc-ticker-filter');
+
+    [tickerFilter, hpcTickerFilter].forEach(select => {
+        const current = select.value;
+        select.innerHTML = '<option value="">All</option>';
+        tickers.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            select.appendChild(opt);
+        });
+        select.value = current;
     });
 
-    // Populate country filter
-    const countryFilter = document.getElementById('project-country-filter');
-    if (countryFilter) {
-        countryFilter.innerHTML = '<option value="">All</option>';
-        countries.forEach(country => {
-            countryFilter.innerHTML += `<option value="${country}">${country}</option>`;
-        });
-    }
-}
-
-// Filter event listeners
-document.getElementById('project-ticker-filter')?.addEventListener('change', renderProjectsTable);
-document.getElementById('project-status-filter')?.addEventListener('change', renderProjectsTable);
-document.getElementById('project-use-filter')?.addEventListener('change', renderProjectsTable);
-document.getElementById('project-country-filter')?.addEventListener('change', renderProjectsTable);
-document.getElementById('hpc-ticker-filter')?.addEventListener('change', renderHpcTable);
-document.getElementById('hpc-cap-rate')?.addEventListener('change', () => { renderHpcTable(); renderDashboard(); });
-
-// ============================================================
-// HPC MODAL
-// ============================================================
-function openHpcModal() {
-    document.getElementById('hpc-modal').classList.add('active');
-    document.getElementById('hpc-modal-title').textContent = 'Add HPC Project';
-    document.getElementById('hpc-form').reset();
-}
-
-function closeHpcModal() {
-    document.getElementById('hpc-modal').classList.remove('active');
+    countryFilter.innerHTML = '<option value="">All</option>';
+    countries.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        countryFilter.appendChild(opt);
+    });
 }
 
 // ============================================================
-// UTILITIES
+// UTILITY FUNCTIONS
 // ============================================================
+function formatNumber(num, decimals = 1) {
+    if (num === null || num === undefined || isNaN(num)) return '0';
+    return num.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 function resetAllOverrides() {
-    if (confirm('Reset all overrides?')) {
-        minerOverrides = {};
-        projectFidoodles = {};
-        saveData();
-        renderAll();
-    }
+    if (!confirm('Reset all project overrides? This cannot be undone.')) return;
+    projectOverrides = {};
+    saveData();
+    renderAll();
+    alert('All overrides cleared.');
 }
 
-function exportData() {
-    let csv = 'Ticker,Price,Mkt Cap ($B),HODL Val ($M),Cash ($M),Debt ($M),FD Shares (M),Mining MW,HPC MW,Mining EV ($M),HPC EV Contracted ($M),HPC EV Pipeline ($M)\n';
+// ============================================================
+// EXPORT FUNCTIONS
+// ============================================================
+function exportDashboard() {
+    let csv = 'Ticker,BTC Holdings,Cash ($M),Debt ($M),FD Shares (M),Mining MW,HPC MW Contracted,HPC MW Pipeline,Mining EV ($M),HPC EV Contracted ($M),HPC EV Pipeline ($M),Fair Value ($)\n';
+
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
 
     Object.keys(MINER_DATA).forEach(ticker => {
         const miner = MINER_DATA[ticker];
-        const projects = ALL_PROJECTS.filter(p => p.ticker === ticker);
+        const projects = allProjects.filter(p => p.ticker === ticker);
 
         let contractedMw = 0, pipelineMw = 0, contractedEv = 0, pipelineEv = 0, miningMw = 0;
 
         projects.forEach(p => {
+            const overrides = projectOverrides[p.id] || {};
+            const valuation = calculateProjectValue(p, overrides);
             const isHpc = p.current_use === 'AI/HPC' || isHyperscaler(p.lessee);
-            const dcf = calculateHpcDcfValue(p);
-            const isContracted = p.status === 'Operational' || p.status === 'Contracted';
 
-            if (isHpc && isContracted) { contractedMw += p.it_mw || 0; contractedEv += dcf; }
-            else if (isHpc) { pipelineMw += p.it_mw || 0; pipelineEv += dcf; }
-            else { miningMw += p.it_mw || 0; }
+            if (isHpc && (p.status === 'Operational' || p.status === 'Contracted')) {
+                contractedMw += p.it_mw || 0;
+                contractedEv += valuation.value;
+            } else if (isHpc) {
+                pipelineMw += p.it_mw || 0;
+                pipelineEv += valuation.value;
+            } else {
+                miningMw += p.it_mw || 0;
+            }
         });
 
+        const miningEV = miningMw * factors.baseNoiPerMw / (factors.baseCapRate / 100);
         const hodlValue = miner.btc * btcPrice / 1e6;
-        const miningEV = miningMw * 1.4 / 0.12;
+        const totalEV = miningEV + contractedEv + pipelineEv;
+        const equityValue = totalEV + hodlValue + miner.cash - miner.debt;
+        const fairValue = equityValue / miner.fdShares;
 
-        csv += `${ticker},-,${((miner.fdShares * 10) / 1000).toFixed(1)},${hodlValue.toFixed(0)},${miner.cash},${miner.debt},${miner.fdShares},${miningMw},${contractedMw + pipelineMw},${miningEV.toFixed(0)},${contractedEv.toFixed(0)},${pipelineEv.toFixed(0)}\n`;
+        csv += `${ticker},${miner.btc},${miner.cash},${miner.debt},${miner.fdShares},${miningMw},${contractedMw},${pipelineMw},${miningEV.toFixed(1)},${contractedEv.toFixed(1)},${pipelineEv.toFixed(1)},${fairValue.toFixed(2)}\n`;
     });
 
-    downloadCsv(csv, 'miner_valuation_export.csv');
+    downloadCsv(csv, 'dashboard_export.csv');
 }
 
 function exportProjects() {
-    let csv = 'Ticker,Site Name,Country,State,Gross MW,IT MW,Use,Status,Lessee,Lease Value ($M),Fidoodle,Adj Value ($M)\n';
+    let csv = 'Ticker,Name,Country,Grid,IT MW,Use,Status,Tenant,NOI ($M),Cap Rate,Term Factor,Multipliers,Fidoodle,Value ($M)\n';
 
-    ALL_PROJECTS.forEach(p => {
-        const fidoodle = projectFidoodles[p.id] ?? 1.0;
-        const adjValue = getProjectValue(p);
-        csv += `"${p.ticker}","${p.name}","${p.country}","${p.state}",${p.gross_mw || 0},${p.it_mw || 0},"${p.current_use}","${p.status}","${p.lessee || ''}",${p.lease_value || 0},${fidoodle},${adjValue.toFixed(0)}\n`;
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
+
+    allProjects.forEach(p => {
+        const overrides = projectOverrides[p.id] || {};
+        const val = calculateProjectValue(p, overrides);
+        const c = val.components;
+
+        csv += `"${p.ticker}","${p.name}","${p.country}","${p.grid || ''}",${p.it_mw || 0},"${p.current_use}","${p.status}","${p.lessee || ''}",${c.noi.toFixed(1)},${(c.capEff * 100).toFixed(1)}%,${c.termFactor.toFixed(3)},${c.combinedMult.toFixed(3)},${c.fidoodle.toFixed(2)},${val.value.toFixed(1)}\n`;
     });
 
     downloadCsv(csv, 'projects_export.csv');

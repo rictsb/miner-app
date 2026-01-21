@@ -33,13 +33,32 @@ function isHyperscaler(tenant) {
 // ============================================================
 const DEFAULT_FACTORS = {
     // Global Valuation Parameters
-    baseNoiPerMw: 1.40,      // $M per MW per year
+    baseNoiPerMw: 1.40,      // $M per MW per year (for HPC)
     baseCapRate: 12.0,       // %
     hyperscalerPremium: 1.10, // multiplier
     defaultTerm: 15,          // years
     escalator: 2.5,           // % annual rent growth
     pue: 1.30,                // Gross-to-IT conversion
     fidoodleDefault: 1.00,    // Default fidoodle
+
+    // BTC Mining Valuation Parameters
+    btcMining: {
+        ebitdaPerMw: 0.35,    // $M EBITDA per MW per year
+        ebitdaMultiple: 5.0,  // EV/EBITDA multiple for mining
+    },
+
+    // HPC Conversion Option - discount factors by conversion year
+    // Represents probability-weighted present value of future HPC conversion
+    hpcConversion: {
+        '2025': 0.80,  // Converting soon - high probability, less discounting
+        '2026': 0.65,
+        '2027': 0.50,
+        '2028': 0.40,
+        '2029': 0.30,
+        '2030': 0.25,
+        '2031': 0.20,
+        'never': 0.00   // No conversion value
+    },
 
     // Credit Quality (Cap Rate Adders in %)
     credit: {
@@ -349,10 +368,10 @@ const ALL_PROJECTS = [
     { id: 27, ticker: 'BTDR', name: 'Ethiopia - Phase 2', country: 'Ethiopia', state: '', gross_mw: 10, it_mw: 9, grid: 'ETH', current_use: 'Mixed', status: 'Development', lessee: 'Self/mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 8.000000, lng: 39.000000 },
 
     // CIFR Projects
-    { id: 28, ticker: 'CIFR', name: 'AWS AI Hosting Contract', country: 'United States', state: '', gross_mw: 278, it_mw: 214, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'AWS', lease_years: 15, annual_rev: 367, noi_pct: 85, source_url: '', lat: null, lng: null },
-    { id: 29, ticker: 'CIFR', name: 'Barber Lake (TX) - Fluidstack/Google', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_years: 10, annual_rev: 300, noi_pct: 85, source_url: '', lat: 32.420474, lng: -100.913205 },
-    { id: 30, ticker: 'CIFR', name: 'Barber Lake Fluidstack Additional Site', country: 'United States', state: 'TX', gross_mw: 51, it_mw: 39, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack', lease_years: 10, annual_rev: 83, noi_pct: 85, source_url: '', lat: 32.420474, lng: -100.913205 },
-    { id: 31, ticker: 'CIFR', name: 'Colchis (West TX) - 1 GW JV', country: 'United States', state: 'TX', gross_mw: 1000, it_mw: 800, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (future HPC)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 28, ticker: 'CIFR', name: 'AWS AI Hosting Contract', country: 'United States', state: '', gross_mw: 278, it_mw: 214, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'AWS', lease_years: 15, annual_rev: 367, noi_pct: 85, source_url: 'https://investors.ciphermining.com/news-releases/news-release-details/cipher-mining-signs-agreement-strategic-partnership-softbank', lat: null, lng: null },
+    { id: 29, ticker: 'CIFR', name: 'Barber Lake (TX) - Fluidstack/Google', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_years: 10, annual_rev: 300, noi_pct: 85, source_url: 'https://investors.ciphermining.com/news-releases/news-release-details/cipher-mining-announces-fluidstack-ai-cloud-partnership', lat: 32.420474, lng: -100.913205 },
+    { id: 30, ticker: 'CIFR', name: 'Barber Lake Fluidstack Additional Site', country: 'United States', state: 'TX', gross_mw: 51, it_mw: 39, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack', lease_years: 10, annual_rev: 83, noi_pct: 85, source_url: 'https://investors.ciphermining.com/news-releases/news-release-details/cipher-mining-announces-fluidstack-ai-cloud-partnership', lat: 32.420474, lng: -100.913205 },
+    { id: 31, ticker: 'CIFR', name: 'Colchis (West TX) - 1 GW JV', country: 'United States', state: 'TX', gross_mw: 1000, it_mw: 800, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (future HPC)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investors.ciphermining.com/news-releases/news-release-details/cipher-mining-signs-agreement-strategic-partnership-softbank', lat: 31.106000, lng: -97.647500 },
     { id: 32, ticker: 'CIFR', name: 'McLennan (Riesel, TX)', country: 'United States', state: 'TX', gross_mw: 75, it_mw: 58, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.474892, lng: -96.923326 },
     { id: 33, ticker: 'CIFR', name: 'Mikeska (Doole, TX)', country: 'United States', state: 'TX', gross_mw: 13, it_mw: 10, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.395717, lng: -99.598953 },
     { id: 34, ticker: 'CIFR', name: 'Odessa (TX)', country: 'United States', state: 'TX', gross_mw: 103, it_mw: 79, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.845556, lng: -102.367222 },
@@ -367,34 +386,34 @@ const ALL_PROJECTS = [
     { id: 41, ticker: 'CLSK', name: 'Mississippi portfolio (5 locations)', country: 'United States', state: 'MS', gross_mw: 150, it_mw: 115, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.767300, lng: -89.681200 },
 
     // CORZ Projects
-    { id: 42, ticker: 'CORZ', name: 'CoreWeave - Denton TX (full site)', country: 'United States', state: 'TX', gross_mw: 338, it_mw: 260, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 12, annual_rev: 320, noi_pct: 85, source_url: '', lat: 33.215536, lng: -97.132481 },
-    { id: 43, ticker: 'CORZ', name: 'CoreWeave - 5 other sites combined', country: 'United States', state: '', gross_mw: 429, it_mw: 330, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 12, annual_rev: 405, noi_pct: 85, source_url: '', lat: null, lng: null },
+    { id: 42, ticker: 'CORZ', name: 'CoreWeave - Denton TX (full site)', country: 'United States', state: 'TX', gross_mw: 338, it_mw: 260, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 12, annual_rev: 320, noi_pct: 85, source_url: 'https://www.sec.gov/Archives/edgar/data/0001844971/000119312524235399/d738426d8k.htm', lat: 33.215536, lng: -97.132481 },
+    { id: 43, ticker: 'CORZ', name: 'CoreWeave - 5 other sites combined', country: 'United States', state: '', gross_mw: 429, it_mw: 330, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 12, annual_rev: 405, noi_pct: 85, source_url: 'https://www.sec.gov/Archives/edgar/data/0001844971/000119312524235399/d738426d8k.htm', lat: null, lng: null },
     { id: 44, ticker: 'CORZ', name: 'Cottonwood / Pecos, TX', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'Mixed', status: 'Operational', lessee: 'Mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.422962, lng: -103.492988 },
     { id: 45, ticker: 'CORZ', name: 'Dalton, GA campus', country: 'United States', state: 'GA', gross_mw: 104, it_mw: 80, grid: 'SERC', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 34.769861, lng: -84.969160 },
-    { id: 46, ticker: 'CORZ', name: 'Marble, NC - HPC conversion', country: 'United States', state: 'NC', gross_mw: 135, it_mw: 104, grid: 'SERC', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.174265, lng: -83.926521 },
+    { id: 46, ticker: 'CORZ', name: 'Marble, NC - HPC conversion', country: 'United States', state: 'NC', gross_mw: 135, it_mw: 104, grid: 'SERC', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/Archives/edgar/data/0001844971/000119312524235399/d738426d8k.htm', lat: 35.174265, lng: -83.926521 },
     { id: 47, ticker: 'CORZ', name: 'Calvert City, KY', country: 'United States', state: 'KY', gross_mw: 130, it_mw: 100, grid: 'TVA', current_use: 'Mixed', status: 'Operational', lessee: 'Mixed', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 37.033123, lng: -88.350280 },
-    { id: 48, ticker: 'CORZ', name: 'Muskogee, OK - CoreWeave', country: 'United States', state: 'OK', gross_mw: 91, it_mw: 70, grid: 'SPP', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.747868, lng: -95.369414 },
+    { id: 48, ticker: 'CORZ', name: 'Muskogee, OK - CoreWeave', country: 'United States', state: 'OK', gross_mw: 91, it_mw: 70, grid: 'SPP', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/Archives/edgar/data/0001844971/000119312524235399/d738426d8k.htm', lat: 35.747868, lng: -95.369414 },
     { id: 49, ticker: 'CORZ', name: 'Grand Forks, ND', country: 'United States', state: 'ND', gross_mw: 52, it_mw: 40, grid: 'MISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 47.925136, lng: -97.032699 },
-    { id: 50, ticker: 'CORZ', name: 'Austin, TX - CoreWeave', country: 'United States', state: 'TX', gross_mw: 21, it_mw: 16, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.267118, lng: -97.743130 },
+    { id: 50, ticker: 'CORZ', name: 'Austin, TX - CoreWeave', country: 'United States', state: 'TX', gross_mw: 21, it_mw: 16, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'CoreWeave', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.sec.gov/Archives/edgar/data/0001844971/000119312524235399/d738426d8k.htm', lat: 30.267118, lng: -97.743130 },
 
     // GLXY Projects
-    { id: 51, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase I', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
-    { id: 52, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase II', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
-    { id: 53, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase III', country: 'United States', state: 'TX', gross_mw: 164, it_mw: 126, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 238, noi_pct: 85, source_url: '', lat: 33.781408, lng: -100.879051 },
-    { id: 54, ticker: 'GLXY', name: 'Helios, TX - Expansion', country: 'United States', state: 'TX', gross_mw: 250, it_mw: 192, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 33.781408, lng: -100.879051 },
+    { id: 51, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase I', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: 'https://investor.galaxy.com/news-releases/news-release-details/galaxy-digital-and-coreweave-announce-strategic-partnership', lat: 33.781408, lng: -100.879051 },
+    { id: 52, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase II', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 381, noi_pct: 85, source_url: 'https://investor.galaxy.com/news-releases/news-release-details/galaxy-digital-and-coreweave-announce-strategic-partnership', lat: 33.781408, lng: -100.879051 },
+    { id: 53, ticker: 'GLXY', name: 'Helios, TX - CoreWeave Phase III', country: 'United States', state: 'TX', gross_mw: 164, it_mw: 126, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'CoreWeave', lease_years: 15, annual_rev: 238, noi_pct: 85, source_url: 'https://investor.galaxy.com/news-releases/news-release-details/galaxy-digital-and-coreweave-announce-strategic-partnership', lat: 33.781408, lng: -100.879051 },
+    { id: 54, ticker: 'GLXY', name: 'Helios, TX - Expansion', country: 'United States', state: 'TX', gross_mw: 250, it_mw: 192, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investor.galaxy.com/news-releases/news-release-details/galaxy-digital-and-coreweave-announce-strategic-partnership', lat: 33.781408, lng: -100.879051 },
 
     // HUT Projects
-    { id: 55, ticker: 'HUT', name: 'River Bend (LA) - Fluidstack/Anthropic lease', country: 'United States', state: 'LA', gross_mw: 319, it_mw: 245, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Anthropic', lease_years: 15, annual_rev: 467, noi_pct: 85, source_url: '', lat: 30.757000, lng: -91.332700 },
-    { id: 56, ticker: 'HUT', name: 'River Bend (LA) - ROFO expansion', country: 'United States', state: 'LA', gross_mw: 1300, it_mw: 1000, grid: 'MISO', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.757000, lng: -91.332700 },
-    { id: 57, ticker: 'HUT', name: 'Anthropic partnership - other sites option', country: 'United States', state: '', gross_mw: 1092, it_mw: 840, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Anthropic', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
+    { id: 55, ticker: 'HUT', name: 'River Bend (LA) - Fluidstack/Anthropic lease', country: 'United States', state: 'LA', gross_mw: 319, it_mw: 245, grid: 'MISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Anthropic', lease_years: 15, annual_rev: 467, noi_pct: 85, source_url: 'https://hut8.com/news/hut-8-announces-strategic-partnership-with-anthropic/', lat: 30.757000, lng: -91.332700 },
+    { id: 56, ticker: 'HUT', name: 'River Bend (LA) - ROFO expansion', country: 'United States', state: 'LA', gross_mw: 1300, it_mw: 1000, grid: 'MISO', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://hut8.com/news/hut-8-announces-strategic-partnership-with-anthropic/', lat: 30.757000, lng: -91.332700 },
+    { id: 57, ticker: 'HUT', name: 'Anthropic partnership - other sites option', country: 'United States', state: '', gross_mw: 1092, it_mw: 840, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Anthropic', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://hut8.com/news/hut-8-announces-strategic-partnership-with-anthropic/', lat: null, lng: null },
     { id: 58, ticker: 'HUT', name: 'Ontario power gen sites (4)', country: 'Canada', state: 'ON', gross_mw: 210, it_mw: 162, grid: 'IESO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.000000, lng: -85.000000 },
     { id: 59, ticker: 'HUT', name: 'King Mountain, TX (JV)', country: 'United States', state: 'TX', gross_mw: 310, it_mw: 248, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: 'JV', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.284588, lng: -102.274029 },
     { id: 60, ticker: 'HUT', name: 'Vega, TX', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 80, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 35.243034, lng: -102.428431 },
     { id: 61, ticker: 'HUT', name: 'Medicine Hat, AB', country: 'Canada', state: 'AB', gross_mw: 101, it_mw: 78, grid: 'AESO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 50.041668, lng: -110.677498 },
 
     // IREN Projects
-    { id: 62, ticker: 'IREN', name: 'Childress (TX) - Microsoft Horizon 1-4', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Microsoft', lease_years: 5, annual_rev: 1940, noi_pct: 85, source_url: '', lat: 34.426427, lng: -100.204444 },
-    { id: 63, ticker: 'IREN', name: 'Childress (TX) - Full 750MW', country: 'United States', state: 'TX', gross_mw: 975, it_mw: 750, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 34.426427, lng: -100.204444 },
+    { id: 62, ticker: 'IREN', name: 'Childress (TX) - Microsoft Horizon 1-4', country: 'United States', state: 'TX', gross_mw: 260, it_mw: 200, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Microsoft', lease_years: 5, annual_rev: 1940, noi_pct: 85, source_url: 'https://investors.iren.com/news-releases/news-release-details/iris-energy-announces-colocation-and-cloud-services-agreement', lat: 34.426427, lng: -100.204444 },
+    { id: 63, ticker: 'IREN', name: 'Childress (TX) - Full 750MW', country: 'United States', state: 'TX', gross_mw: 975, it_mw: 750, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investors.iren.com/news-releases/news-release-details/iris-energy-announces-colocation-and-cloud-services-agreement', lat: 34.426427, lng: -100.204444 },
     { id: 64, ticker: 'IREN', name: 'Sweetwater 1 (TX)', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 77, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.471109, lng: -100.406268 },
     { id: 65, ticker: 'IREN', name: 'Sweetwater 2 (TX)', country: 'United States', state: 'TX', gross_mw: 100, it_mw: 77, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.471109, lng: -100.406268 },
     { id: 66, ticker: 'IREN', name: 'Mackenzie (BC)', country: 'Canada', state: 'BC', gross_mw: 64, it_mw: 49, grid: 'BC Hydro', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 55.336167, lng: -123.090000 },
@@ -412,24 +431,24 @@ const ALL_PROJECTS = [
     { id: 76, ticker: 'MARA', name: 'Kearney, NE', country: 'United States', state: 'NE', gross_mw: 64, it_mw: 51, grid: 'SPP', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 40.699331, lng: -99.081636 },
 
     // WULF Projects
-    { id: 77, ticker: 'WULF', name: 'Lake Mariner (NY) - Fluidstack/Google (CB-1 to CB-5)', country: 'United States', state: 'NY', gross_mw: 476, it_mw: 366, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_years: 10, annual_rev: 670, noi_pct: 85, source_url: '', lat: 43.359730, lng: -78.605270 },
-    { id: 78, ticker: 'WULF', name: 'Lake Mariner (NY) - Core42/G42', country: 'United States', state: 'NY', gross_mw: 78, it_mw: 60, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Core42 (G42)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 43.359730, lng: -78.605270 },
-    { id: 79, ticker: 'WULF', name: 'Abernathy, TX - Fluidstack/Google JV', country: 'United States', state: 'TX', gross_mw: 112, it_mw: 86, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack (51% JV)', lease_years: 25, annual_rev: 192, noi_pct: 85, source_url: '', lat: 33.832304, lng: -101.842949 },
-    { id: 80, ticker: 'WULF', name: 'Fluidstack JV Option - Abernathy Phase II', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 33.832304, lng: -101.842949 },
-    { id: 81, ticker: 'WULF', name: 'Fluidstack JV Option - New Site TBD', country: 'United States', state: '', gross_mw: 218, it_mw: 168, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: null, lng: null },
+    { id: 77, ticker: 'WULF', name: 'Lake Mariner (NY) - Fluidstack/Google (CB-1 to CB-5)', country: 'United States', state: 'NY', gross_mw: 476, it_mw: 366, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack/Google', lease_years: 10, annual_rev: 670, noi_pct: 85, source_url: 'https://ir.terawulf.com/news-events/press-releases/detail/107/terawulf-announces-hpc-ai-expansion-at-lake-mariner-with', lat: 43.359730, lng: -78.605270 },
+    { id: 78, ticker: 'WULF', name: 'Lake Mariner (NY) - Core42/G42', country: 'United States', state: 'NY', gross_mw: 78, it_mw: 60, grid: 'NYISO', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Core42 (G42)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://ir.terawulf.com/news-events/press-releases/detail/106/terawulf-announces-agreement-with-core42-for-72-5mw-of-ai', lat: 43.359730, lng: -78.605270 },
+    { id: 79, ticker: 'WULF', name: 'Abernathy, TX - Fluidstack/Google JV', country: 'United States', state: 'TX', gross_mw: 112, it_mw: 86, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Fluidstack (51% JV)', lease_years: 25, annual_rev: 192, noi_pct: 85, source_url: 'https://ir.terawulf.com/news-events/press-releases/detail/107/terawulf-announces-hpc-ai-expansion-at-lake-mariner-with', lat: 33.832304, lng: -101.842949 },
+    { id: 80, ticker: 'WULF', name: 'Fluidstack JV Option - Abernathy Phase II', country: 'United States', state: 'TX', gross_mw: 218, it_mw: 168, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://ir.terawulf.com/news-events/press-releases/detail/107/terawulf-announces-hpc-ai-expansion-at-lake-mariner-with', lat: 33.832304, lng: -101.842949 },
+    { id: 81, ticker: 'WULF', name: 'Fluidstack JV Option - New Site TBD', country: 'United States', state: '', gross_mw: 218, it_mw: 168, grid: '', current_use: 'AI/HPC', status: 'Pipeline', lessee: 'Fluidstack', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://ir.terawulf.com/news-events/press-releases/detail/107/terawulf-announces-hpc-ai-expansion-at-lake-mariner-with', lat: null, lng: null },
     { id: 82, ticker: 'WULF', name: 'Lake Mariner (NY) - BTC Mining', country: 'United States', state: 'NY', gross_mw: 200, it_mw: 154, grid: 'NYISO', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 43.359730, lng: -78.605270 },
 
     // RIOT Projects
-    { id: 83, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - BTC', country: 'United States', state: 'TX', gross_mw: 750, it_mw: 600, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 30.655628, lng: -97.001389 },
-    { id: 84, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - AMD', country: 'United States', state: 'TX', gross_mw: 33, it_mw: 25, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'AMD', lease_years: 10, annual_rev: 31, noi_pct: 85, source_url: '', lat: 30.655628, lng: -97.001389 },
+    { id: 83, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - BTC', country: 'United States', state: 'TX', gross_mw: 750, it_mw: 600, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://www.riotplatforms.com/news-media/press-releases', lat: 30.655628, lng: -97.001389 },
+    { id: 84, ticker: 'RIOT', name: 'Rockdale, TX (Whinstone) - AMD', country: 'United States', state: 'TX', gross_mw: 33, it_mw: 25, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Operational', lessee: 'AMD', lease_years: 10, annual_rev: 31, noi_pct: 85, source_url: 'https://www.riotplatforms.com/news-media/press-releases/detail/174/riot-platforms-inc-announces-artificial-intelligence-and', lat: 30.655628, lng: -97.001389 },
     { id: 85, ticker: 'RIOT', name: 'Corsicana, TX - Phase 1', country: 'United States', state: 'TX', gross_mw: 400, it_mw: 320, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.095564, lng: -96.469432 },
     { id: 86, ticker: 'RIOT', name: 'Corsicana, TX - Full Build', country: 'United States', state: 'TX', gross_mw: 600, it_mw: 462, grid: 'ERCOT', current_use: 'Mixed', status: 'Pipeline', lessee: 'TBD (Evaluation)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 32.095564, lng: -96.469432 },
 
     // SLNH Projects
-    { id: 87, ticker: 'SLNH', name: 'Project Dorothy 1A (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 88, ticker: 'SLNH', name: 'Project Dorothy 1B (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 89, ticker: 'SLNH', name: 'Project Kati 1 (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Galaxy Digital (48MW)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
-    { id: 90, ticker: 'SLNH', name: 'Project Kati 2 (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (AI/HPC)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: 31.106000, lng: -97.647500 },
+    { id: 87, ticker: 'SLNH', name: 'Project Dorothy 1A (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investors.soluna.com/news-releases/', lat: 31.106000, lng: -97.647500 },
+    { id: 88, ticker: 'SLNH', name: 'Project Dorothy 1B (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'BTC', status: 'Development', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investors.soluna.com/news-releases/', lat: 31.106000, lng: -97.647500 },
+    { id: 89, ticker: 'SLNH', name: 'Project Kati 1 (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Contracted', lessee: 'Galaxy Digital (48MW)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investors.soluna.com/news-releases/news-release-details/soluna-holdings-inks-deal-with-galaxy-digital-to-develop-48-mw/', lat: 31.106000, lng: -97.647500 },
+    { id: 90, ticker: 'SLNH', name: 'Project Kati 2 (TX)', country: 'United States', state: 'TX', gross_mw: 83, it_mw: 64, grid: 'ERCOT', current_use: 'AI/HPC', status: 'Development', lessee: 'TBD (AI/HPC)', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: 'https://investors.soluna.com/news-releases/', lat: 31.106000, lng: -97.647500 },
 
     // HIVE Projects
     { id: 91, ticker: 'HIVE', name: 'Yguazu, Paraguay (ex-Bitfarms)', country: 'Paraguay', state: '', gross_mw: 100, it_mw: 77, grid: 'ANDE', current_use: 'BTC', status: 'Operational', lessee: '', lease_years: 0, annual_rev: 0, noi_pct: 0, source_url: '', lat: -25.450000, lng: -55.000000 },
@@ -593,13 +612,124 @@ function calculateNOI(project, overrides = {}) {
 }
 
 /**
+ * Check if project is a BTC mining site (not HPC/AI)
+ */
+function isBtcMiningOnly(project, overrides = {}) {
+    // If it has a hyperscaler tenant, it's HPC
+    if (isHyperscaler(project.lessee)) return false;
+    // If current_use is AI/HPC, it's not BTC only
+    if (project.current_use === 'AI/HPC') return false;
+    // If it has stated annual_rev from HPC lease, treat as HPC
+    if (project.annual_rev && project.annual_rev > 0 && project.noi_pct) return false;
+    // BTC or Mixed without HPC tenant = BTC mining
+    return project.current_use === 'BTC' || project.current_use === 'Mixed';
+}
+
+/**
+ * Calculate BTC Mining Value
+ * Value = EBITDA per MW × IT MW × EBITDA Multiple × Country Factor × Fidoodle
+ */
+function calculateBtcMiningValue(project, overrides = {}) {
+    const itMw = overrides.itMw || project.it_mw || 0;
+    const ebitdaPerMw = overrides.btcEbitdaPerMw ?? factors.btcMining.ebitdaPerMw;
+    const ebitdaMultiple = overrides.btcEbitdaMultiple ?? factors.btcMining.ebitdaMultiple;
+    const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
+    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
+
+    const ebitda = ebitdaPerMw * itMw;
+    const miningValue = ebitda * ebitdaMultiple * fCountry * fidoodle;
+
+    return {
+        ebitda: ebitda,
+        ebitdaPerMw: ebitdaPerMw,
+        ebitdaMultiple: ebitdaMultiple,
+        fCountry: fCountry,
+        fidoodle: fidoodle,
+        value: miningValue
+    };
+}
+
+/**
+ * Calculate HPC Conversion Option Value
+ * If a BTC site could convert to HPC in the future, calculate the option value
+ * Option Value = Potential HPC Value × Conversion Discount Factor × Country Factor
+ */
+function calculateHpcConversionValue(project, overrides = {}) {
+    const conversionYear = overrides.hpcConversionYear || 'never';
+    if (conversionYear === 'never') {
+        return { value: 0, conversionYear: 'never', discountFactor: 0, potentialHpcValue: 0 };
+    }
+
+    const itMw = overrides.itMw || project.it_mw || 0;
+    const discountFactor = factors.hpcConversion[conversionYear] || 0;
+
+    // Calculate what the site would be worth as HPC (using default HPC assumptions)
+    // Use base NOI per MW and base cap rate for potential value
+    const potentialNoi = factors.baseNoiPerMw * itMw;
+    const potentialCapRate = factors.baseCapRate / 100;
+    const fSize = getSizeMultiplier(itMw, null);
+    const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
+    const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
+
+    // Potential HPC value (simplified - operational, NNN, fee simple assumptions)
+    const potentialHpcValue = (potentialNoi / potentialCapRate) * fSize * fCountry * fGrid;
+
+    // Apply conversion discount
+    const optionValue = potentialHpcValue * discountFactor;
+
+    return {
+        value: optionValue,
+        conversionYear: conversionYear,
+        discountFactor: discountFactor,
+        potentialHpcValue: potentialHpcValue,
+        fSize: fSize,
+        fCountry: fCountry,
+        fGrid: fGrid
+    };
+}
+
+/**
  * Main valuation function - Rule of Thumb formula
- * Value_project = NOI1 / Cap_eff × TermFactor × F_credit × F_lease × F_ownership × F_build × F_concentration × Fidoodle
+ * For HPC/AI: Value = NOI1 / Cap_eff × TermFactor × Multipliers × Fidoodle
+ * For BTC: Value = Mining Value + HPC Conversion Option Value
  */
 function calculateProjectValue(project, overrides = {}) {
     const itMw = overrides.itMw || project.it_mw || 0;
-    if (itMw <= 0) return { value: 0, components: {} };
+    if (itMw <= 0) return { value: 0, components: {}, isBtcSite: false };
 
+    // Check if this is a BTC mining site
+    const btcSite = isBtcMiningOnly(project, overrides);
+
+    if (btcSite) {
+        // BTC Mining Valuation
+        const miningVal = calculateBtcMiningValue(project, overrides);
+        const conversionVal = calculateHpcConversionValue(project, overrides);
+
+        const totalValue = miningVal.value + conversionVal.value;
+
+        return {
+            value: totalValue,
+            isBtcSite: true,
+            components: {
+                // Mining components
+                miningValue: miningVal.value,
+                ebitda: miningVal.ebitda,
+                ebitdaPerMw: miningVal.ebitdaPerMw,
+                ebitdaMultiple: miningVal.ebitdaMultiple,
+                // Conversion option components
+                conversionValue: conversionVal.value,
+                conversionYear: conversionVal.conversionYear,
+                conversionDiscount: conversionVal.discountFactor,
+                potentialHpcValue: conversionVal.potentialHpcValue,
+                // Common
+                fCountry: miningVal.fCountry,
+                fidoodle: miningVal.fidoodle,
+                itMw: itMw
+            }
+        };
+    }
+
+    // HPC/AI Lease Valuation (original formula)
     // 1. Calculate NOI
     const noi = calculateNOI(project, overrides);
 
@@ -636,6 +766,7 @@ function calculateProjectValue(project, overrides = {}) {
 
     return {
         value: value,
+        isBtcSite: false,
         components: {
             noi: noi,
             capEff: capEff,
@@ -798,14 +929,60 @@ function renderAll() {
 // PRICE FETCHING
 // ============================================================
 async function fetchPrices() {
+    let success = false;
+
+    // Try CoinGecko first
     try {
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd');
-        const data = await response.json();
-        btcPrice = data.bitcoin.usd;
-        ethPrice = data.ethereum.usd;
+        if (response.ok) {
+            const data = await response.json();
+            if (data.bitcoin && data.bitcoin.usd) {
+                btcPrice = data.bitcoin.usd;
+                ethPrice = data.ethereum?.usd || ethPrice;
+                success = true;
+            }
+        }
     } catch (error) {
-        console.error('Error fetching prices:', error);
+        console.error('CoinGecko API error:', error);
     }
+
+    // Fallback to Coinbase API
+    if (!success) {
+        try {
+            const [btcResp, ethResp] = await Promise.all([
+                fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot'),
+                fetch('https://api.coinbase.com/v2/prices/ETH-USD/spot')
+            ]);
+            if (btcResp.ok) {
+                const btcData = await btcResp.json();
+                btcPrice = parseFloat(btcData.data.amount);
+                success = true;
+            }
+            if (ethResp.ok) {
+                const ethData = await ethResp.json();
+                ethPrice = parseFloat(ethData.data.amount);
+            }
+        } catch (error) {
+            console.error('Coinbase API error:', error);
+        }
+    }
+
+    // Second fallback to Blockchain.info (BTC only)
+    if (!success) {
+        try {
+            const response = await fetch('https://blockchain.info/ticker');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.USD && data.USD.last) {
+                    btcPrice = data.USD.last;
+                    success = true;
+                }
+            }
+        } catch (error) {
+            console.error('Blockchain.info API error:', error);
+        }
+    }
+
     updatePriceDisplay();
     renderDashboard();
 }
@@ -831,6 +1008,7 @@ function renderDashboard() {
     let totalBtc = 0;
     let totalHpcContracted = 0;
     let totalHpcPipeline = 0;
+    let totalMiningEv = 0;
     let totalFairValue = 0;
 
     const allProjects = [...ALL_PROJECTS, ...customProjects];
@@ -843,25 +1021,30 @@ function renderDashboard() {
         let contractedMw = 0, pipelineMw = 0;
         let contractedEv = 0, pipelineEv = 0;
         let miningMw = 0;
+        let miningEV = 0;  // Now calculated per-project
 
         projects.forEach(p => {
             const overrides = projectOverrides[p.id] || {};
             const valuation = calculateProjectValue(p, overrides);
-            const isHpc = p.current_use === 'AI/HPC' || isHyperscaler(p.lessee);
 
-            if (isHpc && (p.status === 'Operational' || p.status === 'Contracted')) {
-                contractedMw += p.it_mw || 0;
-                contractedEv += valuation.value;
-            } else if (isHpc) {
-                pipelineMw += p.it_mw || 0;
-                pipelineEv += valuation.value;
-            } else {
+            if (valuation.isBtcSite) {
+                // BTC mining site - use mining valuation
                 miningMw += p.it_mw || 0;
+                miningEV += valuation.value;  // Includes mining value + conversion option
+            } else {
+                // HPC/AI site
+                const isContracted = p.status === 'Operational' || p.status === 'Contracted';
+                if (isContracted) {
+                    contractedMw += p.it_mw || 0;
+                    contractedEv += valuation.value;
+                } else {
+                    pipelineMw += p.it_mw || 0;
+                    pipelineEv += valuation.value;
+                }
             }
         });
 
         const hodlValue = miner.btc * btcPrice / 1e6;
-        const miningEV = miningMw * factors.baseNoiPerMw / (factors.baseCapRate / 100);
         const totalEV = miningEV + contractedEv + pipelineEv;
         const equityValue = totalEV + hodlValue + miner.cash - miner.debt;
         const fairValue = equityValue / miner.fdShares;
@@ -870,6 +1053,7 @@ function renderDashboard() {
         totalBtc += miner.btc;
         totalHpcContracted += contractedEv;
         totalHpcPipeline += pipelineEv;
+        totalMiningEv += miningEV;
         totalFairValue += equityValue;
 
         // Main row
@@ -974,6 +1158,7 @@ function renderProjectsTable() {
             const overrides = projectOverrides[project.id] || {};
             const valuation = calculateProjectValue(project, overrides);
             const hasOverrides = Object.keys(overrides).length > 0;
+            const c = valuation.components;
 
             const tr = document.createElement('tr');
             tr.className = 'project-row';
@@ -981,34 +1166,98 @@ function renderProjectsTable() {
 
             const location = project.state ? `${project.state}, ${project.country}` : project.country;
 
-            tr.innerHTML = `
-                <td class="col-ticker">
-                    <span class="ticker">${project.ticker}</span>
-                    ${hasOverrides ? '<span class="override-dot"></span>' : ''}
-                </td>
-                <td class="col-name">${project.name}</td>
-                <td class="col-location">${location}</td>
-                <td>${project.it_mw || 0}</td>
-                <td class="col-status">${project.current_use}</td>
-                <td class="col-status">
-                    <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
-                </td>
-                <td class="col-tenant">${project.lessee || '-'}</td>
-                <td>${formatNumber(valuation.components.noi, 1)}</td>
-                <td>${(valuation.components.capEff * 100).toFixed(1)}%</td>
-                <td>${valuation.components.termFactor.toFixed(3)}</td>
-                <td class="has-tooltip" data-tooltip="Credit: ${valuation.components.fCredit.toFixed(2)}
-Size: ${valuation.components.fSize.toFixed(2)}
-Country: ${valuation.components.fCountry.toFixed(2)}
-Grid: ${valuation.components.fGrid.toFixed(2)}
-Build: ${valuation.components.fBuild.toFixed(2)}">${valuation.components.combinedMult.toFixed(3)}</td>
-                <td class="${hasOverrides && overrides.fidoodle ? 'has-override' : ''}">${(overrides.fidoodle || factors.fidoodleDefault).toFixed(2)}</td>
-                <td class="positive">${formatNumber(valuation.value, 1)}</td>
-            `;
+            // Different display for BTC vs HPC sites
+            if (valuation.isBtcSite) {
+                // BTC Mining Site
+                const convYear = c.conversionYear || 'never';
+                const convDisplay = convYear === 'never' ? 'Never' : convYear;
 
-            tr.addEventListener('click', () => openProjectModal(project));
+                tr.innerHTML = `
+                    <td class="col-ticker">
+                        <span class="ticker">${project.ticker}</span>
+                        ${hasOverrides ? '<span class="override-dot"></span>' : ''}
+                    </td>
+                    <td class="col-name">${project.name}</td>
+                    <td class="col-location">${location}</td>
+                    <td>${project.it_mw || 0}</td>
+                    <td class="col-status">${project.current_use}</td>
+                    <td class="col-status">
+                        <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
+                    </td>
+                    <td class="col-tenant">${project.lessee || '-'}</td>
+                    <td class="has-tooltip" data-tooltip="BTC Mining EBITDA
+EBITDA/MW: $${c.ebitdaPerMw?.toFixed(2) || 0}M
+Total EBITDA: $${c.ebitda?.toFixed(1) || 0}M">${formatNumber(c.ebitda || 0, 1)}</td>
+                    <td class="has-tooltip" data-tooltip="EBITDA Multiple for BTC mining">${c.ebitdaMultiple?.toFixed(1) || 0}x</td>
+                    <td>
+                        <select class="hpc-conversion-select" data-project-id="${project.id}" onclick="event.stopPropagation();">
+                            <option value="never" ${convYear === 'never' ? 'selected' : ''}>Never</option>
+                            <option value="2025" ${convYear === '2025' ? 'selected' : ''}>2025</option>
+                            <option value="2026" ${convYear === '2026' ? 'selected' : ''}>2026</option>
+                            <option value="2027" ${convYear === '2027' ? 'selected' : ''}>2027</option>
+                            <option value="2028" ${convYear === '2028' ? 'selected' : ''}>2028</option>
+                            <option value="2029" ${convYear === '2029' ? 'selected' : ''}>2029</option>
+                            <option value="2030" ${convYear === '2030' ? 'selected' : ''}>2030</option>
+                            <option value="2031" ${convYear === '2031' ? 'selected' : ''}>2031</option>
+                        </select>
+                    </td>
+                    <td class="has-tooltip" data-tooltip="Mining: $${formatNumber(c.miningValue || 0, 1)}M
+Option: $${formatNumber(c.conversionValue || 0, 1)}M
+(${convDisplay} @ ${((c.conversionDiscount || 0) * 100).toFixed(0)}%)">${formatNumber(c.fCountry || 1, 2)}</td>
+                    <td class="${hasOverrides && overrides.fidoodle ? 'has-override' : ''}">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</td>
+                    <td class="positive has-tooltip" data-tooltip="Mining: $${formatNumber(c.miningValue || 0, 1)}M
+HPC Option: $${formatNumber(c.conversionValue || 0, 1)}M">${formatNumber(valuation.value, 1)}</td>
+                `;
+            } else {
+                // HPC/AI Site
+                tr.innerHTML = `
+                    <td class="col-ticker">
+                        <span class="ticker">${project.ticker}</span>
+                        ${hasOverrides ? '<span class="override-dot"></span>' : ''}
+                    </td>
+                    <td class="col-name">${project.name}</td>
+                    <td class="col-location">${location}</td>
+                    <td>${project.it_mw || 0}</td>
+                    <td class="col-status">${project.current_use}</td>
+                    <td class="col-status">
+                        <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
+                    </td>
+                    <td class="col-tenant">${project.lessee || '-'}</td>
+                    <td class="has-tooltip" data-tooltip="Year 1 NOI from HPC lease">${formatNumber(c.noi || 0, 1)}</td>
+                    <td class="has-tooltip" data-tooltip="Effective Cap Rate (Base + Credit adj)">${((c.capEff || 0) * 100).toFixed(1)}%</td>
+                    <td class="neutral has-tooltip" data-tooltip="HPC site - term factor: ${(c.termFactor || 0).toFixed(3)}">-</td>
+                    <td class="has-tooltip" data-tooltip="Credit: ${(c.fCredit || 1).toFixed(2)}
+Size: ${(c.fSize || 1).toFixed(2)}
+Country: ${(c.fCountry || 1).toFixed(2)}
+Grid: ${(c.fGrid || 1).toFixed(2)}
+Build: ${(c.fBuild || 1).toFixed(2)}">${(c.combinedMult || 0).toFixed(3)}</td>
+                    <td class="${hasOverrides && overrides.fidoodle ? 'has-override' : ''}">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</td>
+                    <td class="positive">${formatNumber(valuation.value, 1)}</td>
+                `;
+            }
+
+            tr.addEventListener('click', (e) => {
+                // Don't open modal if clicking the conversion dropdown
+                if (e.target.classList.contains('hpc-conversion-select')) return;
+                openProjectModal(project);
+            });
             tbody.appendChild(tr);
         });
+
+    // Add event listeners for HPC conversion dropdowns
+    document.querySelectorAll('.hpc-conversion-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const projectId = parseInt(e.target.dataset.projectId);
+            const year = e.target.value;
+            if (!projectOverrides[projectId]) {
+                projectOverrides[projectId] = {};
+            }
+            projectOverrides[projectId].hpcConversionYear = year;
+            saveData();
+            renderProjectsTable();
+            renderDashboard();
+        });
+    });
 }
 
 // ============================================================
@@ -1232,6 +1481,19 @@ function loadFactorsToUI() {
     document.getElementById('factor-pue').value = factors.pue;
     document.getElementById('factor-fidoodle-default').value = factors.fidoodleDefault;
 
+    // BTC Mining
+    document.getElementById('factor-btc-ebitda-mw').value = factors.btcMining.ebitdaPerMw;
+    document.getElementById('factor-btc-multiple').value = factors.btcMining.ebitdaMultiple;
+
+    // HPC Conversion
+    document.getElementById('conv-2025').value = factors.hpcConversion['2025'];
+    document.getElementById('conv-2026').value = factors.hpcConversion['2026'];
+    document.getElementById('conv-2027').value = factors.hpcConversion['2027'];
+    document.getElementById('conv-2028').value = factors.hpcConversion['2028'];
+    document.getElementById('conv-2029').value = factors.hpcConversion['2029'];
+    document.getElementById('conv-2030').value = factors.hpcConversion['2030'];
+    document.getElementById('conv-2031').value = factors.hpcConversion['2031'];
+
     // Credit
     document.getElementById('credit-hyperscaler').value = factors.credit.hyperscaler;
     document.getElementById('credit-ig').value = factors.credit.ig;
@@ -1288,6 +1550,19 @@ function saveAllFactors() {
     factors.escalator = parseFloat(document.getElementById('factor-escalator').value);
     factors.pue = parseFloat(document.getElementById('factor-pue').value);
     factors.fidoodleDefault = parseFloat(document.getElementById('factor-fidoodle-default').value);
+
+    // BTC Mining
+    factors.btcMining.ebitdaPerMw = parseFloat(document.getElementById('factor-btc-ebitda-mw').value);
+    factors.btcMining.ebitdaMultiple = parseFloat(document.getElementById('factor-btc-multiple').value);
+
+    // HPC Conversion
+    factors.hpcConversion['2025'] = parseFloat(document.getElementById('conv-2025').value);
+    factors.hpcConversion['2026'] = parseFloat(document.getElementById('conv-2026').value);
+    factors.hpcConversion['2027'] = parseFloat(document.getElementById('conv-2027').value);
+    factors.hpcConversion['2028'] = parseFloat(document.getElementById('conv-2028').value);
+    factors.hpcConversion['2029'] = parseFloat(document.getElementById('conv-2029').value);
+    factors.hpcConversion['2030'] = parseFloat(document.getElementById('conv-2030').value);
+    factors.hpcConversion['2031'] = parseFloat(document.getElementById('conv-2031').value);
 
     // Credit
     factors.credit.hyperscaler = parseFloat(document.getElementById('credit-hyperscaler').value);

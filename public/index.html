@@ -735,6 +735,32 @@
             border-radius: 50%;
             margin-left: 4px;
         }
+
+        /* HPC Conversion dropdown in table */
+        .hpc-conversion-select {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #ff8c00;
+            padding: 2px 6px;
+            font-size: 11px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .hpc-conversion-select:hover {
+            border-color: #ff8c00;
+        }
+
+        .hpc-conversion-select:focus {
+            outline: none;
+            border-color: #ff8c00;
+        }
+
+        /* BTC site styling */
+        .btc-site {
+            background: rgba(255, 140, 0, 0.05);
+        }
     </style>
 </head>
 <body>
@@ -876,9 +902,9 @@
                             <th class="col-status">Use</th>
                             <th class="col-status">Status</th>
                             <th class="col-tenant">Tenant</th>
-                            <th>NOI ($M)</th>
-                            <th>Cap Rate</th>
-                            <th>Term Factor</th>
+                            <th>EBITDA/NOI</th>
+                            <th>Multiple/Cap</th>
+                            <th>HPC Conv</th>
                             <th>Multipliers</th>
                             <th>Fidoodle</th>
                             <th>Value ($M)</th>
@@ -1016,6 +1042,83 @@
                         <span class="factor-label">Global Fidoodle Default</span>
                         <div>
                             <input type="number" class="factor-input" id="factor-fidoodle-default" value="1.00" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BTC Mining Valuation -->
+                <div class="factors-section">
+                    <h3>BTC Mining Valuation</h3>
+                    <p class="description">Parameters for valuing BTC mining sites (not HPC leases)</p>
+
+                    <div class="factor-row">
+                        <span class="factor-label">Mining EBITDA per MW per Year</span>
+                        <div>
+                            <input type="number" class="factor-input" id="factor-btc-ebitda-mw" value="0.35" step="0.05">
+                            <span class="factor-unit">$M</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Mining EBITDA Multiple</span>
+                        <div>
+                            <input type="number" class="factor-input" id="factor-btc-multiple" value="5.0" step="0.5">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HPC Conversion Option -->
+                <div class="factors-section">
+                    <h3>HPC Conversion Option</h3>
+                    <p class="description">Discount factors for BTC sites with potential HPC conversion. Represents probability-weighted present value.</p>
+
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2025</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2025" value="0.80" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2026</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2026" value="0.65" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2027</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2027" value="0.50" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2028</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2028" value="0.40" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2029</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2029" value="0.30" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2030</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2030" value="0.25" step="0.05">
+                            <span class="factor-unit">x</span>
+                        </div>
+                    </div>
+                    <div class="factor-row">
+                        <span class="factor-label">Convert 2031</span>
+                        <div>
+                            <input type="number" class="factor-input" id="conv-2031" value="0.20" step="0.05">
                             <span class="factor-unit">x</span>
                         </div>
                     </div>

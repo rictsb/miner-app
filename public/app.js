@@ -308,6 +308,33 @@ function getValuationValue(v, key) {
 }
 
 function renderValuationTable() {
+  // Calculate lease and pipeline totals per miner from client-side projectValuations (with factors applied)
+  const minerTotals = {};
+  projects.forEach(p => {
+    const pv = projectValuations[p.id];
+    if (!pv) return;
+    if (!minerTotals[p.ticker]) minerTotals[p.ticker] = { lease: 0, pipeline: 0 };
+    minerTotals[p.ticker].lease += pv.lease_value || 0;
+    minerTotals[p.ticker].pipeline += pv.pipeline_value || 0;
+  });
+
+  // Override server values with client-calculated values
+  valuations.forEach(v => {
+    const totals = minerTotals[v.ticker] || { lease: 0, pipeline: 0 };
+    v.components.lease_value = totals.lease;
+    v.components.pipeline_value = totals.pipeline;
+    // Recalculate net_value with new lease/pipeline values
+    v.components.net_value = (v.components.mining_ev || 0) + (v.components.hodl_value || 0) +
+      totals.lease + totals.pipeline + (v.components.cash || 0) - (v.components.debt || 0);
+    // Recalculate implied value per share
+    if (v.per_share?.fd_shares_m > 0) {
+      v.per_share.implied_value = v.components.net_value / v.per_share.fd_shares_m;
+      if (v.per_share.current_price > 0) {
+        v.per_share.upside_pct = ((v.per_share.implied_value / v.per_share.current_price) - 1) * 100;
+      }
+    }
+  });
+
   const sorted = [...valuations].sort((a, b) => {
     const aVal = getValuationValue(a, valuationSort.col);
     const bVal = getValuationValue(b, valuationSort.col);

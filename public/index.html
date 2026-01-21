@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BTC Miner Valuation Terminal v6</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
             margin: 0;
@@ -51,10 +53,6 @@
         .header .price-value {
             color: #00ff00;
             font-weight: bold;
-        }
-
-        .header .price-value.negative {
-            color: #ff4444;
         }
 
         .tabs {
@@ -118,6 +116,7 @@
             font-size: 11px;
             position: sticky;
             top: 0;
+            z-index: 10;
         }
 
         th:first-child, td:first-child {
@@ -155,25 +154,29 @@
             text-decoration: underline;
         }
 
-        .tooltip {
+        /* Custom tooltip styles */
+        .has-tooltip {
             position: relative;
             cursor: help;
+            border-bottom: 1px dotted #666;
         }
 
-        .tooltip:hover::after {
+        .has-tooltip:hover::after {
             content: attr(data-tooltip);
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            background: #333;
+            background: #222;
             color: #fff;
-            padding: 8px 12px;
+            padding: 10px 14px;
             border-radius: 4px;
             font-size: 11px;
-            white-space: nowrap;
+            white-space: pre-wrap;
+            max-width: 350px;
             z-index: 1000;
             border: 1px solid #ff8c00;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
         .btn {
@@ -199,6 +202,11 @@
 
         .btn-secondary:hover {
             background: #444;
+        }
+
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 10px;
         }
 
         input, select {
@@ -256,7 +264,7 @@
             background: #111;
             border: 2px solid #ff8c00;
             padding: 20px;
-            max-width: 600px;
+            max-width: 700px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
@@ -308,7 +316,7 @@
         /* Summary cards */
         .summary-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
@@ -337,16 +345,6 @@
             margin-top: 5px;
         }
 
-        /* Editable cell */
-        .editable {
-            cursor: pointer;
-            border-bottom: 1px dashed #444;
-        }
-
-        .editable:hover {
-            border-bottom-color: #ff8c00;
-        }
-
         /* Status badges */
         .status-badge {
             display: inline-block;
@@ -365,13 +363,184 @@
             color: #ffff00;
         }
 
-        .status-pipeline {
+        .status-pipeline, .status-development {
             background: #330033;
             color: #ff88ff;
         }
 
         .table-container {
             overflow-x: auto;
+            max-height: calc(100vh - 300px);
+        }
+
+        /* Expandable rows */
+        .expandable-row {
+            cursor: pointer;
+        }
+
+        .expandable-row:hover {
+            background: #1a1a1a;
+        }
+
+        .expand-icon {
+            display: inline-block;
+            width: 16px;
+            transition: transform 0.2s;
+        }
+
+        .expandable-row.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .expanded-content {
+            display: none;
+            background: #0a0a0a;
+        }
+
+        .expanded-content.show {
+            display: table-row;
+        }
+
+        .expanded-content td {
+            padding: 15px 20px;
+            border-bottom: 2px solid #333;
+        }
+
+        .project-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 10px;
+        }
+
+        .project-item {
+            background: #151515;
+            padding: 10px;
+            border-left: 3px solid #333;
+            font-size: 11px;
+        }
+
+        .project-item.contracted {
+            border-left-color: #00ff00;
+        }
+
+        .project-item.pipeline {
+            border-left-color: #ff8c00;
+        }
+
+        .project-item .project-name {
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .project-item .project-details {
+            color: #888;
+        }
+
+        /* Hyperscaler badge */
+        .hyperscaler-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #00bfff, #0066cc);
+            color: #fff;
+            padding: 2px 6px;
+            font-size: 9px;
+            border-radius: 3px;
+            margin-left: 5px;
+            font-weight: bold;
+        }
+
+        /* Map styles */
+        #map {
+            height: calc(100vh - 280px);
+            min-height: 500px;
+            background: #111;
+            border: 1px solid #333;
+        }
+
+        .map-legend {
+            background: #111;
+            border: 1px solid #333;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .map-legend-item {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 20px;
+            font-size: 11px;
+        }
+
+        .map-legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        /* Factors table */
+        .factors-section {
+            margin-bottom: 30px;
+        }
+
+        .factors-section h3 {
+            color: #ff8c00;
+            font-size: 14px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+
+        .factors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        /* Editable input in table */
+        .editable-input {
+            background: transparent;
+            border: none;
+            color: #ff8c00;
+            width: 60px;
+            text-align: right;
+            padding: 2px 4px;
+        }
+
+        .editable-input:focus {
+            background: #222;
+            border: 1px solid #ff8c00;
+            outline: none;
+        }
+
+        /* Leaflet popup styling */
+        .leaflet-popup-content-wrapper {
+            background: #111;
+            color: #ff8c00;
+            border: 1px solid #ff8c00;
+        }
+
+        .leaflet-popup-tip {
+            background: #111;
+        }
+
+        .leaflet-popup-content {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .popup-ticker {
+            color: #00bfff;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .popup-status {
+            display: inline-block;
+            padding: 2px 6px;
+            font-size: 10px;
+            border-radius: 3px;
+            margin-left: 8px;
         }
     </style>
 </head>
@@ -399,6 +568,7 @@
         <button class="tab" data-tab="projects">Projects</button>
         <button class="tab" data-tab="hpc-val">HPC Val</button>
         <button class="tab" data-tab="factors">Factors</button>
+        <button class="tab" data-tab="map">Map</button>
     </div>
 
     <div class="content">
@@ -416,22 +586,23 @@
                     <div class="sub" id="total-btc-value">$0M</div>
                 </div>
                 <div class="summary-card">
-                    <div class="label">HPC CAPACITY</div>
-                    <div class="value" id="total-hpc-mw">0 MW</div>
-                    <div class="sub">Contracted AI/HPC</div>
+                    <div class="label">CONTRACTED HPC</div>
+                    <div class="value" id="total-hpc-contracted">0 MW</div>
+                    <div class="sub">With signed leases</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">PIPELINE HPC</div>
+                    <div class="value" id="total-hpc-pipeline">0 MW</div>
+                    <div class="sub">Development stage</div>
                 </div>
                 <div class="summary-card">
                     <div class="label">HPC CONTRACT VALUE</div>
                     <div class="value" id="total-hpc-value">$0B</div>
-                    <div class="sub">Total lease value</div>
+                    <div class="sub">Total stated value</div>
                 </div>
             </div>
 
             <div class="controls">
-                <div class="control-group">
-                    <label>Fidoodle Factor:</label>
-                    <input type="number" id="global-fidoodle" value="1.0" min="0" max="2" step="0.05" style="width: 80px;">
-                </div>
                 <button class="btn btn-secondary" onclick="resetAllOverrides()">Reset Overrides</button>
                 <button class="btn" onclick="exportData()">Export CSV</button>
             </div>
@@ -440,19 +611,21 @@
                 <table id="dashboard-table">
                     <thead>
                         <tr>
+                            <th style="width: 30px;"></th>
                             <th>Ticker</th>
                             <th>Price</th>
                             <th>Mkt Cap</th>
-                            <th class="tooltip" data-tooltip="Bitcoin holdings value at current price">HODL Val</th>
-                            <th class="tooltip" data-tooltip="Cash and equivalents">Cash</th>
-                            <th class="tooltip" data-tooltip="Total debt outstanding">Debt</th>
-                            <th class="tooltip" data-tooltip="Fully diluted shares outstanding">FD Shares</th>
-                            <th class="tooltip" data-tooltip="Mining capacity in MW">Mining MW</th>
-                            <th class="tooltip" data-tooltip="HPC/AI capacity in MW">HPC MW</th>
-                            <th class="tooltip" data-tooltip="Mining enterprise value">Mining EV</th>
-                            <th class="tooltip" data-tooltip="HPC enterprise value from DCF">HPC EV</th>
-                            <th class="tooltip" data-tooltip="Fair value per share">Fair Value</th>
-                            <th class="tooltip" data-tooltip="Upside/downside to fair value">Upside</th>
+                            <th>HODL Val</th>
+                            <th>Cash</th>
+                            <th>Debt</th>
+                            <th>FD Shares</th>
+                            <th>Mining MW</th>
+                            <th>HPC MW</th>
+                            <th>Mining EV</th>
+                            <th>HPC EV (Contracted)</th>
+                            <th>HPC EV (Pipeline)</th>
+                            <th>Fair Value</th>
+                            <th>Upside</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -464,7 +637,7 @@
         <div id="projects" class="tab-content">
             <div class="controls">
                 <div class="control-group">
-                    <label>Filter Ticker:</label>
+                    <label>Ticker:</label>
                     <select id="project-ticker-filter">
                         <option value="">All</option>
                     </select>
@@ -476,6 +649,7 @@
                         <option value="Operational">Operational</option>
                         <option value="Contracted">Contracted</option>
                         <option value="Development">Development</option>
+                        <option value="Pipeline">Pipeline</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -487,6 +661,13 @@
                         <option value="Mixed">Mixed</option>
                     </select>
                 </div>
+                <div class="control-group">
+                    <label>Country:</label>
+                    <select id="project-country-filter">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="exportProjects()">Export Projects</button>
             </div>
 
             <div class="table-container">
@@ -496,12 +677,14 @@
                             <th>Ticker</th>
                             <th>Site Name</th>
                             <th>Location</th>
+                            <th>Country</th>
                             <th>Gross MW</th>
                             <th>IT MW</th>
                             <th>Use</th>
                             <th>Status</th>
-                            <th>Grid</th>
                             <th>Lessee</th>
+                            <th>Fidoodle</th>
+                            <th>Adj. Value</th>
                             <th>Source</th>
                         </tr>
                     </thead>
@@ -519,9 +702,14 @@
                     <div class="sub">Contracted projects</div>
                 </div>
                 <div class="summary-card">
-                    <div class="label">TOTAL IT MW</div>
-                    <div class="value" id="hpc-total-mw">0 MW</div>
-                    <div class="sub">Under contract</div>
+                    <div class="label">CONTRACTED MW</div>
+                    <div class="value" id="hpc-contracted-mw">0 MW</div>
+                    <div class="sub">Signed leases</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">PIPELINE MW</div>
+                    <div class="value" id="hpc-pipeline-mw">0 MW</div>
+                    <div class="sub">In development</div>
                 </div>
                 <div class="summary-card">
                     <div class="label">TOTAL CONTRACT VALUE</div>
@@ -543,12 +731,11 @@
                     </select>
                 </div>
                 <div class="control-group">
-                    <label>Cap Rate:</label>
+                    <label>Base Cap Rate:</label>
                     <input type="number" id="hpc-cap-rate" value="12" min="5" max="25" step="0.5" style="width: 70px;">
                     <span>%</span>
                 </div>
                 <button class="btn" onclick="openHpcModal()">+ Add Project</button>
-                <button class="btn btn-secondary" onclick="seedHpcProjects()">Load Seed Data</button>
             </div>
 
             <div class="table-container">
@@ -576,53 +763,138 @@
 
         <!-- Factors Tab -->
         <div id="factors" class="tab-content">
-            <h3 style="color: #ff8c00; margin-bottom: 20px;">Valuation Factors</h3>
-
-            <div class="form-row" style="max-width: 600px;">
-                <div class="form-group">
-                    <label>Base NOI / MW / Year ($M)</label>
-                    <input type="number" id="factor-noi-mw" value="1.40" step="0.1">
+            <div class="factors-grid">
+                <div class="factors-section">
+                    <h3>Base Valuation Parameters</h3>
+                    <table style="max-width: 400px;">
+                        <tr>
+                            <td>Base NOI / MW / Year ($M)</td>
+                            <td><input type="number" id="factor-noi-mw" value="1.40" step="0.1" style="width: 80px;"></td>
+                        </tr>
+                        <tr>
+                            <td>Base Cap Rate (%)</td>
+                            <td><input type="number" id="factor-cap-rate" value="12" step="0.5" style="width: 80px;"></td>
+                        </tr>
+                        <tr>
+                            <td>Hyperscaler Premium</td>
+                            <td><input type="number" id="factor-hyperscaler" value="1.10" step="0.05" style="width: 80px;"></td>
+                        </tr>
+                        <tr>
+                            <td>Gross to IT MW Conversion</td>
+                            <td><input type="number" id="factor-pue" value="1.30" step="0.05" style="width: 80px;"></td>
+                        </tr>
+                    </table>
                 </div>
-                <div class="form-group">
-                    <label>Base Cap Rate (%)</label>
-                    <input type="number" id="factor-cap-rate" value="12" step="0.5">
+
+                <div class="factors-section">
+                    <h3>Size Factors</h3>
+                    <table id="size-factors-table" style="max-width: 300px;">
+                        <thead>
+                            <tr>
+                                <th>Min MW</th>
+                                <th>Factor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>500+</td><td><input type="number" class="editable-input" data-size="500" value="1.10" step="0.05"></td></tr>
+                            <tr><td>250-499</td><td><input type="number" class="editable-input" data-size="250" value="1.00" step="0.05"></td></tr>
+                            <tr><td>100-249</td><td><input type="number" class="editable-input" data-size="100" value="0.95" step="0.05"></td></tr>
+                            <tr><td>&lt;100</td><td><input type="number" class="editable-input" data-size="0" value="0.85" step="0.05"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="factors-section">
+                    <h3>Credit Quality Factors (Cap Rate Adders)</h3>
+                    <table style="max-width: 350px;">
+                        <thead>
+                            <tr>
+                                <th>Tenant Type</th>
+                                <th>Cap Rate Adder</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Hyperscaler (AAA)</td><td><input type="number" class="editable-input" id="credit-hyperscaler" value="-2.0" step="0.5">%</td></tr>
+                            <tr><td>Investment Grade</td><td><input type="number" class="editable-input" id="credit-ig" value="-1.0" step="0.5">%</td></tr>
+                            <tr><td>Speculative Grade</td><td><input type="number" class="editable-input" id="credit-spec" value="1.0" step="0.5">%</td></tr>
+                            <tr><td>Unrated/Startup</td><td><input type="number" class="editable-input" id="credit-unrated" value="2.0" step="0.5">%</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="factors-section">
+                    <h3>Country Factors</h3>
+                    <p style="color: #888; font-size: 11px; margin-bottom: 10px;">Multiplier applied to project values by country. Set to 0 to exclude.</p>
+                    <table id="country-factors-table" style="max-width: 350px;">
+                        <thead>
+                            <tr>
+                                <th>Country</th>
+                                <th>Factor</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <button class="btn btn-secondary btn-small" onclick="addCountryFactor()" style="margin-top: 10px;">+ Add Country</button>
+                </div>
+
+                <div class="factors-section">
+                    <h3>Grid Factors</h3>
+                    <table style="max-width: 300px;">
+                        <thead>
+                            <tr>
+                                <th>Grid</th>
+                                <th>Factor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>ERCOT</td><td><input type="number" class="editable-input" data-grid="ERCOT" value="1.05" step="0.05"></td></tr>
+                            <tr><td>PJM</td><td><input type="number" class="editable-input" data-grid="PJM" value="1.00" step="0.05"></td></tr>
+                            <tr><td>MISO</td><td><input type="number" class="editable-input" data-grid="MISO" value="1.00" step="0.05"></td></tr>
+                            <tr><td>NYISO</td><td><input type="number" class="editable-input" data-grid="NYISO" value="0.95" step="0.05"></td></tr>
+                            <tr><td>Other</td><td><input type="number" class="editable-input" data-grid="Other" value="0.90" step="0.05"></td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <h4 style="color: #888; margin: 20px 0 10px;">Size Factors</h4>
-            <div class="table-container" style="max-width: 400px;">
-                <table id="size-factors-table">
-                    <thead>
-                        <tr>
-                            <th>Min MW</th>
-                            <th>Factor</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td>500+</td><td>1.10</td></tr>
-                        <tr><td>250-499</td><td>1.00</td></tr>
-                        <tr><td>100-249</td><td>0.95</td></tr>
-                        <tr><td>&lt;100</td><td>0.85</td></tr>
-                    </tbody>
-                </table>
+            <div style="margin-top: 20px;">
+                <button class="btn" onclick="saveFactors()">Save All Factors</button>
+                <button class="btn btn-secondary" onclick="resetFactors()">Reset to Defaults</button>
+            </div>
+        </div>
+
+        <!-- Map Tab -->
+        <div id="map-tab" class="tab-content">
+            <div class="controls">
+                <div class="control-group">
+                    <label>Ticker:</label>
+                    <select id="map-ticker-filter">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Status:</label>
+                    <select id="map-status-filter">
+                        <option value="">All</option>
+                        <option value="contracted">Contracted HPC</option>
+                        <option value="pipeline">Pipeline/Development</option>
+                        <option value="btc">BTC Mining</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Min MW:</label>
+                    <input type="number" id="map-mw-filter" value="0" min="0" style="width: 80px;">
+                </div>
+                <button class="btn btn-secondary" onclick="resetMapFilters()">Reset Filters</button>
             </div>
 
-            <h4 style="color: #888; margin: 20px 0 10px;">Credit Quality Factors</h4>
-            <div class="table-container" style="max-width: 400px;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Tenant Type</th>
-                            <th>Cap Rate Adder</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td>Hyperscaler (AAA)</td><td>-2.0%</td></tr>
-                        <tr><td>Investment Grade</td><td>-1.0%</td></tr>
-                        <tr><td>Speculative Grade</td><td>+1.0%</td></tr>
-                        <tr><td>Unrated/Startup</td><td>+2.0%</td></tr>
-                    </tbody>
-                </table>
+            <div id="map"></div>
+
+            <div class="map-legend">
+                <span class="map-legend-item"><span class="map-legend-dot" style="background: #00ff00;"></span>Contracted HPC</span>
+                <span class="map-legend-item"><span class="map-legend-dot" style="background: #ff8c00;"></span>Pipeline/Development</span>
+                <span class="map-legend-item"><span class="map-legend-dot" style="background: #00bfff;"></span>BTC Mining</span>
+                <span class="map-legend-item"><span class="map-legend-dot" style="background: #888;"></span>Other</span>
             </div>
         </div>
     </div>
@@ -639,18 +911,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Ticker</label>
-                        <select id="hpc-ticker" required>
-                            <option value="APLD">APLD</option>
-                            <option value="CIFR">CIFR</option>
-                            <option value="CORZ">CORZ</option>
-                            <option value="GLXY">GLXY</option>
-                            <option value="HUT">HUT</option>
-                            <option value="IREN">IREN</option>
-                            <option value="RIOT">RIOT</option>
-                            <option value="WULF">WULF</option>
-                            <option value="MARA">MARA</option>
-                            <option value="CLSK">CLSK</option>
-                        </select>
+                        <select id="hpc-ticker" required></select>
                     </div>
                     <div class="form-group">
                         <label>Project Name</label>
@@ -719,6 +980,28 @@
                     <button type="submit" class="btn">Save Project</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Country Factor Modal -->
+    <div id="country-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Add Country Factor</h2>
+                <button class="modal-close" onclick="closeCountryModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Country Name</label>
+                <input type="text" id="new-country-name" placeholder="e.g., Ethiopia">
+            </div>
+            <div class="form-group">
+                <label>Factor (0-2)</label>
+                <input type="number" id="new-country-factor" value="1.0" min="0" max="2" step="0.1">
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn btn-secondary" onclick="closeCountryModal()">Cancel</button>
+                <button class="btn" onclick="saveNewCountryFactor()">Add</button>
+            </div>
         </div>
     </div>
 

@@ -17,8 +17,18 @@ function initDataFile() {
   if (!fs.existsSync(DATA_FILE)) {
     const initialData = {
       minerOverrides: {},
-      fidoodleFactors: {},
-      hpcProjects: [],
+      projectFidoodles: {},
+      countryFactors: {
+        'United States': 1.0,
+        'USA': 1.0,
+        'Canada': 0.9,
+        'Norway': 0.85,
+        'Paraguay': 0.7,
+        'Bhutan': 0.5,
+        'Ethiopia': 0.0,
+        'UAE': 0.8,
+        'Multiple': 0.8
+      },
       lastUpdated: new Date().toISOString()
     };
     fs.writeFileSync(DATA_FILE, JSON.stringify(initialData, null, 2));
@@ -44,6 +54,18 @@ app.get('/api/data', (req, res) => {
   res.json(readData());
 });
 
+// Save all data
+app.post('/api/data', (req, res) => {
+  const currentData = readData();
+  const newData = {
+    ...currentData,
+    ...req.body,
+    lastUpdated: new Date().toISOString()
+  };
+  writeData(newData);
+  res.json({ success: true });
+});
+
 // Save miner overrides
 app.post('/api/miner-overrides', (req, res) => {
   const data = readData();
@@ -52,63 +74,24 @@ app.post('/api/miner-overrides', (req, res) => {
   res.json({ success: true });
 });
 
-// Save fidoodle factors
-app.post('/api/fidoodle-factors', (req, res) => {
+// Save project fidoodles
+app.post('/api/project-fidoodles', (req, res) => {
   const data = readData();
-  data.fidoodleFactors = req.body;
+  data.projectFidoodles = req.body;
   writeData(data);
   res.json({ success: true });
 });
 
-// Get HPC projects
-app.get('/api/hpc-projects', (req, res) => {
+// Save country factors
+app.post('/api/country-factors', (req, res) => {
   const data = readData();
-  res.json(data.hpcProjects || []);
-});
-
-// Save HPC projects
-app.post('/api/hpc-projects', (req, res) => {
-  const data = readData();
-  data.hpcProjects = req.body;
-  writeData(data);
-  res.json({ success: true });
-});
-
-// Add single HPC project
-app.post('/api/hpc-project', (req, res) => {
-  const data = readData();
-  if (!data.hpcProjects) data.hpcProjects = [];
-  const newProject = { ...req.body, id: Date.now() };
-  data.hpcProjects.push(newProject);
-  writeData(data);
-  res.json(newProject);
-});
-
-// Update HPC project
-app.put('/api/hpc-project/:id', (req, res) => {
-  const data = readData();
-  const id = parseInt(req.params.id);
-  const index = data.hpcProjects.findIndex(p => p.id === id);
-  if (index !== -1) {
-    data.hpcProjects[index] = { ...req.body, id };
-    writeData(data);
-    res.json(data.hpcProjects[index]);
-  } else {
-    res.status(404).json({ error: 'Project not found' });
-  }
-});
-
-// Delete HPC project
-app.delete('/api/hpc-project/:id', (req, res) => {
-  const data = readData();
-  const id = parseInt(req.params.id);
-  data.hpcProjects = data.hpcProjects.filter(p => p.id !== id);
+  data.countryFactors = req.body;
   writeData(data);
   res.json({ success: true });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`BTC Miner Valuation App running on http://localhost:${PORT}`);
+  console.log(`BTC Miner Valuation App v6 running on http://localhost:${PORT}`);
   initDataFile();
 });

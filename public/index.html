@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTC Miner & HPC Valuation Tool</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #475569;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .app-container { display: flex; flex-direction: column; height: 100vh; }
+
+    header {
+      background: var(--bg-secondary);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    .header-controls { display: flex; gap: 1rem; align-items: center; }
+
+    .main-content { display: flex; flex: 1; overflow: hidden; }
+
+    .sidebar {
+      width: 320px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+    .miner-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+
+    .miner-card {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .miner-card:hover { background: var(--bg-primary); }
+    .miner-card.selected { border-color: var(--accent); }
+    .miner-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .miner-ticker { font-weight: 700; font-size: 1.1rem; }
+    .miner-value { color: var(--success); font-weight: 600; }
+    .miner-metrics { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary); }
+
+    .content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .tabs { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+    .tab {
+      padding: 1rem 1.5rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-content { flex: 1; overflow: hidden; display: none; }
+    .tab-content.active { display: flex; flex-direction: column; }
+
+    .dashboard { padding: 1.5rem; overflow-y: auto; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--bg-card); padding: 1.5rem; border-radius: 8px; }
+    .stat-label { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; }
+
+    .valuation-section { background: var(--bg-card); border-radius: 8px; overflow: hidden; }
+    .section-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .section-header h2 { font-size: 1.1rem; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: var(--bg-secondary); font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); position: sticky; top: 0; }
+    td { font-size: 0.9rem; }
+    tr:hover { background: var(--bg-secondary); }
+
+    .text-right { text-align: right; }
+    .text-success { color: var(--success); }
+    .text-warning { color: var(--warning); }
+    .text-danger { color: var(--danger); }
+
+    #map-container { flex: 1; position: relative; }
+    #map { height: 100%; width: 100%; }
+    .map-filters {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1000;
+      background: var(--bg-card);
+      padding: 1rem;
+      border-radius: 8px;
+      max-width: 300px;
+    }
+    .map-filters h3 { margin-bottom: 1rem; font-size: 1rem; }
+    .filter-group { margin-bottom: 1rem; }
+    .filter-group label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+
+    .projects-container { flex: 1; overflow-y: auto; padding: 1.5rem; }
+    .project-filters { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .projects-table-container { background: var(--bg-card); border-radius: 8px; overflow: auto; max-height: calc(100vh - 250px); }
+
+    .factors-container { padding: 1.5rem; overflow-y: auto; }
+    .factor-category { background: var(--bg-card); border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
+    .factor-category-header { padding: 1rem 1.5rem; background: var(--bg-secondary); font-weight: 600; text-transform: capitalize; }
+    .factor-items { padding: 1rem; }
+    .factor-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .factor-item:last-child { border-bottom: none; }
+
+    input, select, textarea {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    input[type="range"] { width: 100%; }
+    textarea { resize: vertical; min-height: 60px; }
+
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: var(--bg-card); }
+    button.secondary:hover { background: var(--border); }
+    button.danger { background: var(--danger); }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header { padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { padding: 1.5rem; }
+    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 0.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary); }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+
+    .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .badge-success { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .badge-info { background: rgba(59, 130, 246, 0.2); color: var(--accent); }
+
+    .clickable { cursor: pointer; }
+    .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .leaflet-popup-content-wrapper { background: var(--bg-card); color: var(--text-primary); }
+    .leaflet-popup-tip { background: var(--bg-card); }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <h1>BTC Miner & HPC Valuation Tool</h1>
+      <div class="header-controls">
+        <label>BTC Price: $<input type="number" id="btc-price" value="90000" style="width: 100px;"></label>
+        <label>EV/EH: $<input type="number" id="ev-per-eh" value="54" style="width: 60px;">M</label>
+        <button onclick="refreshValuations()">Recalculate</button>
+      </div>
+    </header>
+
+    <div class="main-content">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h2>Miners</h2>
+          <button onclick="showAddMinerModal()" style="margin-top: 0.5rem; width: 100%;">+ Add Miner</button>
+        </div>
+        <div class="miner-list" id="miner-list"></div>
+      </div>
+
+      <div class="content-area">
+        <div class="tabs">
+          <div class="tab active" data-tab="dashboard">Dashboard</div>
+          <div class="tab" data-tab="map">Map</div>
+          <div class="tab" data-tab="projects">Projects</div>
+          <div class="tab" data-tab="factors">Factors</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="tab-dashboard">
+          <div class="dashboard">
+            <div class="stats-grid" id="stats-grid"></div>
+            <div class="valuation-section">
+              <div class="section-header"><h2>Valuation Summary</h2></div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th>Name</th>
+                    <th class="text-right">Mining EV</th>
+                    <th class="text-right">HODL Value</th>
+                    <th class="text-right">Lease Value</th>
+                    <th class="text-right">Pipeline</th>
+                    <th class="text-right">Cash</th>
+                    <th class="text-right">Debt</th>
+                    <th class="text-right">Net Value</th>
+                  </tr>
+                </thead>
+                <tbody id="valuation-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Map Tab -->
+        <div class="tab-content" id="tab-map">
+          <div id="map-container">
+            <div id="map"></div>
+            <div class="map-filters">
+              <h3>Filters</h3>
+              <div class="filter-group">
+                <label>Miner</label>
+                <select id="map-filter-miner"><option value="">All Miners</option></select>
+              </div>
+              <div class="filter-group">
+                <label>Min MW: <span id="mw-value">0</span></label>
+                <input type="range" id="map-filter-mw" min="0" max="1000" value="0">
+              </div>
+              <div class="filter-group">
+                <label>Has Lease</label>
+                <select id="map-filter-lease">
+                  <option value="">All</option>
+                  <option value="true">With Lease</option>
+                  <option value="false">Without Lease</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label>Phase</label>
+                <select id="map-filter-phase"><option value="">All Phases</option></select>
+              </div>
+              <button onclick="applyMapFilters()" style="width: 100%;">Apply Filters</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Projects Tab -->
+        <div class="tab-content" id="tab-projects">
+          <div class="projects-container">
+            <div class="project-filters">
+              <select id="project-filter-ticker"><option value="">All Miners</option></select>
+              <select id="project-filter-status"><option value="">All Statuses</option></select>
+              <select id="project-filter-phase"><option value="">All Phases</option></select>
+              <input type="text" id="project-search" placeholder="Search projects...">
+              <button onclick="showAddProjectModal()">+ Add Project</button>
+            </div>
+            <div class="projects-table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th>Site Name</th>
+                    <th>Phase</th>
+                    <th>State</th>
+                    <th class="text-right">Gross MW</th>
+                    <th class="text-right">IT MW</th>
+                    <th>Grid</th>
+                    <th>Current Use</th>
+                    <th>Status</th>
+                    <th>Energization</th>
+                    <th>Lessee</th>
+                    <th class="text-right">Lease ($M)</th>
+                    <th class="text-right">NOI %</th>
+                    <th>Confidence</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="projects-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Factors Tab -->
+        <div class="tab-content" id="tab-factors">
+          <div class="factors-container" id="factors-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Miner Modal -->
+  <div class="modal-overlay" id="miner-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="miner-modal-title">Add Miner</h3>
+        <button class="secondary" onclick="closeMinerModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="miner-edit-ticker">
+        <div class="form-row">
+          <div class="form-group"><label>Ticker</label><input type="text" id="miner-ticker" placeholder="MARA"></div>
+          <div class="form-group"><label>Name</label><input type="text" id="miner-name" placeholder="MARA Holdings"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Hashrate (EH/s)</label><input type="number" id="miner-hashrate" step="0.1"></div>
+          <div class="form-group">
+            <label>Hashrate Type</label>
+            <select id="miner-hashrate-type">
+              <option value="Self">Self-Mining</option>
+              <option value="HUM">Hosted/Managed</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Total Debt ($M)</label><input type="number" id="miner-debt" step="0.01"></div>
+          <div class="form-group"><label>Cash ($M)</label><input type="number" id="miner-cash" step="0.01"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>BTC Holdings</label><input type="number" id="miner-btc" step="1"></div>
+          <div class="form-group"><label>ETH Holdings</label><input type="number" id="miner-eth" step="1"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary" onclick="closeMinerModal()">Cancel</button>
+        <button onclick="saveMiner()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Project Modal -->
+  <div class="modal-overlay" id="project-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="project-modal-title">Add Project</h3>
+        <button class="secondary" onclick="closeProjectModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="project-edit-id">
+
+        <!-- Basic Info -->
+        <div class="form-row">
+          <div class="form-group"><label>Ticker</label><select id="project-ticker"></select></div>
+          <div class="form-group"><label>Site Name</label><input type="text" id="project-site-name"></div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Site Phase</label>
+            <select id="project-site-phase">
+              <option value="Capacity Online">Capacity Online</option>
+              <option value="Power under construction">Power under construction</option>
+              <option value="Power secured">Power secured</option>
+              <option value="Pipeline">Pipeline</option>
+              <option value="Pipeline - unallocated">Pipeline - unallocated</option>
+              <option value="In discussions">In discussions</option>
+              <option value="Option">Option</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="project-status">
+              <option value="Operational">Operational</option>
+              <option value="Contracted">Contracted</option>
+              <option value="Under Construction">Under Construction</option>
+              <option value="In Development">In Development</option>
+              <option value="Pipeline">Pipeline</option>
+              <option value="Option">Option</option>
+              <option value="Target">Target</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Current Use</label>
+            <select id="project-current-use">
+              <option value="BTC Mining">BTC Mining</option>
+              <option value="AI/HPC">AI/HPC</option>
+              <option value="Mixed">Mixed</option>
+              <option value="Converting">Converting</option>
+              <option value="Planned">Planned</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="form-row-3">
+          <div class="form-group"><label>Country</label><input type="text" id="project-country" value="United States"></div>
+          <div class="form-group"><label>State</label><input type="text" id="project-state"></div>
+          <div class="form-group">
+            <label>Grid</label>
+            <select id="project-grid">
+              <option value="ERCOT">ERCOT</option>
+              <option value="ERCOT (Texas)">ERCOT (Texas)</option>
+              <option value="PJM">PJM</option>
+              <option value="MISO">MISO</option>
+              <option value="NYISO">NYISO</option>
+              <option value="NYISO Zone A">NYISO Zone A</option>
+              <option value="WECC">WECC</option>
+              <option value="SPP">SPP</option>
+              <option value="IESO">IESO</option>
+              <option value="AESO">AESO</option>
+              <option value="BC Hydro">BC Hydro</option>
+              <option value="Hydro-Québec">Hydro-Québec</option>
+              <option value="Various">Various</option>
+              <option value="TBD">TBD</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Power -->
+        <div class="form-row">
+          <div class="form-group"><label>Gross MW</label><input type="number" id="project-gross-mw" step="0.1"></div>
+          <div class="form-group"><label>IT MW</label><input type="number" id="project-it-mw" step="0.1"></div>
+          <div class="form-group"><label>PUE</label><input type="number" id="project-pue" step="0.01" value="1.3"></div>
+          <div class="form-group"><label>Power Authority</label><input type="text" id="project-power-authority"></div>
+        </div>
+
+        <!-- Dates -->
+        <div class="form-row-3">
+          <div class="form-group"><label>Energization Date</label><input type="date" id="project-energization"></div>
+          <div class="form-group"><label>Lease Start</label><input type="text" id="project-lease-start" placeholder="Nov-2025"></div>
+          <div class="form-group">
+            <label>Ownership Status</label>
+            <select id="project-ownership-status">
+              <option value="">Not specified</option>
+              <option value="Owned">Owned</option>
+              <option value="Leased">Leased</option>
+              <option value="JV">Joint Venture</option>
+              <option value="Option">Option</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Lease Details -->
+        <div class="form-row">
+          <div class="form-group"><label>Lessee</label><input type="text" id="project-lessee"></div>
+          <div class="form-group"><label>Lease Value ($M)</label><input type="number" id="project-lease-value" step="0.01"></div>
+          <div class="form-group"><label>Lease Years</label><input type="number" id="project-lease-yrs" step="0.5"></div>
+          <div class="form-group"><label>NOI %</label><input type="number" id="project-noi-pct" step="1" max="100"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Annual Revenue ($M)</label><input type="number" id="project-annual-rev" step="0.01"></div>
+          <div class="form-group"><label>Annual NOI ($M)</label><input type="number" id="project-noi-annual" step="0.01"></div>
+          <div class="form-group"><label>HPC Pipeline MW 2028</label><input type="number" id="project-hpc-pipeline" step="1"></div>
+          <div class="form-group">
+            <label>Confidence</label>
+            <select id="project-confidence">
+              <option value="">Not specified</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group"><label>Lease Notes</label><input type="text" id="project-lease-notes"></div>
+        <div class="form-group"><label>Notes</label><textarea id="project-notes"></textarea></div>
+        <div class="form-group"><label>Source URL</label><input type="text" id="project-source-url"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="danger" onclick="deleteProject()" id="btn-delete-project" style="margin-right: auto; display: none;">Delete</button>
+        <button class="secondary" onclick="closeProjectModal()">Cancel</button>
+        <button onclick="saveProject()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

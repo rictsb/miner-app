@@ -2,9 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Stock price cache (in-memory, refreshes on demand)
+let stockPriceCache = {};
+let lastPriceFetch = 0;
+const PRICE_CACHE_TTL = 60 * 1000; // 1 minute cache
 
 // Middleware
 app.use(cors());
@@ -484,6 +490,223 @@ app.get('/api/stats', (req, res) => {
       grids: Object.entries(gridCounts).map(([grid, data]) => ({ grid, ...data })).sort((a, b) => b.total_mw - a.total_mw)
     };
     res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============== STOCK PRICES API ==============
+
+// Fetch stock price from Yahoo Finance
+async function fetchStockPrice(ticker) {
+  return new Promise((resolve, reject) => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+          resolve(price || null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+// Get all stock prices
+app.get('/api/stock-prices', async (req, res) => {
+  try {
+    const now = Date.now();
+    const forceRefresh = req.query.refresh === 'true';
+
+    // Return cached prices if fresh enough
+    if (!forceRefresh && now - lastPriceFetch < PRICE_CACHE_TTL && Object.keys(stockPriceCache).length > 0) {
+      return res.json(stockPriceCache);
+    }
+
+    // Fetch all miner stock prices
+    const tickers = data.miners.map(m => m.ticker);
+    const prices = {};
+
+    // Fetch in parallel with small batches to avoid rate limiting
+    const batchSize = 5;
+    for (let i = 0; i < tickers.length; i += batchSize) {
+      const batch = tickers.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(async (ticker) => {
+        const price = await fetchStockPrice(ticker);
+        return { ticker, price };
+      }));
+      results.forEach(r => {
+        if (r.price !== null) {
+          prices[r.ticker] = r.price;
+        }
+      });
+    }
+
+    stockPriceCache = prices;
+    lastPriceFetch = now;
+
+    res.json(prices);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single stock price
+app.get('/api/stock-prices/:ticker', async (req, res) => {
+  try {
+    const ticker = req.params.ticker.toUpperCase();
+    const price = await fetchStockPrice(ticker);
+    res.json({ ticker, price });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============== ENHANCED VALUATION API ==============
+
+// Get computed valuations with per-share metrics
+app.get('/api/valuations-enhanced', async (req, res) => {
+  try {
+    const btcPrice = parseFloat(req.query.btc_price) || 90000;
+    const ethPrice = parseFloat(req.query.eth_price) || 3000;
+    const evPerEh = parseFloat(req.query.ev_per_eh) || 54;
+    const includeStockPrices = req.query.include_prices !== 'false';
+
+    // Fetch current stock prices if requested
+    let stockPrices = {};
+    if (includeStockPrices) {
+      const now = Date.now();
+      if (now - lastPriceFetch < PRICE_CACHE_TTL && Object.keys(stockPriceCache).length > 0) {
+        stockPrices = stockPriceCache;
+      } else {
+        const tickers = data.miners.map(m => m.ticker);
+        for (const ticker of tickers) {
+          const price = await fetchStockPrice(ticker);
+          if (price !== null) {
+            stockPrices[ticker] = price;
+          }
+        }
+        stockPriceCache = stockPrices;
+        lastPriceFetch = now;
+      }
+    }
+
+    // Build factor lookup
+    const factorLookup = {};
+    data.factors.forEach(f => {
+      if (!factorLookup[f.category]) factorLookup[f.category] = {};
+      factorLookup[f.category][f.factor_key] = f.multiplier;
+    });
+
+    const capRate = factorLookup['valuation']?.['cap_rate'] || 0.12;
+    const noiPerMwYr = factorLookup['valuation']?.['noi_per_mw_yr'] || 1.4;
+
+    const valuations = data.miners.map(miner => {
+      // Get projects for this miner
+      const projects = data.projects.filter(p => p.ticker === miner.ticker);
+
+      // 1. Mining Value
+      const miningEv = (miner.hashrate_eh || 0) * evPerEh;
+
+      // 2. HODL Value
+      const hodlValue = (miner.btc_holdings || 0) * btcPrice / 1000000 +
+                        (miner.eth_holdings || 0) * ethPrice / 1000000;
+
+      // 3. Lease Value (NPV of contracted NOI)
+      let leaseValue = 0;
+      let pipelineValue = 0;
+
+      projects.forEach(p => {
+        // Get applicable factors
+        let phaseFactor = 1;
+        if (factorLookup['phase']) {
+          phaseFactor = factorLookup['phase'][p.site_phase] || 0.5;
+        }
+
+        let gridFactor = 1;
+        if (factorLookup['grid'] && p.grid) {
+          const gridKey = p.grid.split(' ')[0];
+          gridFactor = factorLookup['grid'][gridKey] || 0.9;
+        }
+
+        let yearFactor = 1;
+        if (factorLookup['year'] && p.energization_date) {
+          const yearMatch = p.energization_date.match(/20\d{2}/);
+          if (yearMatch) {
+            yearFactor = factorLookup['year'][yearMatch[0]] || 0.5;
+          }
+        }
+
+        let sizeFactor = 1;
+        if (factorLookup['size'] && p.it_mw) {
+          if (p.it_mw >= 500) sizeFactor = factorLookup['size']['500'] || 1.1;
+          else if (p.it_mw >= 250) sizeFactor = factorLookup['size']['250'] || 1.0;
+          else if (p.it_mw >= 100) sizeFactor = factorLookup['size']['100'] || 0.95;
+          else sizeFactor = factorLookup['size']['99'] || 0.85;
+        }
+
+        const combinedFactor = phaseFactor * gridFactor * yearFactor * sizeFactor;
+
+        if (p.noi_annual_m && p.noi_annual_m > 0) {
+          leaseValue += (p.noi_annual_m / capRate) * combinedFactor;
+        } else if (p.it_mw && p.it_mw > 0) {
+          const estimatedNoi = p.it_mw * noiPerMwYr * 0.85;
+          pipelineValue += (estimatedNoi / capRate) * combinedFactor;
+        }
+      });
+
+      // 4. Net position
+      const totalAssetValue = miningEv + hodlValue + leaseValue + pipelineValue + (miner.cash_m || 0);
+      const netValue = totalAssetValue - (miner.total_debt_m || 0);
+
+      // 5. Per-share metrics
+      const fdShares = miner.fd_shares_m || miner.shares_outstanding_m || 0;
+      const impliedValuePerShare = fdShares > 0 ? (netValue / fdShares) : null;
+      const currentPrice = stockPrices[miner.ticker] || null;
+      const upsidePct = (impliedValuePerShare && currentPrice)
+        ? ((impliedValuePerShare - currentPrice) / currentPrice * 100)
+        : null;
+
+      return {
+        ticker: miner.ticker,
+        name: miner.name,
+        components: {
+          mining_ev: Math.round(miningEv),
+          hodl_value: Math.round(hodlValue),
+          lease_value: Math.round(leaseValue),
+          pipeline_value: Math.round(pipelineValue),
+          cash: Math.round(miner.cash_m || 0),
+          total_assets: Math.round(totalAssetValue),
+          debt: Math.round(miner.total_debt_m || 0),
+          net_value: Math.round(netValue)
+        },
+        per_share: {
+          fd_shares_m: fdShares,
+          implied_value: impliedValuePerShare ? Math.round(impliedValuePerShare * 100) / 100 : null,
+          current_price: currentPrice,
+          upside_pct: upsidePct ? Math.round(upsidePct * 10) / 10 : null
+        },
+        metrics: {
+          hashrate_eh: miner.hashrate_eh,
+          btc_holdings: miner.btc_holdings,
+          project_count: projects.length,
+          total_it_mw: projects.reduce((sum, p) => sum + (p.it_mw || 0), 0),
+          contracted_mw: projects.filter(p => p.lease_value_m > 0).reduce((sum, p) => sum + (p.it_mw || 0), 0)
+        }
+      };
+    });
+
+    res.json(valuations.sort((a, b) => b.components.net_value - a.components.net_value));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

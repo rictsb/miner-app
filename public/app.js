@@ -3,9 +3,11 @@ let miners = [];
 let projects = [];
 let valuations = [];
 let factors = [];
+let projectValuations = {}; // Store per-project valuations
 let map = null;
 let markers = [];
 let selectedMiner = null;
+let expandedRows = new Set(); // Track expanded rows
 
 const API_BASE = '/api';
 
@@ -59,8 +61,9 @@ async function refreshValuations() {
   const btcPrice = document.getElementById('btc-price').value || 90000;
   const evPerEh = document.getElementById('ev-per-eh').value || 54;
   try {
-    const res = await fetch(`${API_BASE}/valuations?btc_price=${btcPrice}&ev_per_eh=${evPerEh}`);
+    const res = await fetch(`${API_BASE}/valuations-enhanced?btc_price=${btcPrice}&ev_per_eh=${evPerEh}`);
     valuations = await res.json();
+    calculateProjectValuations();
     renderValuationTable();
     renderMinerList();
   } catch (err) {
@@ -68,21 +71,197 @@ async function refreshValuations() {
   }
 }
 
+async function refreshStockPrices() {
+  const btcPrice = document.getElementById('btc-price').value || 90000;
+  const evPerEh = document.getElementById('ev-per-eh').value || 54;
+  try {
+    const res = await fetch(`${API_BASE}/valuations-enhanced?btc_price=${btcPrice}&ev_per_eh=${evPerEh}&refresh_prices=true`);
+    valuations = await res.json();
+    calculateProjectValuations();
+    renderValuationTable();
+    renderMinerList();
+  } catch (err) {
+    console.error('Error refreshing stock prices:', err);
+  }
+}
+
+function calculateProjectValuations() {
+  // Build factor lookup
+  const factorLookup = {};
+  factors.forEach(f => {
+    if (!factorLookup[f.category]) factorLookup[f.category] = {};
+    factorLookup[f.category][f.factor_key] = f.multiplier;
+  });
+
+  const capRate = factorLookup['valuation']?.['cap_rate'] || 0.12;
+  const noiPerMwYr = factorLookup['valuation']?.['noi_per_mw_yr'] || 1.4;
+
+  projectValuations = {};
+
+  projects.forEach(p => {
+    // Get applicable factors
+    let phaseFactor = 1;
+    if (factorLookup['phase']) {
+      phaseFactor = factorLookup['phase'][p.site_phase] || 0.5;
+    }
+
+    let gridFactor = 1;
+    if (factorLookup['grid'] && p.grid) {
+      const gridKey = p.grid.split(' ')[0];
+      gridFactor = factorLookup['grid'][gridKey] || 0.9;
+    }
+
+    let yearFactor = 1;
+    if (factorLookup['year'] && p.energization_date) {
+      const yearMatch = p.energization_date.match(/20\d{2}/);
+      if (yearMatch) {
+        yearFactor = factorLookup['year'][yearMatch[0]] || 0.5;
+      }
+    }
+
+    let sizeFactor = 1;
+    if (factorLookup['size'] && p.it_mw) {
+      if (p.it_mw >= 500) sizeFactor = factorLookup['size']['500'] || 1.1;
+      else if (p.it_mw >= 250) sizeFactor = factorLookup['size']['250'] || 1.0;
+      else if (p.it_mw >= 100) sizeFactor = factorLookup['size']['100'] || 0.95;
+      else sizeFactor = factorLookup['size']['99'] || 0.85;
+    }
+
+    const combinedFactor = phaseFactor * gridFactor * yearFactor * sizeFactor;
+
+    let leaseValue = 0;
+    let pipelineValue = 0;
+    let valueType = 'none';
+
+    if (p.noi_annual_m && p.noi_annual_m > 0) {
+      leaseValue = (p.noi_annual_m / capRate) * combinedFactor;
+      valueType = 'lease';
+    } else if (p.it_mw && p.it_mw > 0) {
+      const estimatedNoi = p.it_mw * noiPerMwYr * 0.85;
+      pipelineValue = (estimatedNoi / capRate) * combinedFactor;
+      valueType = 'pipeline';
+    }
+
+    projectValuations[p.id] = {
+      lease_value: Math.round(leaseValue),
+      pipeline_value: Math.round(pipelineValue),
+      total_value: Math.round(leaseValue + pipelineValue),
+      value_type: valueType,
+      factors: {
+        phase: phaseFactor,
+        grid: gridFactor,
+        year: yearFactor,
+        size: sizeFactor,
+        combined: combinedFactor
+      }
+    };
+  });
+}
+
+function toggleRow(ticker) {
+  if (expandedRows.has(ticker)) {
+    expandedRows.delete(ticker);
+  } else {
+    expandedRows.add(ticker);
+  }
+  renderValuationTable();
+}
+
 function renderValuationTable() {
   const tbody = document.getElementById('valuation-table');
-  tbody.innerHTML = valuations.map(v => `
-    <tr class="clickable" onclick="selectMiner('${v.ticker}')">
+  let html = '';
+
+  valuations.forEach(v => {
+    const ps = v.per_share || {};
+    const upsideClass = ps.upside_pct !== null ? (ps.upside_pct >= 0 ? 'text-success' : 'text-danger') : '';
+    const upsideSign = ps.upside_pct !== null && ps.upside_pct >= 0 ? '+' : '';
+    const isExpanded = expandedRows.has(v.ticker);
+    const expandIcon = isExpanded ? '▼' : '▶';
+
+    // Main row
+    html += `
+    <tr class="data-row ${isExpanded ? 'expanded' : ''}" onclick="toggleRow('${v.ticker}')">
+      <td><span class="expand-icon">${expandIcon}</span></td>
       <td><strong>${v.ticker}</strong></td>
-      <td>${v.name}</td>
-      <td class="text-right">$${formatNumber(v.components.mining_ev)}M</td>
-      <td class="text-right">$${formatNumber(v.components.hodl_value)}M</td>
-      <td class="text-right text-success">$${formatNumber(v.components.lease_value)}M</td>
-      <td class="text-right text-warning">$${formatNumber(v.components.pipeline_value)}M</td>
-      <td class="text-right">$${formatNumber(v.components.cash)}M</td>
-      <td class="text-right text-danger">$${formatNumber(v.components.debt)}M</td>
-      <td class="text-right"><strong class="${v.components.net_value >= 0 ? 'text-success' : 'text-danger'}">$${formatNumber(v.components.net_value)}M</strong></td>
-    </tr>
-  `).join('');
+      <td class="text-right">${formatNum(v.components.mining_ev)}</td>
+      <td class="text-right">${formatNum(v.components.hodl_value)}</td>
+      <td class="text-right text-success">${formatNum(v.components.lease_value)}</td>
+      <td class="text-right text-warning">${formatNum(v.components.pipeline_value)}</td>
+      <td class="text-right">${formatNum(v.components.cash)}</td>
+      <td class="text-right text-danger">${formatNum(v.components.debt)}</td>
+      <td class="text-right"><strong class="${v.components.net_value >= 0 ? 'text-success' : 'text-danger'}">${formatNum(v.components.net_value)}</strong></td>
+      <td class="text-right text-muted">${ps.fd_shares_m ? formatNum(ps.fd_shares_m) : '-'}</td>
+      <td class="text-right">${ps.current_price ? '$' + ps.current_price.toFixed(2) : '-'}</td>
+      <td class="text-right">${ps.implied_value ? '$' + ps.implied_value.toFixed(2) : '-'}</td>
+      <td class="text-right ${upsideClass}"><strong>${ps.upside_pct !== null ? upsideSign + ps.upside_pct.toFixed(1) + '%' : '-'}</strong></td>
+    </tr>`;
+
+    // Expanded content
+    if (isExpanded) {
+      const minerProjects = projects.filter(p => p.ticker === v.ticker);
+      const leaseProjects = minerProjects.filter(p => projectValuations[p.id]?.value_type === 'lease');
+      const pipelineProjects = minerProjects.filter(p => projectValuations[p.id]?.value_type === 'pipeline');
+
+      html += `
+      <tr class="expanded-content">
+        <td colspan="13">
+          <div class="expanded-inner">`;
+
+      // Lease projects
+      if (leaseProjects.length > 0) {
+        html += `<h4>Contracted Leases (${leaseProjects.length})</h4>
+        <div class="project-grid">`;
+        leaseProjects.forEach(p => {
+          const pv = projectValuations[p.id] || {};
+          html += `
+          <div class="project-item">
+            <div class="project-item-header">
+              <span class="project-name">${p.site_name || 'Unnamed'}</span>
+              <span class="project-value">$${formatNum(pv.lease_value)}M</span>
+            </div>
+            <div class="project-details">
+              <span>${p.it_mw || 0} MW</span>
+              <span>${p.grid || '-'}</span>
+              <span>${p.lessee || '-'}</span>
+              <span>NOI: $${p.noi_annual_m?.toFixed(1) || 0}M/yr</span>
+            </div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Pipeline projects
+      if (pipelineProjects.length > 0) {
+        html += `<h4 style="margin-top: 10px;">Pipeline Projects (${pipelineProjects.length})</h4>
+        <div class="project-grid">`;
+        pipelineProjects.forEach(p => {
+          const pv = projectValuations[p.id] || {};
+          html += `
+          <div class="project-item">
+            <div class="project-item-header">
+              <span class="project-name">${p.site_name || 'Unnamed'}</span>
+              <span class="project-value text-warning">$${formatNum(pv.pipeline_value)}M</span>
+            </div>
+            <div class="project-details">
+              <span>${p.it_mw || 0} MW</span>
+              <span>${p.grid || '-'}</span>
+              <span>${p.site_phase || '-'}</span>
+              <span>Factor: ${(pv.factors?.combined || 1).toFixed(2)}x</span>
+            </div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      if (leaseProjects.length === 0 && pipelineProjects.length === 0) {
+        html += `<div class="text-muted">No projects with assigned value</div>`;
+      }
+
+      html += `</div></td></tr>`;
+    }
+  });
+
+  tbody.innerHTML = html;
 }
 
 // ============== MINERS ==============
@@ -98,12 +277,11 @@ function renderMinerList() {
       <div class="miner-card ${isSelected ? 'selected' : ''}" onclick="selectMiner('${m.ticker}')">
         <div class="miner-header">
           <span class="miner-ticker">${m.ticker}</span>
-          <span class="miner-value">$${formatNumber(v.components.net_value)}M</span>
+          <span class="miner-value">$${formatNum(v.components.net_value)}M</span>
         </div>
         <div class="miner-metrics">
-          <span>${m.hashrate_eh || 0} EH/s</span>
-          <span>${v.metrics.project_count || 0} projects</span>
-          <span>${formatNumber(v.metrics.total_it_mw || 0)} MW</span>
+          <span>${m.hashrate_eh || 0} EH</span>
+          <span>${v.metrics.project_count || 0} proj</span>
         </div>
       </div>
     `;
@@ -173,7 +351,7 @@ async function saveMiner() {
 // ============== PROJECTS ==============
 
 function populateFilters() {
-  const tickerOptions = ['<option value="">All Miners</option>']
+  const tickerOptions = ['<option value="">All</option>']
     .concat(miners.map(m => `<option value="${m.ticker}">${m.ticker}</option>`))
     .join('');
   document.getElementById('project-filter-ticker').innerHTML = tickerOptions;
@@ -182,15 +360,15 @@ function populateFilters() {
 
   const statuses = [...new Set(projects.map(p => p.status).filter(Boolean))];
   document.getElementById('project-filter-status').innerHTML =
-    '<option value="">All Statuses</option>' +
+    '<option value="">All</option>' +
     statuses.map(s => `<option value="${s}">${s}</option>`).join('');
 
   const phases = [...new Set(projects.map(p => p.site_phase).filter(Boolean))];
   document.getElementById('map-filter-phase').innerHTML =
-    '<option value="">All Phases</option>' +
+    '<option value="">All</option>' +
     phases.map(p => `<option value="${p}">${p}</option>`).join('');
   document.getElementById('project-filter-phase').innerHTML =
-    '<option value="">All Phases</option>' +
+    '<option value="">All</option>' +
     phases.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
@@ -215,20 +393,19 @@ function renderProjects() {
     <tr>
       <td><strong>${p.ticker}</strong></td>
       <td class="truncate" title="${p.site_name || ''}">${p.site_name || '-'}</td>
-      <td><span class="badge ${getPhaseClass(p.site_phase)}">${p.site_phase || '-'}</span></td>
+      <td><span class="badge ${getPhaseClass(p.site_phase)}">${truncate(p.site_phase, 12) || '-'}</span></td>
       <td>${p.state || '-'}</td>
-      <td class="text-right">${p.gross_mw || '-'}</td>
       <td class="text-right">${p.it_mw || '-'}</td>
       <td>${p.grid || '-'}</td>
-      <td>${p.current_use || '-'}</td>
-      <td><span class="badge ${getStatusClass(p.status)}">${p.status || '-'}</span></td>
+      <td>${truncate(p.current_use, 8) || '-'}</td>
+      <td><span class="badge ${getStatusClass(p.status)}">${truncate(p.status, 10) || '-'}</span></td>
       <td>${p.energization_date ? formatDate(p.energization_date) : '-'}</td>
-      <td>${p.lessee || '-'}</td>
-      <td class="text-right">${p.lease_value_m ? `$${formatNumber(p.lease_value_m)}` : '-'}</td>
-      <td class="text-right">${p.noi_pct ? `${p.noi_pct}%` : '-'}</td>
+      <td>${truncate(p.lessee, 10) || '-'}</td>
+      <td class="text-right">${p.lease_value_m ? formatNum(p.lease_value_m) : '-'}</td>
+      <td class="text-right">${p.noi_pct ? p.noi_pct + '%' : '-'}</td>
       <td><span class="badge ${getConfidenceClass(p.confidence)}">${p.confidence || '-'}</span></td>
       <td>
-        <button class="secondary" onclick="showEditProjectModal(${p.id})" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Edit</button>
+        <button class="secondary" onclick="showEditProjectModal(${p.id})" style="padding: 2px 4px;">Ed</button>
       </td>
     </tr>
   `).join('');
@@ -260,7 +437,6 @@ function showAddProjectModal() {
   document.getElementById('project-edit-id').value = '';
   document.getElementById('btn-delete-project').style.display = 'none';
 
-  // Clear all fields
   const fields = [
     'project-ticker', 'project-site-name', 'project-site-phase', 'project-status',
     'project-current-use', 'project-country', 'project-state', 'project-grid',
@@ -379,7 +555,7 @@ async function saveProject() {
 async function deleteProject() {
   const id = document.getElementById('project-edit-id').value;
   if (!id) return;
-  if (!confirm('Are you sure you want to delete this project?')) return;
+  if (!confirm('Delete this project?')) return;
   try {
     await fetch(`${API_BASE}/projects/${id}`, { method: 'DELETE' });
     closeProjectModal();
@@ -413,7 +589,7 @@ function renderFactors() {
           <div class="factor-item">
             <span>${f.factor_key}</span>
             <input type="number" value="${f.multiplier}" step="0.01"
-              onchange="updateFactor(${f.id}, this.value)" style="width: 80px; text-align: right;">
+              onchange="updateFactor(${f.id}, this.value)" style="width: 60px; text-align: right;">
           </div>
         `).join('')}
       </div>
@@ -440,7 +616,7 @@ function initMap() {
   if (map) return;
   map = L.map('map').setView([39.8, -98.5], 4);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap, &copy; CartoDB',
+    attribution: '&copy; OSM, CartoDB',
     maxZoom: 19
   }).addTo(map);
   renderMapMarkers();
@@ -456,9 +632,9 @@ function renderMapMarkers(filteredProjects = null) {
 
   projectsToShow.forEach(p => {
     if (!p.lat || !p.lng) return;
-    const color = p.lease_value_m > 0 ? '#22c55e' :
-                  p.status === 'Operational' ? '#3b82f6' : '#f59e0b';
-    const radius = Math.max(5, Math.min(20, Math.sqrt(p.it_mw || 10) * 2));
+    const color = p.lease_value_m > 0 ? '#00ff00' :
+                  p.status === 'Operational' ? '#ff6600' : '#ffcc00';
+    const radius = Math.max(4, Math.min(15, Math.sqrt(p.it_mw || 10) * 1.5));
 
     const marker = L.circleMarker([p.lat, p.lng], {
       radius: radius,
@@ -470,19 +646,14 @@ function renderMapMarkers(filteredProjects = null) {
     });
 
     marker.bindPopup(`
-      <div style="min-width: 250px;">
+      <div style="min-width: 200px; font-size: 10px;">
         <strong>${p.ticker}</strong> - ${p.site_name}<br>
-        <hr style="margin: 0.5rem 0; border-color: #475569;">
-        <strong>Phase:</strong> ${p.site_phase || '-'}<br>
-        <strong>Status:</strong> ${p.status || '-'}<br>
-        <strong>Current Use:</strong> ${p.current_use || '-'}<br>
-        <strong>IT MW:</strong> ${p.it_mw || '-'} | <strong>Gross MW:</strong> ${p.gross_mw || '-'}<br>
-        <strong>Grid:</strong> ${p.grid || '-'}<br>
-        <strong>Lessee:</strong> ${p.lessee || '-'}<br>
-        ${p.lease_value_m ? `<strong>Lease:</strong> $${formatNumber(p.lease_value_m)}M (${p.lease_yrs || '-'} yrs)<br>` : ''}
-        ${p.noi_pct ? `<strong>NOI:</strong> ${p.noi_pct}%<br>` : ''}
-        <strong>Energization:</strong> ${p.energization_date ? formatDate(p.energization_date) : '-'}<br>
-        ${p.confidence ? `<strong>Confidence:</strong> ${p.confidence}` : ''}
+        <hr style="margin: 4px 0; border-color: #333;">
+        Phase: ${p.site_phase || '-'}<br>
+        Status: ${p.status || '-'}<br>
+        IT MW: ${p.it_mw || '-'} | Grid: ${p.grid || '-'}<br>
+        Lessee: ${p.lessee || '-'}<br>
+        ${p.lease_value_m ? `Lease: $${formatNum(p.lease_value_m)}M` : ''}
       </div>
     `);
     marker.addTo(map);
@@ -512,23 +683,23 @@ function renderStats(stats) {
   const grid = document.getElementById('stats-grid');
   grid.innerHTML = `
     <div class="stat-card">
-      <div class="stat-label">Total Miners</div>
+      <div class="stat-label">Miners</div>
       <div class="stat-value">${stats.total_miners}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Total Projects</div>
+      <div class="stat-label">Projects</div>
       <div class="stat-value">${stats.total_projects}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Total IT Capacity</div>
-      <div class="stat-value">${formatNumber(stats.total_it_mw)} MW</div>
+      <div class="stat-label">IT Capacity</div>
+      <div class="stat-value">${formatNum(stats.total_it_mw)} MW</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Total Lease Value</div>
-      <div class="stat-value text-success">$${formatNumber(stats.total_lease_value)}M</div>
+      <div class="stat-label">Lease Value</div>
+      <div class="stat-value text-success">$${formatNum(stats.total_lease_value)}M</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Contracted Projects</div>
+      <div class="stat-label">Contracted</div>
       <div class="stat-value">${stats.contracted_projects}</div>
     </div>
   `;
@@ -536,7 +707,7 @@ function renderStats(stats) {
 
 // ============== UTILITIES ==============
 
-function formatNumber(n) {
+function formatNum(n) {
   if (n === null || n === undefined) return '-';
   return Math.round(n).toLocaleString();
 }
@@ -545,7 +716,12 @@ function formatDate(dateStr) {
   if (!dateStr) return '-';
   if (dateStr.includes('-') && dateStr.length >= 7) {
     const d = new Date(dateStr);
-    if (!isNaN(d)) return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    if (!isNaN(d)) return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }
   return dateStr;
+}
+
+function truncate(str, len) {
+  if (!str) return '';
+  return str.length > len ? str.substring(0, len) + '..' : str;
 }

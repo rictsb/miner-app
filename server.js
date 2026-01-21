@@ -12,6 +12,11 @@ let stockPriceCache = {};
 let lastPriceFetch = 0;
 const PRICE_CACHE_TTL = 60 * 1000; // 1 minute cache
 
+// BTC price cache
+let btcPriceCache = null;
+let lastBtcFetch = 0;
+const BTC_CACHE_TTL = 30 * 1000; // 30 seconds cache
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -492,6 +497,57 @@ app.get('/api/stats', (req, res) => {
     res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ============== BTC PRICE API ==============
+
+// Fetch live BTC price from Yahoo Finance
+async function fetchBtcPrice() {
+  return new Promise((resolve, reject) => {
+    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=1d';
+
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+          resolve(price || null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+// Get live BTC price
+app.get('/api/btc-price', async (req, res) => {
+  try {
+    const now = Date.now();
+
+    // Return cached price if fresh enough
+    if (btcPriceCache && now - lastBtcFetch < BTC_CACHE_TTL) {
+      return res.json({ price: btcPriceCache, cached: true });
+    }
+
+    const price = await fetchBtcPrice();
+    if (price) {
+      btcPriceCache = price;
+      lastBtcFetch = now;
+      res.json({ price, cached: false });
+    } else {
+      // Return cached price even if stale, or default
+      res.json({ price: btcPriceCache || 90000, cached: true, stale: true });
+    }
+  } catch (err) {
+    res.json({ price: btcPriceCache || 90000, error: err.message });
   }
 });
 

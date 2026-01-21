@@ -4327,11 +4327,11 @@
       "lessee": "AMD",
       "lease_value_m": 311.0,
       "lease_yrs": 10.0,
-      "annual_rev_m": 1.244,
-      "noi_pct": 0.8038585209003215,
-      "noi_annual_m": 1.0,
+      "annual_rev_m": 31.1,
+      "noi_pct": 80.0,
+      "noi_annual_m": 24.9,
       "lease_start": "2026-01-26 00:00:00",
-      "lease_notes": "Expandable to 200MW",
+      "lease_notes": "$311M/10yr with AMD. Expandable to 200MW",
       "confidence": "HIGH",
       "change_type": null,
       "notes": "https://finviz.com/news/278711/riot-announces-fee-simple-acquisition-of-land-and-first-data-center-lease-with-amd-at-the-rockdale-site",
@@ -4783,6 +4783,72 @@
       "factor_key": "No",
       "multiplier": 0.9,
       "sort_order": 30
+    },
+    {
+      "category": "country",
+      "factor_key": "United States",
+      "multiplier": 1.0,
+      "sort_order": 31
+    },
+    {
+      "category": "country",
+      "factor_key": "USA",
+      "multiplier": 1.0,
+      "sort_order": 32
+    },
+    {
+      "category": "country",
+      "factor_key": "Canada",
+      "multiplier": 0.95,
+      "sort_order": 33
+    },
+    {
+      "category": "country",
+      "factor_key": "Norway",
+      "multiplier": 0.9,
+      "sort_order": 34
+    },
+    {
+      "category": "country",
+      "factor_key": "UAE",
+      "multiplier": 0.85,
+      "sort_order": 35
+    },
+    {
+      "category": "country",
+      "factor_key": "Paraguay",
+      "multiplier": 0.7,
+      "sort_order": 36
+    },
+    {
+      "category": "country",
+      "factor_key": "Bhutan",
+      "multiplier": 0.6,
+      "sort_order": 37
+    },
+    {
+      "category": "country",
+      "factor_key": "Ethiopia",
+      "multiplier": 0.0,
+      "sort_order": 38
+    },
+    {
+      "category": "country",
+      "factor_key": "US / Canada",
+      "multiplier": 0.95,
+      "sort_order": 39
+    },
+    {
+      "category": "country",
+      "factor_key": "US/Canada",
+      "multiplier": 0.95,
+      "sort_order": 40
+    },
+    {
+      "category": "country",
+      "factor_key": "Multiple",
+      "multiplier": 0.85,
+      "sort_order": 41
     }
   ]
 }

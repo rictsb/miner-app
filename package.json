@@ -1,14 +1,12 @@
 {
   "name": "btc-miner-valuation-app",
-  "version": "1.0.0",
-  "description": "BTC Miner & HPC Data Center Valuation Tool",
+  "version": "6.0.0",
+  "description": "BTC Miner Valuation Web App with HPC/AI Lease DCF Model",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
     "express": "^4.18.2"
   }
 }

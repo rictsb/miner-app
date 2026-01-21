@@ -1,1038 +1,727 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BTC Miner Valuation</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    :root {
-      --bg-primary: #000000;
-      --bg-secondary: #1a1a1a;
-      --bg-card: #0d0d0d;
-      --bg-row-hover: #1f1f1f;
-      --bg-expanded: #111111;
-      --text-primary: #ff6600;
-      --text-secondary: #999999;
-      --text-white: #ffffff;
-      --text-muted: #666666;
-      --accent: #ff6600;
-      --accent-dim: #cc5200;
-      --success: #00ff00;
-      --warning: #ffcc00;
-      --danger: #ff3333;
-      --border: #333333;
-      --border-light: #2a2a2a;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Miner Valuation Terminal v6</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #000;
+            color: #ff8c00;
+            min-height: 100vh;
+        }
 
-    body {
-      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-white);
-      font-size: 9pt;
-      line-height: 1.3;
-    }
+        .header {
+            background: linear-gradient(180deg, #1a1a1a 0%, #000 100%);
+            padding: 10px 20px;
+            border-bottom: 2px solid #ff8c00;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-    .app-container { display: flex; flex-direction: column; height: 100vh; }
+        .header h1 {
+            font-size: 18px;
+            color: #ff8c00;
+        }
 
-    header {
-      background: var(--bg-secondary);
-      padding: 4px 12px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    header h1 {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .header-controls { display: flex; gap: 8px; align-items: center; }
-    .header-controls label {
-      color: var(--text-secondary);
-      font-size: 10px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .btc-live { color: var(--success); font-size: 9px; margin-left: 2px; }
+        .header .prices {
+            display: flex;
+            gap: 30px;
+            font-size: 14px;
+        }
 
-    .main-content { display: flex; flex: 1; overflow: hidden; }
+        .header .price-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-    .sidebar {
-      width: 180px;
-      background: var(--bg-secondary);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .sidebar-header {
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg-card);
-    }
-    .sidebar-header h2 {
-      font-size: 10px;
-      color: var(--text-primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .miner-list { flex: 1; overflow-y: auto; }
+        .header .price-label {
+            color: #888;
+        }
 
-    .miner-card {
-      padding: 4px 8px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--border-light);
-      transition: background 0.1s;
-    }
-    .miner-card:hover { background: var(--bg-row-hover); }
-    .miner-card.selected { background: var(--bg-row-hover); border-left: 2px solid var(--accent); }
-    .miner-header { display: flex; justify-content: space-between; align-items: center; }
-    .miner-ticker { font-weight: 700; font-size: 9pt; color: var(--text-white); }
-    .miner-value { color: var(--success); font-size: 8pt; }
-    .miner-metrics { display: flex; gap: 8px; font-size: 8pt; color: var(--text-muted); margin-top: 2px; }
+        .header .price-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
 
-    .content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .header .price-value.negative {
+            color: #ff4444;
+        }
 
-    .tabs {
-      display: flex;
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      padding: 0 8px;
-    }
-    .tab {
-      padding: 6px 12px;
-      cursor: pointer;
-      color: var(--text-secondary);
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-bottom: 2px solid transparent;
-      transition: all 0.1s;
-    }
-    .tab:hover { color: var(--text-white); }
-    .tab.active { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+        .tabs {
+            display: flex;
+            background: #111;
+            border-bottom: 1px solid #333;
+        }
 
-    .tab-content { flex: 1; overflow: hidden; display: none; }
-    .tab-content.active { display: flex; flex-direction: column; }
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
 
-    .dashboard { padding: 8px; overflow-y: auto; display: flex; flex-direction: column; flex: 1; }
-    .stats-grid { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-    .stat-card {
-      background: var(--bg-card);
-      padding: 8px 12px;
-      border: 1px solid var(--border);
-      min-width: 100px;
-    }
-    .stat-label { color: var(--text-muted); font-size: 9px; text-transform: uppercase; }
-    .stat-value { font-size: 14px; font-weight: 700; color: var(--text-white); }
+        .tab:hover {
+            color: #ff8c00;
+            background: #1a1a1a;
+        }
 
-    .valuation-section {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      flex: 1;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .section-header {
-      padding: 6px 10px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--bg-secondary);
-    }
-    .section-header h2 {
-      font-size: 10px;
-      color: var(--text-primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
+        .tab.active {
+            color: #ff8c00;
+            border-bottom-color: #ff8c00;
+            background: #1a1a1a;
+        }
 
-    .table-container { overflow: auto; flex: 1; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th, td {
-      padding: 3px 6px;
-      text-align: left;
-      border-bottom: 1px solid var(--border-light);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    th {
-      background: var(--bg-secondary);
-      font-weight: 600;
-      font-size: 9px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      position: sticky;
-      top: 0;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      user-select: none;
-      position: relative;
-    }
-    th:hover { color: var(--text-white); }
-    th.sorted-asc::after { content: ' ▲'; color: var(--accent); }
-    th.sorted-desc::after { content: ' ▼'; color: var(--accent); }
+        .content {
+            padding: 20px;
+        }
 
-    /* Resizable columns */
-    th .resizer {
-      position: absolute;
-      right: 0;
-      top: 0;
-      height: 100%;
-      width: 4px;
-      background: transparent;
-      cursor: col-resize;
-    }
-    th .resizer:hover,
-    th .resizer.resizing { background: var(--accent); }
+        .tab-content {
+            display: none;
+        }
 
-    td { font-size: 10px; }
-    tr.data-row { cursor: pointer; }
-    tr.data-row:hover { background: var(--bg-row-hover); }
-    tr.expanded { background: var(--bg-row-hover); }
-    tr.fidoodle-override { background: #1a1a00; }
-    tr.fidoodle-override:hover { background: #2a2a10; }
-    .fidoodle-row { background: rgba(255, 204, 0, 0.1); padding: 4px; margin: 4px 0; border-radius: 3px; }
+        .tab-content.active {
+            display: block;
+        }
 
-    .expand-icon {
-      color: var(--text-muted);
-      font-size: 8px;
-      margin-right: 4px;
-      display: inline-block;
-      width: 10px;
-    }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
 
-    .expanded-content {
-      background: var(--bg-expanded);
-      border-bottom: 1px solid var(--border);
-    }
-    .expanded-content td { padding: 0; }
-    .expanded-inner { padding: 8px 12px 8px 24px; }
-    .expanded-inner h4 {
-      font-size: 9px;
-      color: var(--text-primary);
-      text-transform: uppercase;
-      margin-bottom: 6px;
-      letter-spacing: 0.5px;
-    }
-    .project-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 6px;
-    }
-    .project-item {
-      background: var(--bg-card);
-      border: 1px solid var(--border-light);
-      padding: 6px 8px;
-      font-size: 9px;
-    }
-    .project-item-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 4px;
-    }
-    .project-name { color: var(--text-white); font-weight: 600; }
-    .project-value { color: var(--success); }
-    .project-details { color: var(--text-muted); }
-    .project-details span { margin-right: 8px; }
+        th, td {
+            padding: 8px 12px;
+            text-align: right;
+            border-bottom: 1px solid #222;
+        }
 
-    /* Calculation breakdown */
-    .calc-breakdown {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      padding: 10px 12px;
-      margin-top: 4px;
-    }
-    .calc-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 2px 0;
-      font-size: 9px;
-    }
-    .calc-row.total {
-      border-top: 1px solid var(--border);
-      margin-top: 4px;
-      padding-top: 4px;
-      font-weight: 700;
-    }
-    .calc-label { color: var(--text-muted); }
-    .calc-value { color: var(--text-white); }
-    .calc-formula { color: var(--text-secondary); font-size: 8px; margin-left: 8px; }
+        th {
+            background: #111;
+            color: #ff8c00;
+            font-weight: normal;
+            text-transform: uppercase;
+            font-size: 11px;
+            position: sticky;
+            top: 0;
+        }
 
-    .text-right { text-align: right; }
-    .text-success { color: var(--success); }
-    .text-warning { color: var(--warning); }
-    .text-danger { color: var(--danger); }
-    .text-muted { color: var(--text-muted); }
+        th:first-child, td:first-child {
+            text-align: left;
+        }
 
-    #map-container { flex: 1; position: relative; }
-    #map { height: 100%; width: 100%; }
-    .map-filters {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 1000;
-      background: var(--bg-card);
-      padding: 8px;
-      border: 1px solid var(--border);
-      font-size: 10px;
-      width: 180px;
-    }
-    .map-filters h3 {
-      margin-bottom: 8px;
-      font-size: 10px;
-      color: var(--text-primary);
-      text-transform: uppercase;
-    }
-    .filter-group { margin-bottom: 6px; }
-    .filter-group label {
-      display: block;
-      font-size: 9px;
-      color: var(--text-muted);
-      margin-bottom: 2px;
-      text-transform: uppercase;
-    }
+        tr:hover {
+            background: #1a1a1a;
+        }
 
-    .projects-container { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; }
-    .project-filters { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-    .projects-table-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      overflow: auto;
-      flex: 1;
-    }
+        .ticker {
+            color: #00bfff;
+            font-weight: bold;
+        }
 
-    .factors-container { padding: 8px; overflow-y: auto; }
-    .factor-category {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      margin-bottom: 8px;
-    }
-    .factor-category-header {
-      padding: 6px 10px;
-      background: var(--bg-secondary);
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 10px;
-      color: var(--text-primary);
-      letter-spacing: 0.5px;
-    }
-    .factor-items { padding: 6px 10px; }
-    .factor-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 3px 0;
-      border-bottom: 1px solid var(--border-light);
-      font-size: 10px;
-    }
-    .factor-item:last-child { border-bottom: none; }
+        .positive {
+            color: #00ff00;
+        }
 
-    input, select, textarea {
-      background: var(--bg-primary);
-      border: 1px solid var(--border);
-      color: var(--text-white);
-      padding: 3px 6px;
-      font-size: 10px;
-      font-family: inherit;
-    }
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-    input[type="range"] { width: 100%; }
-    textarea { resize: vertical; min-height: 40px; }
+        .negative {
+            color: #ff4444;
+        }
 
-    button {
-      background: var(--accent);
-      color: var(--bg-primary);
-      border: none;
-      padding: 3px 8px;
-      font-size: 9px;
-      font-weight: 700;
-      cursor: pointer;
-      text-transform: uppercase;
-      font-family: inherit;
-      letter-spacing: 0.5px;
-    }
-    button:hover { background: var(--accent-dim); }
-    button.secondary { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); }
-    button.secondary:hover { background: var(--bg-row-hover); color: var(--text-white); }
-    button.danger { background: var(--danger); }
+        .neutral {
+            color: #888;
+        }
 
-    /* Source cells with tooltips */
-    .source-cell {
-      cursor: pointer;
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      padding: 1px 3px;
-      border-radius: 2px;
-      transition: background 0.15s;
-      gap: 2px;
-    }
-    .source-cell:hover { background: rgba(255,102,0,0.2); }
-    .source-cell.has-override { background: rgba(0,255,0,0.1); }
-    .source-indicator {
-      font-size: 8px;
-      margin-left: 3px;
-      opacity: 0.5;
-    }
-    .source-cell:hover .source-indicator { opacity: 1; }
-    .source-link-icon {
-      font-size: 10px;
-      text-decoration: none;
-      opacity: 0.6;
-      transition: opacity 0.15s;
-    }
-    .source-link-icon:hover { opacity: 1; }
+        .source-link {
+            color: #00bfff;
+            text-decoration: none;
+            cursor: pointer;
+        }
 
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.85);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-    }
-    .modal-overlay.active { display: flex; }
-    .modal {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      width: 90%;
-      max-width: 700px;
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-    .modal-header {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--bg-card);
-    }
-    .modal-header h3 {
-      font-size: 11px;
-      color: var(--text-primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .modal-body { padding: 12px; }
-    .modal-footer {
-      padding: 8px 12px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: flex-end;
-      gap: 6px;
-      background: var(--bg-card);
-    }
-    .form-group { margin-bottom: 8px; }
-    .form-group label {
-      display: block;
-      margin-bottom: 3px;
-      font-size: 9px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-    .form-group input, .form-group select, .form-group textarea { width: 100%; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .source-link:hover {
+            text-decoration: underline;
+        }
 
-    /* HPC Val Tab */
-    .hpcval-container { padding: 12px; }
-    .hpcval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .hpcval-header h2 { margin: 0; font-size: 14px; }
-    .hpcval-header .header-buttons { display: flex; gap: 8px; }
-    .hpcval-summary { margin-bottom: 12px; }
-    .hpc-summary-grid { display: flex; gap: 20px; align-items: flex-start; }
-    .hpc-totals { display: flex; gap: 12px; flex-wrap: wrap; }
-    .hpcval-summary .stat { background: var(--bg-card); padding: 8px 12px; border: 1px solid var(--border); min-width: 100px; }
-    .hpcval-summary .stat-label { font-size: 8px; color: var(--text-muted); text-transform: uppercase; }
-    .hpcval-summary .stat-value { font-size: 14px; font-weight: 600; }
-    .hpc-by-company { flex: 1; background: var(--bg-card); padding: 8px 12px; border: 1px solid var(--border); }
-    .hpc-by-company h4 { margin: 0 0 8px 0; font-size: 9px; color: var(--text-muted); text-transform: uppercase; }
-    .company-hpc-row { display: grid; grid-template-columns: 60px 70px 90px 80px; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border-light); font-size: 9px; }
-    .company-hpc-row:last-child { border-bottom: none; }
-    .company-ticker { font-weight: 700; color: var(--accent); }
-    .company-mw { color: var(--text-secondary); }
-    .company-value { font-weight: 600; }
-    .company-per-mw { color: var(--text-secondary); }
-    .hpcval-table-container { overflow-x: auto; }
-    .hpc-section { margin-bottom: 16px; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); }
-    .hpc-section h4 { margin: 0 0 10px 0; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
-    .source-link { text-decoration: none; font-size: 12px; }
-    .source-link:hover { filter: brightness(1.3); }
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
 
-    .badge {
-      display: inline-block;
-      padding: 1px 4px;
-      font-size: 8px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-    .badge-success { background: rgba(0, 255, 0, 0.15); color: var(--success); }
-    .badge-warning { background: rgba(255, 204, 0, 0.15); color: var(--warning); }
-    .badge-info { background: rgba(255, 102, 0, 0.15); color: var(--accent); }
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid #ff8c00;
+        }
 
-    .clickable { cursor: pointer; }
-    .truncate { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .btn {
+            background: #ff8c00;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 5px;
+        }
 
-    .leaflet-popup-content-wrapper { background: var(--bg-card); color: var(--text-white); border-radius: 0; }
-    .leaflet-popup-tip { background: var(--bg-card); }
+        .btn:hover {
+            background: #ffaa00;
+        }
 
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg-primary); }
-    ::-webkit-scrollbar-thumb { background: var(--border); }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-  </style>
+        .btn-secondary {
+            background: #333;
+            color: #ff8c00;
+            border: 1px solid #ff8c00;
+        }
+
+        .btn-secondary:hover {
+            background: #444;
+        }
+
+        input, select {
+            background: #111;
+            border: 1px solid #333;
+            color: #ff8c00;
+            padding: 6px 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #ff8c00;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group label {
+            color: #888;
+            font-size: 11px;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #111;
+            border: 2px solid #ff8c00;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .modal-header h2 {
+            color: #ff8c00;
+            font-size: 16px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #ff8c00;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        /* Summary cards */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: #111;
+            border: 1px solid #333;
+            padding: 15px;
+        }
+
+        .summary-card .label {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        .summary-card .value {
+            color: #ff8c00;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .summary-card .sub {
+            color: #666;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        /* Editable cell */
+        .editable {
+            cursor: pointer;
+            border-bottom: 1px dashed #444;
+        }
+
+        .editable:hover {
+            border-bottom-color: #ff8c00;
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 10px;
+            border-radius: 3px;
+        }
+
+        .status-operational {
+            background: #003300;
+            color: #00ff00;
+        }
+
+        .status-contracted {
+            background: #333300;
+            color: #ffff00;
+        }
+
+        .status-pipeline {
+            background: #330033;
+            color: #ff88ff;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+    </style>
 </head>
 <body>
-  <div class="app-container">
-    <header>
-      <h1>BTC Miner Valuation</h1>
-      <div class="header-controls">
-        <label>BTC $<input type="number" id="btc-price" value="90000" style="width: 70px;"><span class="btc-live" id="btc-live-indicator"></span></label>
-        <label>EV/EH $<input type="number" id="ev-per-eh" value="54" style="width: 40px;">M</label>
-        <button onclick="refreshValuations()">Calc</button>
-        <button onclick="refreshStockPrices()" class="secondary">Prices</button>
-      </div>
-    </header>
-
-    <div class="main-content">
-      <div class="sidebar">
-        <div class="sidebar-header">
-          <h2>Miners</h2>
+    <div class="header">
+        <h1>BTC MINER VALUATION TERMINAL v6</h1>
+        <div class="prices">
+            <div class="price-item">
+                <span class="price-label">BTC:</span>
+                <span class="price-value" id="btc-price">$---</span>
+            </div>
+            <div class="price-item">
+                <span class="price-label">ETH:</span>
+                <span class="price-value" id="eth-price">$---</span>
+            </div>
+            <div class="price-item">
+                <span class="price-label">Last Update:</span>
+                <span class="price-value neutral" id="last-update">--:--:--</span>
+            </div>
         </div>
-        <div class="miner-list" id="miner-list"></div>
-        <div style="padding: 6px;">
-          <button onclick="showAddMinerModal()" style="width: 100%;">+ Add</button>
-        </div>
-      </div>
+    </div>
 
-      <div class="content-area">
-        <div class="tabs">
-          <div class="tab active" data-tab="dashboard">Dashboard</div>
-          <div class="tab" data-tab="map">Map</div>
-          <div class="tab" data-tab="projects">Projects</div>
-          <div class="tab" data-tab="hpcval">HPC Val</div>
-          <div class="tab" data-tab="factors">Factors</div>
-        </div>
+    <div class="tabs">
+        <button class="tab active" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="projects">Projects</button>
+        <button class="tab" data-tab="hpc-val">HPC Val</button>
+        <button class="tab" data-tab="factors">Factors</button>
+    </div>
 
+    <div class="content">
         <!-- Dashboard Tab -->
-        <div class="tab-content active" id="tab-dashboard">
-          <div class="dashboard">
-            <div class="stats-grid" id="stats-grid"></div>
-            <div class="valuation-section">
-              <div class="section-header"><h2>Valuation Summary</h2></div>
-              <div class="table-container">
-                <table id="valuation-table-el">
-                  <thead>
-                    <tr id="valuation-header"></tr>
-                  </thead>
-                  <tbody id="valuation-table"></tbody>
-                </table>
-              </div>
+        <div id="dashboard" class="tab-content active">
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="label">TOTAL MARKET CAP</div>
+                    <div class="value" id="total-mcap">$0B</div>
+                    <div class="sub">All tracked miners</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">TOTAL BTC HELD</div>
+                    <div class="value" id="total-btc">0</div>
+                    <div class="sub" id="total-btc-value">$0M</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">HPC CAPACITY</div>
+                    <div class="value" id="total-hpc-mw">0 MW</div>
+                    <div class="sub">Contracted AI/HPC</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">HPC CONTRACT VALUE</div>
+                    <div class="value" id="total-hpc-value">$0B</div>
+                    <div class="sub">Total lease value</div>
+                </div>
             </div>
-          </div>
-        </div>
 
-        <!-- Map Tab -->
-        <div class="tab-content" id="tab-map">
-          <div id="map-container">
-            <div id="map"></div>
-            <div class="map-filters">
-              <h3>Filters</h3>
-              <div class="filter-group">
-                <label>Miner</label>
-                <select id="map-filter-miner" style="width:100%"><option value="">All</option></select>
-              </div>
-              <div class="filter-group">
-                <label>Min MW: <span id="mw-value">0</span></label>
-                <input type="range" id="map-filter-mw" min="0" max="1000" value="0">
-              </div>
-              <div class="filter-group">
-                <label>Lease</label>
-                <select id="map-filter-lease" style="width:100%">
-                  <option value="">All</option>
-                  <option value="true">With Lease</option>
-                  <option value="false">No Lease</option>
-                </select>
-              </div>
-              <div class="filter-group">
-                <label>Phase</label>
-                <select id="map-filter-phase" style="width:100%"><option value="">All</option></select>
-              </div>
-              <button onclick="applyMapFilters()" style="width: 100%; margin-top: 6px;">Apply</button>
+            <div class="controls">
+                <div class="control-group">
+                    <label>Fidoodle Factor:</label>
+                    <input type="number" id="global-fidoodle" value="1.0" min="0" max="2" step="0.05" style="width: 80px;">
+                </div>
+                <button class="btn btn-secondary" onclick="resetAllOverrides()">Reset Overrides</button>
+                <button class="btn" onclick="exportData()">Export CSV</button>
             </div>
-          </div>
+
+            <div class="table-container">
+                <table id="dashboard-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Price</th>
+                            <th>Mkt Cap</th>
+                            <th class="tooltip" data-tooltip="Bitcoin holdings value at current price">HODL Val</th>
+                            <th class="tooltip" data-tooltip="Cash and equivalents">Cash</th>
+                            <th class="tooltip" data-tooltip="Total debt outstanding">Debt</th>
+                            <th class="tooltip" data-tooltip="Fully diluted shares outstanding">FD Shares</th>
+                            <th class="tooltip" data-tooltip="Mining capacity in MW">Mining MW</th>
+                            <th class="tooltip" data-tooltip="HPC/AI capacity in MW">HPC MW</th>
+                            <th class="tooltip" data-tooltip="Mining enterprise value">Mining EV</th>
+                            <th class="tooltip" data-tooltip="HPC enterprise value from DCF">HPC EV</th>
+                            <th class="tooltip" data-tooltip="Fair value per share">Fair Value</th>
+                            <th class="tooltip" data-tooltip="Upside/downside to fair value">Upside</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Projects Tab -->
-        <div class="tab-content" id="tab-projects">
-          <div class="projects-container">
-            <div class="project-filters">
-              <select id="project-filter-ticker"><option value="">All Miners</option></select>
-              <select id="project-filter-status"><option value="">All Status</option></select>
-              <select id="project-filter-phase"><option value="">All Phases</option></select>
-              <input type="text" id="project-search" placeholder="Search..." style="width: 120px;">
-              <button onclick="showAddProjectModal()">+ Add</button>
+        <div id="projects" class="tab-content">
+            <div class="controls">
+                <div class="control-group">
+                    <label>Filter Ticker:</label>
+                    <select id="project-ticker-filter">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Status:</label>
+                    <select id="project-status-filter">
+                        <option value="">All</option>
+                        <option value="Operational">Operational</option>
+                        <option value="Contracted">Contracted</option>
+                        <option value="Development">Development</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Use Type:</label>
+                    <select id="project-use-filter">
+                        <option value="">All</option>
+                        <option value="BTC">BTC Mining</option>
+                        <option value="AI/HPC">AI/HPC</option>
+                        <option value="Mixed">Mixed</option>
+                    </select>
+                </div>
             </div>
-            <div class="projects-table-container">
-              <table id="projects-table-el">
-                <thead>
-                  <tr id="projects-header"></tr>
-                </thead>
-                <tbody id="projects-table"></tbody>
-              </table>
+
+            <div class="table-container">
+                <table id="projects-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Site Name</th>
+                            <th>Location</th>
+                            <th>Gross MW</th>
+                            <th>IT MW</th>
+                            <th>Use</th>
+                            <th>Status</th>
+                            <th>Grid</th>
+                            <th>Lessee</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
-          </div>
         </div>
 
         <!-- HPC Val Tab -->
-        <div class="tab-content" id="tab-hpcval">
-          <div class="hpcval-container">
-            <div class="hpcval-header">
-              <h2>Hyperscaler Lease Valuation</h2>
-              <div class="header-buttons">
-                <button onclick="showHpcProjectModal()">+ Add HPC Project</button>
-                <button class="secondary" onclick="resetHpcProjects()">Reset to Defaults</button>
-              </div>
+        <div id="hpc-val" class="tab-content">
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="label">TOTAL HPC LEASES</div>
+                    <div class="value" id="hpc-lease-count">0</div>
+                    <div class="sub">Contracted projects</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">TOTAL IT MW</div>
+                    <div class="value" id="hpc-total-mw">0 MW</div>
+                    <div class="sub">Under contract</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">TOTAL CONTRACT VALUE</div>
+                    <div class="value" id="hpc-total-contract">$0B</div>
+                    <div class="sub">Stated lease values</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">DCF VALUE</div>
+                    <div class="value" id="hpc-dcf-value">$0B</div>
+                    <div class="sub">Net present value</div>
+                </div>
             </div>
-            <div class="hpcval-summary" id="hpcval-summary"></div>
-            <div class="hpcval-table-container">
-              <table id="hpcval-table-el">
-                <thead>
-                  <tr id="hpcval-header"></tr>
-                </thead>
-                <tbody id="hpcval-table"></tbody>
-              </table>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Filter Ticker:</label>
+                    <select id="hpc-ticker-filter">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Cap Rate:</label>
+                    <input type="number" id="hpc-cap-rate" value="12" min="5" max="25" step="0.5" style="width: 70px;">
+                    <span>%</span>
+                </div>
+                <button class="btn" onclick="openHpcModal()">+ Add Project</button>
+                <button class="btn btn-secondary" onclick="seedHpcProjects()">Load Seed Data</button>
             </div>
-          </div>
+
+            <div class="table-container">
+                <table id="hpc-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Project</th>
+                            <th>Tenant</th>
+                            <th>IT MW</th>
+                            <th>Lease Value</th>
+                            <th>Years</th>
+                            <th>Annual Rev</th>
+                            <th>NOI %</th>
+                            <th>Status</th>
+                            <th>DCF Value</th>
+                            <th>Source</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Factors Tab -->
-        <div class="tab-content" id="tab-factors">
-          <div class="factors-container" id="factors-container"></div>
+        <div id="factors" class="tab-content">
+            <h3 style="color: #ff8c00; margin-bottom: 20px;">Valuation Factors</h3>
+
+            <div class="form-row" style="max-width: 600px;">
+                <div class="form-group">
+                    <label>Base NOI / MW / Year ($M)</label>
+                    <input type="number" id="factor-noi-mw" value="1.40" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Base Cap Rate (%)</label>
+                    <input type="number" id="factor-cap-rate" value="12" step="0.5">
+                </div>
+            </div>
+
+            <h4 style="color: #888; margin: 20px 0 10px;">Size Factors</h4>
+            <div class="table-container" style="max-width: 400px;">
+                <table id="size-factors-table">
+                    <thead>
+                        <tr>
+                            <th>Min MW</th>
+                            <th>Factor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>500+</td><td>1.10</td></tr>
+                        <tr><td>250-499</td><td>1.00</td></tr>
+                        <tr><td>100-249</td><td>0.95</td></tr>
+                        <tr><td>&lt;100</td><td>0.85</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 style="color: #888; margin: 20px 0 10px;">Credit Quality Factors</h4>
+            <div class="table-container" style="max-width: 400px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tenant Type</th>
+                            <th>Cap Rate Adder</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Hyperscaler (AAA)</td><td>-2.0%</td></tr>
+                        <tr><td>Investment Grade</td><td>-1.0%</td></tr>
+                        <tr><td>Speculative Grade</td><td>+1.0%</td></tr>
+                        <tr><td>Unrated/Startup</td><td>+2.0%</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-      </div>
     </div>
-  </div>
 
-  <!-- Add/Edit Miner Modal -->
-  <div class="modal-overlay" id="miner-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 id="miner-modal-title">Add Miner</h3>
-        <button class="secondary" onclick="closeMinerModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="miner-edit-ticker">
-        <div class="form-row">
-          <div class="form-group"><label>Ticker</label><input type="text" id="miner-ticker"></div>
-          <div class="form-group"><label>Name</label><input type="text" id="miner-name"></div>
+    <!-- HPC Project Modal -->
+    <div id="hpc-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="hpc-modal-title">Add HPC Project</h2>
+                <button class="modal-close" onclick="closeHpcModal()">&times;</button>
+            </div>
+            <form id="hpc-form">
+                <input type="hidden" id="hpc-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ticker</label>
+                        <select id="hpc-ticker" required>
+                            <option value="APLD">APLD</option>
+                            <option value="CIFR">CIFR</option>
+                            <option value="CORZ">CORZ</option>
+                            <option value="GLXY">GLXY</option>
+                            <option value="HUT">HUT</option>
+                            <option value="IREN">IREN</option>
+                            <option value="RIOT">RIOT</option>
+                            <option value="WULF">WULF</option>
+                            <option value="MARA">MARA</option>
+                            <option value="CLSK">CLSK</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Project Name</label>
+                        <input type="text" id="hpc-name" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tenant</label>
+                        <input type="text" id="hpc-tenant" placeholder="e.g., CoreWeave, Microsoft">
+                    </div>
+                    <div class="form-group">
+                        <label>IT MW</label>
+                        <input type="number" id="hpc-mw" step="1" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stated Lease Value ($M)</label>
+                        <input type="number" id="hpc-lease-value" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Lease Years</label>
+                        <input type="number" id="hpc-years" step="1" value="15">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Annual Revenue ($M)</label>
+                        <input type="number" id="hpc-annual-rev" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>NOI Margin (%)</label>
+                        <input type="number" id="hpc-noi-pct" step="1" value="85">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="hpc-status">
+                            <option value="Operational">Operational</option>
+                            <option value="Contracted">Contracted</option>
+                            <option value="Pipeline">Pipeline</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Credit Type</label>
+                        <select id="hpc-credit">
+                            <option value="hyperscaler">Hyperscaler (AAA)</option>
+                            <option value="investment_grade">Investment Grade</option>
+                            <option value="speculative">Speculative Grade</option>
+                            <option value="unrated">Unrated/Startup</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Source URL</label>
+                    <input type="url" id="hpc-source-url" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <input type="text" id="hpc-notes">
+                </div>
+                <div style="margin-top: 20px; text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="closeHpcModal()">Cancel</button>
+                    <button type="submit" class="btn">Save Project</button>
+                </div>
+            </form>
         </div>
-        <div class="form-row">
-          <div class="form-group"><label>Hashrate (EH/s)</label><input type="number" id="miner-hashrate" step="0.1"></div>
-          <div class="form-group">
-            <label>Type</label>
-            <select id="miner-hashrate-type">
-              <option value="Self">Self</option>
-              <option value="HUM">Hosted</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Debt $M</label><input type="number" id="miner-debt" step="0.01"></div>
-          <div class="form-group"><label>Cash $M</label><input type="number" id="miner-cash" step="0.01"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>BTC Holdings</label><input type="number" id="miner-btc" step="1"></div>
-          <div class="form-group"><label>ETH Holdings</label><input type="number" id="miner-eth" step="1"></div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="secondary" onclick="closeMinerModal()">Cancel</button>
-        <button onclick="saveMiner()">Save</button>
-      </div>
     </div>
-  </div>
 
-  <!-- Add/Edit Project Modal -->
-  <div class="modal-overlay" id="project-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 id="project-modal-title">Add Project</h3>
-        <button class="secondary" onclick="closeProjectModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="project-edit-id">
-        <div class="form-row">
-          <div class="form-group"><label>Ticker</label><select id="project-ticker"></select></div>
-          <div class="form-group"><label>Site Name</label><input type="text" id="project-site-name"></div>
-        </div>
-        <div class="form-row-3">
-          <div class="form-group">
-            <label>Phase</label>
-            <select id="project-site-phase">
-              <option value="Capacity Online">Capacity Online</option>
-              <option value="Power under construction">Under Construction</option>
-              <option value="Power secured">Power Secured</option>
-              <option value="Pipeline">Pipeline</option>
-              <option value="Pipeline - unallocated">Pipeline - Unalloc</option>
-              <option value="In discussions">In Discussions</option>
-              <option value="Option">Option</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select id="project-status">
-              <option value="Operational">Operational</option>
-              <option value="Contracted">Contracted</option>
-              <option value="Under Construction">Under Construction</option>
-              <option value="In Development">In Development</option>
-              <option value="Pipeline">Pipeline</option>
-              <option value="Option">Option</option>
-              <option value="Target">Target</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Use</label>
-            <select id="project-current-use">
-              <option value="BTC Mining">BTC Mining</option>
-              <option value="AI/HPC">AI/HPC</option>
-              <option value="Mixed">Mixed</option>
-              <option value="Converting">Converting</option>
-              <option value="Planned">Planned</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row-3">
-          <div class="form-group"><label>Country</label><input type="text" id="project-country" value="United States"></div>
-          <div class="form-group"><label>State</label><input type="text" id="project-state"></div>
-          <div class="form-group">
-            <label>Grid</label>
-            <select id="project-grid">
-              <option value="ERCOT">ERCOT</option>
-              <option value="PJM">PJM</option>
-              <option value="MISO">MISO</option>
-              <option value="NYISO">NYISO</option>
-              <option value="WECC">WECC</option>
-              <option value="SPP">SPP</option>
-              <option value="IESO">IESO</option>
-              <option value="AESO">AESO</option>
-              <option value="Various">Various</option>
-              <option value="TBD">TBD</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Gross MW</label><input type="number" id="project-gross-mw" step="0.1"></div>
-          <div class="form-group"><label>IT MW</label><input type="number" id="project-it-mw" step="0.1"></div>
-          <div class="form-group"><label>PUE</label><input type="number" id="project-pue" step="0.01" value="1.3"></div>
-          <div class="form-group"><label>Power Auth</label><input type="text" id="project-power-authority"></div>
-        </div>
-        <div class="form-row-3">
-          <div class="form-group"><label>Energization</label><input type="date" id="project-energization"></div>
-          <div class="form-group"><label>Lease Start</label><input type="text" id="project-lease-start"></div>
-          <div class="form-group">
-            <label>Ownership</label>
-            <select id="project-ownership-status">
-              <option value="">-</option>
-              <option value="Owned">Owned</option>
-              <option value="Leased">Leased</option>
-              <option value="JV">JV</option>
-              <option value="Option">Option</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Lessee</label><input type="text" id="project-lessee"></div>
-          <div class="form-group"><label>Lease $M</label><input type="number" id="project-lease-value" step="0.01"></div>
-          <div class="form-group"><label>Lease Yrs</label><input type="number" id="project-lease-yrs" step="0.5"></div>
-          <div class="form-group"><label>NOI %</label><input type="number" id="project-noi-pct" step="1" max="100"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Annual Rev $M</label><input type="number" id="project-annual-rev" step="0.01"></div>
-          <div class="form-group"><label>Annual NOI $M</label><input type="number" id="project-noi-annual" step="0.01"></div>
-          <div class="form-group"><label>HPC MW 2028</label><input type="number" id="project-hpc-pipeline" step="1"></div>
-          <div class="form-group">
-            <label>Confidence</label>
-            <select id="project-confidence">
-              <option value="">-</option>
-              <option value="HIGH">HIGH</option>
-              <option value="MEDIUM">MEDIUM</option>
-              <option value="LOW">LOW</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group"><label>Notes</label><textarea id="project-notes"></textarea></div>
-        <div class="form-row">
-          <div class="form-group"><label>Lease Notes</label><input type="text" id="project-lease-notes"></div>
-          <div class="form-group"><label>Source URL</label><input type="text" id="project-source-url"></div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="danger" onclick="deleteProject()" id="btn-delete-project" style="margin-right: auto; display: none;">Delete</button>
-        <button class="secondary" onclick="closeProjectModal()">Cancel</button>
-        <button onclick="saveProject()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Source Edit Modal -->
-  <div class="modal-overlay" id="source-modal">
-    <div class="modal" style="max-width: 400px;">
-      <div class="modal-header">
-        <h3 id="source-modal-title">Edit Value</h3>
-        <button class="secondary" onclick="closeSourceModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="source-edit-ticker">
-        <input type="hidden" id="source-edit-field">
-        <div class="form-group">
-          <label>Value ($M)</label>
-          <input type="number" id="source-value" step="0.1">
-        </div>
-        <div class="form-group">
-          <label>Source / Notes</label>
-          <textarea id="source-note" rows="2" placeholder="Where does this number come from?"></textarea>
-        </div>
-        <div class="form-group">
-          <label>Source URL</label>
-          <input type="url" id="source-url" placeholder="https://...">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="danger" onclick="clearSourceOverride()" style="margin-right: auto;">Reset to Default</button>
-        <button class="secondary" onclick="closeSourceModal()">Cancel</button>
-        <button onclick="saveSourceOverride()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- HPC Project Modal -->
-  <div class="modal-overlay" id="hpc-modal">
-    <div class="modal" style="max-width: 900px; max-height: 95vh;">
-      <div class="modal-header">
-        <h3 id="hpc-modal-title">Add HPC Project</h3>
-        <button class="secondary" onclick="closeHpcModal()">×</button>
-      </div>
-      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-        <input type="hidden" id="hpc-edit-id">
-
-        <!-- Basic Info -->
-        <div class="hpc-section">
-          <h4>Project Info</h4>
-          <div class="form-row">
-            <div class="form-group"><label>Project Name</label><input type="text" id="hpc-name"></div>
-            <div class="form-group"><label>Ticker</label><select id="hpc-ticker"></select></div>
-          </div>
-          <div class="form-row-3">
-            <div class="form-group"><label>Location/Market</label><input type="text" id="hpc-location"></div>
-            <div class="form-group"><label>Tenant Name</label><input type="text" id="hpc-tenant"></div>
-            <div class="form-group"><label>Contracted IT MW</label><input type="number" id="hpc-it-mw" step="1"></div>
-          </div>
-        </div>
-
-        <!-- Credit & Lease Structure -->
-        <div class="hpc-section">
-          <h4>Credit & Lease Structure</h4>
-          <div class="form-row-3">
-            <div class="form-group">
-              <label>Credit Backstop</label>
-              <select id="hpc-credit-backstop">
-                <option value="hyperscaler">Hyperscaler Backstop</option>
-                <option value="parent">Parent Guarantee</option>
-                <option value="none">None</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Credit Score (0-100)</label><input type="number" id="hpc-credit-score" value="90" min="0" max="100"></div>
-            <div class="form-group">
-              <label>Lease Type</label>
-              <select id="hpc-lease-type">
-                <option value="nnn">NNN (Triple Net)</option>
-                <option value="modified_gross">Modified Gross</option>
-                <option value="hosting_sla">Hosting + SLA</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Base Term & Revenue -->
-        <div class="hpc-section">
-          <h4>Base Term & Revenue</h4>
-          <div class="form-row-3">
-            <div class="form-group"><label>Base Term (Years)</label><input type="number" id="hpc-base-term" value="15" step="1"></div>
-            <div class="form-group"><label>Start Date / COD</label><input type="date" id="hpc-start-date"></div>
-            <div class="form-group"><label>Delay Years (Δ)</label><input type="number" id="hpc-delay-years" value="0" step="0.5"></div>
-          </div>
-          <div class="form-row-3">
-            <div class="form-group">
-              <label>Rent Model</label>
-              <select id="hpc-rent-model" onchange="toggleRentInputs()">
-                <option value="per_kw">$/kW-month</option>
-                <option value="direct_noi">Direct NOI ($M/yr)</option>
-              </select>
-            </div>
-            <div class="form-group" id="hpc-rent-kw-group"><label>Rent ($/kW-month)</label><input type="number" id="hpc-rent-kw" value="120" step="1"></div>
-            <div class="form-group" id="hpc-direct-noi-group" style="display:none"><label>Annual NOI ($M)</label><input type="number" id="hpc-direct-noi" step="0.1"></div>
-            <div class="form-group"><label>Escalator (%/yr)</label><input type="number" id="hpc-escalator" value="2.5" step="0.1"></div>
-          </div>
-        </div>
-
-        <!-- Operating Costs -->
-        <div class="hpc-section">
-          <h4>Operating Costs & Margins</h4>
-          <div class="form-row-3">
-            <div class="form-group"><label>Pass-Through % Reimbursed</label><input type="number" id="hpc-passthrough" value="95" step="1"></div>
-            <div class="form-group"><label>Non-Reimbursed Opex ($/yr, M)</label><input type="number" id="hpc-opex" value="0" step="0.1"></div>
-            <div class="form-group"><label>Replacement Reserve ($/kW-yr)</label><input type="number" id="hpc-reserve" value="15" step="1"></div>
-          </div>
-          <div class="form-row-3">
-            <div class="form-group"><label>Power Margin ($/kW-mo, opt)</label><input type="number" id="hpc-power-margin" value="0" step="1"></div>
-            <div class="form-group"><label>Service Margin ($/yr, M, opt)</label><input type="number" id="hpc-service-margin" value="0" step="0.1"></div>
-            <div class="form-group"><label>Probability of COD (%)</label><input type="number" id="hpc-pcod" value="90" step="1"></div>
-          </div>
-        </div>
-
-        <!-- Cap Rate & Risk Factors -->
-        <div class="hpc-section">
-          <h4>Cap Rate & Risk Adders (bps)</h4>
-          <div class="form-row-3">
-            <div class="form-group"><label>Base Market Cap Rate (%)</label><input type="number" id="hpc-base-cap" value="8" step="0.25"></div>
-            <div class="form-group"><label>Credit/Backstop Adder</label><input type="number" id="hpc-adder-credit" value="0" step="5"></div>
-            <div class="form-group"><label>Lease Type Adder</label><input type="number" id="hpc-adder-lease" value="0" step="5"></div>
-          </div>
-          <div class="form-row-3">
-            <div class="form-group"><label>Concentration Risk Adder</label><input type="number" id="hpc-adder-concentration" value="50" step="5"></div>
-            <div class="form-group"><label>Ownership/Ground Lease Adder</label><input type="number" id="hpc-adder-ownership" value="0" step="5"></div>
-            <div class="form-group"><label>Market/Site Risk Adder</label><input type="number" id="hpc-adder-market" value="0" step="5"></div>
-          </div>
-        </div>
-
-        <!-- Capex -->
-        <div class="hpc-section">
-          <h4>Capex & Reimbursements</h4>
-          <div class="form-row-3">
-            <div class="form-group"><label>Total Capex ($M)</label><input type="number" id="hpc-capex" value="0" step="1"></div>
-            <div class="form-group"><label>Tenant TI Contributions ($M)</label><input type="number" id="hpc-ti" value="0" step="1"></div>
-            <div class="form-group"><label>Build Discount Rate (%)</label><input type="number" id="hpc-build-discount" value="10" step="0.5"></div>
-          </div>
-        </div>
-
-        <!-- Renewal Options -->
-        <div class="hpc-section">
-          <h4>Renewal Options</h4>
-          <div class="form-row-3">
-            <div class="form-group"><label>Renewal Count</label><input type="number" id="hpc-renewal-count" value="2" step="1"></div>
-            <div class="form-group"><label>Years Each Renewal</label><input type="number" id="hpc-renewal-years" value="5" step="1"></div>
-            <div class="form-group"><label>Probability Each (%)</label><input type="number" id="hpc-renewal-prob" value="70" step="5"></div>
-          </div>
-        </div>
-
-        <!-- Expansion Options -->
-        <div class="hpc-section">
-          <h4>ROFO / Expansion Options</h4>
-          <div class="form-row-3">
-            <div class="form-group"><label>Expansion MW</label><input type="number" id="hpc-expansion-mw" value="0" step="10"></div>
-            <div class="form-group"><label>Expansion Start Date</label><input type="date" id="hpc-expansion-date"></div>
-            <div class="form-group"><label>Expansion Probability (%)</label><input type="number" id="hpc-expansion-prob" value="50" step="5"></div>
-          </div>
-        </div>
-
-        <!-- Residual -->
-        <div class="hpc-section">
-          <h4>Residual Assumptions</h4>
-          <div class="form-row-3">
-            <div class="form-group">
-              <label>Residual Model</label>
-              <select id="hpc-residual-model">
-                <option value="salvage">Salvage/Land Value</option>
-                <option value="release">Re-Lease Model</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Re-Lease Probability (%)</label><input type="number" id="hpc-release-prob" value="60" step="5"></div>
-            <div class="form-group"><label>Downtime Months</label><input type="number" id="hpc-downtime" value="6" step="1"></div>
-          </div>
-          <div class="form-row-3">
-            <div class="form-group"><label>Re-Tenant Capex ($M)</label><input type="number" id="hpc-retenant-capex" value="0" step="1"></div>
-            <div class="form-group"><label>Reversion Cap Rate (%)</label><input type="number" id="hpc-reversion-cap" value="9" step="0.25"></div>
-            <div class="form-group"><label>Salvage Value ($M, if salvage)</label><input type="number" id="hpc-salvage" value="0" step="1"></div>
-          </div>
-        </div>
-
-        <!-- Ownership -->
-        <div class="hpc-section">
-          <h4>Ownership & Control</h4>
-          <div class="form-row-3">
-            <div class="form-group">
-              <label>Ownership Type</label>
-              <select id="hpc-ownership">
-                <option value="fee_simple">Fee Simple</option>
-                <option value="ground_lease">Ground Lease</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Ground Rent ($/yr, M)</label><input type="number" id="hpc-ground-rent" value="0" step="0.1"></div>
-            <div class="form-group">
-              <label>Single Tenant?</label>
-              <select id="hpc-single-tenant">
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Substation Transferable?</label>
-              <select id="hpc-substation">
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Interconnect Transferable?</label>
-              <select id="hpc-interconnect">
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Source -->
-        <div class="hpc-section">
-          <h4>Source</h4>
-          <div class="form-group">
-            <label>Source URL</label>
-            <input type="url" id="hpc-source-url" placeholder="https://...">
-          </div>
-        </div>
-
-      </div>
-      <div class="modal-footer">
-        <button class="danger" onclick="deleteHpcProject()" id="btn-delete-hpc" style="margin-right: auto; display: none;">Delete</button>
-        <button class="secondary" onclick="closeHpcModal()">Cancel</button>
-        <button onclick="saveHpcProject()">Save & Calculate</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

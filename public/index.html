@@ -203,6 +203,9 @@
     tr.data-row { cursor: pointer; }
     tr.data-row:hover { background: var(--bg-row-hover); }
     tr.expanded { background: var(--bg-row-hover); }
+    tr.fidoodle-override { background: #1a1a00; }
+    tr.fidoodle-override:hover { background: #2a2a10; }
+    .fidoodle-row { background: rgba(255, 204, 0, 0.1); padding: 4px; margin: 4px 0; border-radius: 3px; }
 
     .expand-icon {
       color: var(--text-muted);
@@ -370,6 +373,25 @@
     button.secondary:hover { background: var(--bg-row-hover); color: var(--text-white); }
     button.danger { background: var(--danger); }
 
+    /* Source cells with tooltips */
+    .source-cell {
+      cursor: pointer;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 3px;
+      border-radius: 2px;
+      transition: background 0.15s;
+    }
+    .source-cell:hover { background: rgba(255,102,0,0.2); }
+    .source-cell.has-override { background: rgba(0,255,0,0.1); }
+    .source-indicator {
+      font-size: 8px;
+      margin-left: 3px;
+      opacity: 0.5;
+    }
+    .source-cell:hover .source-indicator { opacity: 1; }
+
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -423,6 +445,18 @@
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 
+    /* HPC Val Tab */
+    .hpcval-container { padding: 12px; }
+    .hpcval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .hpcval-header h2 { margin: 0; font-size: 14px; }
+    .hpcval-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .hpcval-summary .stat { background: var(--bg-card); padding: 8px; border: 1px solid var(--border); }
+    .hpcval-summary .stat-label { font-size: 8px; color: var(--text-muted); text-transform: uppercase; }
+    .hpcval-summary .stat-value { font-size: 14px; font-weight: 600; }
+    .hpcval-table-container { overflow-x: auto; }
+    .hpc-section { margin-bottom: 16px; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+    .hpc-section h4 { margin: 0 0 10px 0; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
+
     .badge {
       display: inline-block;
       padding: 1px 4px;
@@ -474,6 +508,7 @@
           <div class="tab active" data-tab="dashboard">Dashboard</div>
           <div class="tab" data-tab="map">Map</div>
           <div class="tab" data-tab="projects">Projects</div>
+          <div class="tab" data-tab="hpcval">HPC Val</div>
           <div class="tab" data-tab="factors">Factors</div>
         </div>
 
@@ -542,6 +577,25 @@
                   <tr id="projects-header"></tr>
                 </thead>
                 <tbody id="projects-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- HPC Val Tab -->
+        <div class="tab-content" id="tab-hpcval">
+          <div class="hpcval-container">
+            <div class="hpcval-header">
+              <h2>Hyperscaler Lease Valuation</h2>
+              <button onclick="showHpcProjectModal()">+ Add HPC Project</button>
+            </div>
+            <div class="hpcval-summary" id="hpcval-summary"></div>
+            <div class="hpcval-table-container">
+              <table id="hpcval-table-el">
+                <thead>
+                  <tr id="hpcval-header"></tr>
+                </thead>
+                <tbody id="hpcval-table"></tbody>
               </table>
             </div>
           </div>
@@ -712,6 +766,231 @@
         <button class="danger" onclick="deleteProject()" id="btn-delete-project" style="margin-right: auto; display: none;">Delete</button>
         <button class="secondary" onclick="closeProjectModal()">Cancel</button>
         <button onclick="saveProject()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Source Edit Modal -->
+  <div class="modal-overlay" id="source-modal">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 id="source-modal-title">Edit Value</h3>
+        <button class="secondary" onclick="closeSourceModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="source-edit-ticker">
+        <input type="hidden" id="source-edit-field">
+        <div class="form-group">
+          <label>Value ($M)</label>
+          <input type="number" id="source-value" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Source / Notes</label>
+          <textarea id="source-note" rows="3" placeholder="Where does this number come from?"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="danger" onclick="clearSourceOverride()" style="margin-right: auto;">Reset to Default</button>
+        <button class="secondary" onclick="closeSourceModal()">Cancel</button>
+        <button onclick="saveSourceOverride()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HPC Project Modal -->
+  <div class="modal-overlay" id="hpc-modal">
+    <div class="modal" style="max-width: 900px; max-height: 95vh;">
+      <div class="modal-header">
+        <h3 id="hpc-modal-title">Add HPC Project</h3>
+        <button class="secondary" onclick="closeHpcModal()">×</button>
+      </div>
+      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <input type="hidden" id="hpc-edit-id">
+
+        <!-- Basic Info -->
+        <div class="hpc-section">
+          <h4>Project Info</h4>
+          <div class="form-row">
+            <div class="form-group"><label>Project Name</label><input type="text" id="hpc-name"></div>
+            <div class="form-group"><label>Ticker</label><select id="hpc-ticker"></select></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group"><label>Location/Market</label><input type="text" id="hpc-location"></div>
+            <div class="form-group"><label>Tenant Name</label><input type="text" id="hpc-tenant"></div>
+            <div class="form-group"><label>Contracted IT MW</label><input type="number" id="hpc-it-mw" step="1"></div>
+          </div>
+        </div>
+
+        <!-- Credit & Lease Structure -->
+        <div class="hpc-section">
+          <h4>Credit & Lease Structure</h4>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Credit Backstop</label>
+              <select id="hpc-credit-backstop">
+                <option value="hyperscaler">Hyperscaler Backstop</option>
+                <option value="parent">Parent Guarantee</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Credit Score (0-100)</label><input type="number" id="hpc-credit-score" value="90" min="0" max="100"></div>
+            <div class="form-group">
+              <label>Lease Type</label>
+              <select id="hpc-lease-type">
+                <option value="nnn">NNN (Triple Net)</option>
+                <option value="modified_gross">Modified Gross</option>
+                <option value="hosting_sla">Hosting + SLA</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Base Term & Revenue -->
+        <div class="hpc-section">
+          <h4>Base Term & Revenue</h4>
+          <div class="form-row-3">
+            <div class="form-group"><label>Base Term (Years)</label><input type="number" id="hpc-base-term" value="15" step="1"></div>
+            <div class="form-group"><label>Start Date / COD</label><input type="date" id="hpc-start-date"></div>
+            <div class="form-group"><label>Delay Years (Δ)</label><input type="number" id="hpc-delay-years" value="0" step="0.5"></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Rent Model</label>
+              <select id="hpc-rent-model" onchange="toggleRentInputs()">
+                <option value="per_kw">$/kW-month</option>
+                <option value="direct_noi">Direct NOI ($M/yr)</option>
+              </select>
+            </div>
+            <div class="form-group" id="hpc-rent-kw-group"><label>Rent ($/kW-month)</label><input type="number" id="hpc-rent-kw" value="120" step="1"></div>
+            <div class="form-group" id="hpc-direct-noi-group" style="display:none"><label>Annual NOI ($M)</label><input type="number" id="hpc-direct-noi" step="0.1"></div>
+            <div class="form-group"><label>Escalator (%/yr)</label><input type="number" id="hpc-escalator" value="2.5" step="0.1"></div>
+          </div>
+        </div>
+
+        <!-- Operating Costs -->
+        <div class="hpc-section">
+          <h4>Operating Costs & Margins</h4>
+          <div class="form-row-3">
+            <div class="form-group"><label>Pass-Through % Reimbursed</label><input type="number" id="hpc-passthrough" value="95" step="1"></div>
+            <div class="form-group"><label>Non-Reimbursed Opex ($/yr, M)</label><input type="number" id="hpc-opex" value="0" step="0.1"></div>
+            <div class="form-group"><label>Replacement Reserve ($/kW-yr)</label><input type="number" id="hpc-reserve" value="15" step="1"></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group"><label>Power Margin ($/kW-mo, opt)</label><input type="number" id="hpc-power-margin" value="0" step="1"></div>
+            <div class="form-group"><label>Service Margin ($/yr, M, opt)</label><input type="number" id="hpc-service-margin" value="0" step="0.1"></div>
+            <div class="form-group"><label>Probability of COD (%)</label><input type="number" id="hpc-pcod" value="90" step="1"></div>
+          </div>
+        </div>
+
+        <!-- Cap Rate & Risk Factors -->
+        <div class="hpc-section">
+          <h4>Cap Rate & Risk Adders (bps)</h4>
+          <div class="form-row-3">
+            <div class="form-group"><label>Base Market Cap Rate (%)</label><input type="number" id="hpc-base-cap" value="8" step="0.25"></div>
+            <div class="form-group"><label>Credit/Backstop Adder</label><input type="number" id="hpc-adder-credit" value="0" step="5"></div>
+            <div class="form-group"><label>Lease Type Adder</label><input type="number" id="hpc-adder-lease" value="0" step="5"></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group"><label>Concentration Risk Adder</label><input type="number" id="hpc-adder-concentration" value="50" step="5"></div>
+            <div class="form-group"><label>Ownership/Ground Lease Adder</label><input type="number" id="hpc-adder-ownership" value="0" step="5"></div>
+            <div class="form-group"><label>Market/Site Risk Adder</label><input type="number" id="hpc-adder-market" value="0" step="5"></div>
+          </div>
+        </div>
+
+        <!-- Capex -->
+        <div class="hpc-section">
+          <h4>Capex & Reimbursements</h4>
+          <div class="form-row-3">
+            <div class="form-group"><label>Total Capex ($M)</label><input type="number" id="hpc-capex" value="0" step="1"></div>
+            <div class="form-group"><label>Tenant TI Contributions ($M)</label><input type="number" id="hpc-ti" value="0" step="1"></div>
+            <div class="form-group"><label>Build Discount Rate (%)</label><input type="number" id="hpc-build-discount" value="10" step="0.5"></div>
+          </div>
+        </div>
+
+        <!-- Renewal Options -->
+        <div class="hpc-section">
+          <h4>Renewal Options</h4>
+          <div class="form-row-3">
+            <div class="form-group"><label>Renewal Count</label><input type="number" id="hpc-renewal-count" value="2" step="1"></div>
+            <div class="form-group"><label>Years Each Renewal</label><input type="number" id="hpc-renewal-years" value="5" step="1"></div>
+            <div class="form-group"><label>Probability Each (%)</label><input type="number" id="hpc-renewal-prob" value="70" step="5"></div>
+          </div>
+        </div>
+
+        <!-- Expansion Options -->
+        <div class="hpc-section">
+          <h4>ROFO / Expansion Options</h4>
+          <div class="form-row-3">
+            <div class="form-group"><label>Expansion MW</label><input type="number" id="hpc-expansion-mw" value="0" step="10"></div>
+            <div class="form-group"><label>Expansion Start Date</label><input type="date" id="hpc-expansion-date"></div>
+            <div class="form-group"><label>Expansion Probability (%)</label><input type="number" id="hpc-expansion-prob" value="50" step="5"></div>
+          </div>
+        </div>
+
+        <!-- Residual -->
+        <div class="hpc-section">
+          <h4>Residual Assumptions</h4>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Residual Model</label>
+              <select id="hpc-residual-model">
+                <option value="salvage">Salvage/Land Value</option>
+                <option value="release">Re-Lease Model</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Re-Lease Probability (%)</label><input type="number" id="hpc-release-prob" value="60" step="5"></div>
+            <div class="form-group"><label>Downtime Months</label><input type="number" id="hpc-downtime" value="6" step="1"></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group"><label>Re-Tenant Capex ($M)</label><input type="number" id="hpc-retenant-capex" value="0" step="1"></div>
+            <div class="form-group"><label>Reversion Cap Rate (%)</label><input type="number" id="hpc-reversion-cap" value="9" step="0.25"></div>
+            <div class="form-group"><label>Salvage Value ($M, if salvage)</label><input type="number" id="hpc-salvage" value="0" step="1"></div>
+          </div>
+        </div>
+
+        <!-- Ownership -->
+        <div class="hpc-section">
+          <h4>Ownership & Control</h4>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Ownership Type</label>
+              <select id="hpc-ownership">
+                <option value="fee_simple">Fee Simple</option>
+                <option value="ground_lease">Ground Lease</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Ground Rent ($/yr, M)</label><input type="number" id="hpc-ground-rent" value="0" step="0.1"></div>
+            <div class="form-group">
+              <label>Single Tenant?</label>
+              <select id="hpc-single-tenant">
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Substation Transferable?</label>
+              <select id="hpc-substation">
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Interconnect Transferable?</label>
+              <select id="hpc-interconnect">
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="danger" onclick="deleteHpcProject()" id="btn-delete-hpc" style="margin-right: auto; display: none;">Delete</button>
+        <button class="secondary" onclick="closeHpcModal()">Cancel</button>
+        <button onclick="saveHpcProject()">Save & Calculate</button>
       </div>
     </div>
   </div>

@@ -17,6 +17,12 @@ let projectSort = { col: 'value', dir: 'desc' };
 // Column widths (stored in localStorage)
 let columnWidths = JSON.parse(localStorage.getItem('columnWidths') || '{}');
 
+// Fidoodle factors - manual overrides per project (stored in localStorage)
+let fidoodleFactors = JSON.parse(localStorage.getItem('fidoodleFactors') || '{}');
+
+// Miner data sources/overrides (stored in localStorage)
+let minerOverrides = JSON.parse(localStorage.getItem('minerOverrides') || '{}');
+
 const API_BASE = '/api';
 
 // ============== COLUMN DEFINITIONS ==============
@@ -25,11 +31,11 @@ const valuationColumns = [
   { key: 'expand', label: '', width: 20, sortable: false },
   { key: 'ticker', label: 'Ticker', width: 60, sortable: true, align: 'left' },
   { key: 'mining_ev', label: 'Mining', width: 70, sortable: true, align: 'right', format: 'money' },
-  { key: 'hodl_value', label: 'HODL', width: 70, sortable: true, align: 'right', format: 'money' },
   { key: 'lease_value', label: 'Lease', width: 70, sortable: true, align: 'right', format: 'money', class: 'text-success' },
   { key: 'pipeline_value', label: 'Pipeline', width: 70, sortable: true, align: 'right', format: 'money', class: 'text-warning' },
-  { key: 'cash', label: 'Cash', width: 60, sortable: true, align: 'right', format: 'money' },
-  { key: 'debt', label: 'Debt', width: 60, sortable: true, align: 'right', format: 'money', class: 'text-danger' },
+  { key: 'hodl_value', label: 'HODL', width: 70, sortable: true, align: 'right', format: 'money', hasSource: true },
+  { key: 'cash', label: 'Cash', width: 60, sortable: true, align: 'right', format: 'money', hasSource: true },
+  { key: 'debt', label: 'Debt', width: 60, sortable: true, align: 'right', format: 'money', class: 'text-danger', hasSource: true },
   { key: 'net_value', label: 'Net Val', width: 80, sortable: true, align: 'right', format: 'money' },
   { key: 'fd_shares_m', label: 'Shares', width: 60, sortable: true, align: 'right', format: 'number' },
   { key: 'current_price', label: 'Price', width: 60, sortable: true, align: 'right', format: 'price' },
@@ -191,7 +197,14 @@ function calculateProjectValuations() {
       if (countryFactor === undefined) countryFactor = 1.0; // default for unlisted countries
     }
 
-    const combinedFactor = phaseFactor * gridFactor * yearFactor * sizeFactor * countryFactor;
+    // Fidoodle factor - manual override per project
+    const fidoodleFactor = fidoodleFactors[p.id] !== undefined ? fidoodleFactors[p.id] : null;
+    const hasFidoodle = fidoodleFactor !== null;
+
+    // Combined factor uses fidoodle if set, otherwise calculated factors
+    const calculatedFactor = phaseFactor * gridFactor * yearFactor * sizeFactor * countryFactor;
+    const combinedFactor = hasFidoodle ? fidoodleFactor : calculatedFactor;
+
     let leaseValue = 0, pipelineValue = 0, valueType = 'none';
     let baseNoi = 0, estimatedNoi = 0;
 
@@ -214,7 +227,8 @@ function calculateProjectValuations() {
       estimated_noi: estimatedNoi,
       cap_rate: capRate,
       noi_per_mw: noiPerMwYr,
-      factors: { phase: phaseFactor, grid: gridFactor, year: yearFactor, size: sizeFactor, country: countryFactor, combined: combinedFactor }
+      factors: { phase: phaseFactor, grid: gridFactor, year: yearFactor, size: sizeFactor, country: countryFactor, calculated: calculatedFactor, fidoodle: fidoodleFactor, combined: combinedFactor },
+      hasFidoodle: hasFidoodle
     };
   });
 }
@@ -318,14 +332,26 @@ function renderValuationTable() {
     minerTotals[p.ticker].pipeline += pv.pipeline_value || 0;
   });
 
-  // Override server values with client-calculated values
+  // Override server values with client-calculated values and manual overrides
   valuations.forEach(v => {
     const totals = minerTotals[v.ticker] || { lease: 0, pipeline: 0 };
     v.components.lease_value = totals.lease;
     v.components.pipeline_value = totals.pipeline;
-    // Recalculate net_value with new lease/pipeline values
-    v.components.net_value = (v.components.mining_ev || 0) + (v.components.hodl_value || 0) +
-      totals.lease + totals.pipeline + (v.components.cash || 0) - (v.components.debt || 0);
+
+    // Apply manual overrides for HODL, cash, debt
+    const overrides = minerOverrides[v.ticker] || {};
+    const hodl = overrides.hodl_value !== undefined ? overrides.hodl_value : (v.components.hodl_value || 0);
+    const cash = overrides.cash !== undefined ? overrides.cash : (v.components.cash || 0);
+    const debt = overrides.debt !== undefined ? overrides.debt : (v.components.debt || 0);
+
+    // Store the effective values
+    v.components.hodl_value = hodl;
+    v.components.cash = cash;
+    v.components.debt = debt;
+
+    // Recalculate net_value with new lease/pipeline values and overrides
+    v.components.net_value = (v.components.mining_ev || 0) + hodl +
+      totals.lease + totals.pipeline + cash - debt;
     // Recalculate implied value per share
     if (v.per_share?.fd_shares_m > 0) {
       v.per_share.implied_value = v.components.net_value / v.per_share.fd_shares_m;
@@ -373,6 +399,17 @@ function renderValuationTable() {
           cellClass = up >= 0 ? 'text-success' : 'text-danger';
           val = `<strong>${up >= 0 ? '+' : ''}${up.toFixed(1)}%</strong>`;
         } else val = '-';
+      } else if (col.hasSource && (col.key === 'hodl_value' || col.key === 'cash' || col.key === 'debt')) {
+        const rawVal = v.components[col.key];
+        const override = minerOverrides[v.ticker]?.[col.key];
+        const source = minerOverrides[v.ticker]?.[col.key + '_source'] || getDefaultSource(v.ticker, col.key);
+        const hasOverride = override !== undefined;
+        const displayVal = hasOverride ? override : rawVal;
+        val = `<span class="source-cell ${hasOverride ? 'has-override' : ''}"
+          title="${source}"
+          onclick="event.stopPropagation();showEditSourceModal('${v.ticker}', '${col.key}', ${displayVal || 0}, '${source.replace(/'/g, "\\'")}')">
+          ${fmtNum(displayVal, 1)}<span class="source-indicator">ⓘ</span>
+        </span>`;
       } else if (col.format === 'money') {
         val = fmtNum(v.components[col.key], 1);
       } else if (col.format === 'number') {
@@ -491,8 +528,9 @@ function renderProjects() {
     const pv = projectValuations[p.id] || {};
     const isExpanded = expandedProjects.has(p.id);
     const expandIcon = isExpanded ? '▼' : '▶';
+    const hasFidoodle = pv.hasFidoodle;
 
-    html += `<tr class="data-row ${isExpanded ? 'expanded' : ''}" onclick="toggleProject(${p.id})">`;
+    html += `<tr class="data-row ${isExpanded ? 'expanded' : ''} ${hasFidoodle ? 'fidoodle-override' : ''}" onclick="toggleProject(${p.id})">`;
     projectColumns.forEach(col => {
       const width = columnWidths[`proj_${col.key}`] || col.width;
       const alignClass = col.align === 'right' ? 'text-right' : '';
@@ -555,7 +593,13 @@ function renderExpandedProject(p, pv) {
       <div class="calc-row"><span class="calc-label">Year Factor</span><span class="calc-value">${(f.year || 1).toFixed(2)}x</span></div>
       <div class="calc-row"><span class="calc-label">Size Factor (${p.it_mw || 0} MW)</span><span class="calc-value">${(f.size || 1).toFixed(2)}x</span></div>
       <div class="calc-row"><span class="calc-label">Country Factor (${p.country || '-'})</span><span class="calc-value">${(f.country || 1).toFixed(2)}x</span></div>
-      <div class="calc-row"><span class="calc-label">Combined Factor</span><span class="calc-value">${(f.combined || 1).toFixed(3)}x</span></div>
+      <div class="calc-row"><span class="calc-label">Calculated Factor</span><span class="calc-value">${(f.calculated || 1).toFixed(3)}x</span></div>
+      <div class="calc-row fidoodle-row"><span class="calc-label">Fidoodle Factor (override)</span><span class="calc-value">
+        <input type="number" step="0.01" value="${f.fidoodle !== null ? f.fidoodle : ''}" placeholder="${(f.calculated || 1).toFixed(2)}"
+          onclick="event.stopPropagation()" onchange="setFidoodleFactor(${p.id}, this.value)" style="width:60px;text-align:right">
+        ${f.fidoodle !== null ? `<button onclick="event.stopPropagation();clearFidoodleFactor(${p.id})" style="margin-left:4px;padding:1px 4px">✕</button>` : ''}
+      </span></div>
+      <div class="calc-row"><span class="calc-label">Combined Factor ${pv.hasFidoodle ? '(fidoodle)' : ''}</span><span class="calc-value ${pv.hasFidoodle ? 'text-warning' : ''}">${(f.combined || 1).toFixed(3)}x</span></div>
       <div class="calc-row total"><span class="calc-label">Final Value</span><span class="calc-value text-success">$${fmtNum(pv.lease_value, 1)}M</span></div>
       <div class="calc-row"><span class="calc-formula">= $${(pv.base_noi || 0).toFixed(2)}M / ${((pv.cap_rate || 0.12) * 100).toFixed(1)}% × ${(f.combined || 1).toFixed(3)}</span></div>`;
   } else if (pv.value_type === 'pipeline') {
@@ -571,7 +615,13 @@ function renderExpandedProject(p, pv) {
       <div class="calc-row"><span class="calc-label">Year Factor</span><span class="calc-value">${(f.year || 1).toFixed(2)}x</span></div>
       <div class="calc-row"><span class="calc-label">Size Factor (${p.it_mw || 0} MW)</span><span class="calc-value">${(f.size || 1).toFixed(2)}x</span></div>
       <div class="calc-row"><span class="calc-label">Country Factor (${p.country || '-'})</span><span class="calc-value">${(f.country || 1).toFixed(2)}x</span></div>
-      <div class="calc-row"><span class="calc-label">Combined Factor</span><span class="calc-value">${(f.combined || 1).toFixed(3)}x</span></div>
+      <div class="calc-row"><span class="calc-label">Calculated Factor</span><span class="calc-value">${(f.calculated || 1).toFixed(3)}x</span></div>
+      <div class="calc-row fidoodle-row"><span class="calc-label">Fidoodle Factor (override)</span><span class="calc-value">
+        <input type="number" step="0.01" value="${f.fidoodle !== null ? f.fidoodle : ''}" placeholder="${(f.calculated || 1).toFixed(2)}"
+          onclick="event.stopPropagation()" onchange="setFidoodleFactor(${p.id}, this.value)" style="width:60px;text-align:right">
+        ${f.fidoodle !== null ? `<button onclick="event.stopPropagation();clearFidoodleFactor(${p.id})" style="margin-left:4px;padding:1px 4px">✕</button>` : ''}
+      </span></div>
+      <div class="calc-row"><span class="calc-label">Combined Factor ${pv.hasFidoodle ? '(fidoodle)' : ''}</span><span class="calc-value ${pv.hasFidoodle ? 'text-warning' : ''}">${(f.combined || 1).toFixed(3)}x</span></div>
       <div class="calc-row total"><span class="calc-label">Final Value</span><span class="calc-value text-warning">$${fmtNum(pv.pipeline_value, 1)}M</span></div>
       <div class="calc-row"><span class="calc-formula">= ${p.it_mw || 0} MW × $${(pv.noi_per_mw || 1.4).toFixed(2)}M × 85% / ${((pv.cap_rate || 0.12) * 100).toFixed(1)}% × ${(f.combined || 1).toFixed(3)}</span></div>`;
   } else {
@@ -585,6 +635,88 @@ function renderExpandedProject(p, pv) {
 function toggleProject(id) {
   expandedProjects.has(id) ? expandedProjects.delete(id) : expandedProjects.add(id);
   renderProjects();
+}
+
+// ============== FIDOODLE FACTOR ==============
+
+function setFidoodleFactor(projectId, value) {
+  if (value === '' || value === null) {
+    delete fidoodleFactors[projectId];
+  } else {
+    fidoodleFactors[projectId] = parseFloat(value);
+  }
+  localStorage.setItem('fidoodleFactors', JSON.stringify(fidoodleFactors));
+  calculateProjectValuations();
+  renderProjects();
+  renderValuationTable();
+  renderMinerList();
+}
+
+function clearFidoodleFactor(projectId) {
+  delete fidoodleFactors[projectId];
+  localStorage.setItem('fidoodleFactors', JSON.stringify(fidoodleFactors));
+  calculateProjectValuations();
+  renderProjects();
+  renderValuationTable();
+  renderMinerList();
+}
+
+// ============== SOURCE TOOLTIPS & OVERRIDES ==============
+
+function getDefaultSource(ticker, field) {
+  const sources = {
+    hodl_value: 'BTC holdings × current BTC price (from company filings)',
+    cash: 'Latest 10-Q/10-K filing',
+    debt: 'Latest 10-Q/10-K filing'
+  };
+  return sources[field] || 'Company data';
+}
+
+function showEditSourceModal(ticker, field, currentValue, currentSource) {
+  const fieldLabels = { hodl_value: 'HODL Value', cash: 'Cash', debt: 'Debt' };
+  const modal = document.getElementById('source-modal');
+  document.getElementById('source-modal-title').textContent = `Edit ${fieldLabels[field]} - ${ticker}`;
+  document.getElementById('source-edit-ticker').value = ticker;
+  document.getElementById('source-edit-field').value = field;
+  document.getElementById('source-value').value = currentValue || '';
+  document.getElementById('source-note').value = currentSource || '';
+  modal.classList.add('active');
+}
+
+function closeSourceModal() {
+  document.getElementById('source-modal').classList.remove('active');
+}
+
+function saveSourceOverride() {
+  const ticker = document.getElementById('source-edit-ticker').value;
+  const field = document.getElementById('source-edit-field').value;
+  const value = parseFloat(document.getElementById('source-value').value);
+  const source = document.getElementById('source-note').value;
+
+  if (!minerOverrides[ticker]) minerOverrides[ticker] = {};
+  minerOverrides[ticker][field] = value;
+  minerOverrides[ticker][field + '_source'] = source;
+
+  localStorage.setItem('minerOverrides', JSON.stringify(minerOverrides));
+  closeSourceModal();
+  refreshValuations();
+}
+
+function clearSourceOverride() {
+  const ticker = document.getElementById('source-edit-ticker').value;
+  const field = document.getElementById('source-edit-field').value;
+
+  if (minerOverrides[ticker]) {
+    delete minerOverrides[ticker][field];
+    delete minerOverrides[ticker][field + '_source'];
+    if (Object.keys(minerOverrides[ticker]).length === 0) {
+      delete minerOverrides[ticker];
+    }
+  }
+
+  localStorage.setItem('minerOverrides', JSON.stringify(minerOverrides));
+  closeSourceModal();
+  refreshValuations();
 }
 
 // ============== MINERS SIDEBAR ==============
@@ -873,3 +1005,384 @@ function getConfidenceClass(c) {
   if (c === 'MEDIUM') return 'badge-warning';
   return 'badge-info';
 }
+
+// ============== HPC VALUATION MODEL ==============
+
+// HPC Projects stored in localStorage
+let hpcProjects = JSON.parse(localStorage.getItem('hpcProjects') || '[]');
+
+const hpcColumns = [
+  { key: 'name', label: 'Project', width: 120, align: 'left' },
+  { key: 'ticker', label: 'Ticker', width: 50, align: 'left' },
+  { key: 'tenant', label: 'Tenant', width: 80, align: 'left' },
+  { key: 'it_mw', label: 'IT MW', width: 50, align: 'right' },
+  { key: 'cap_eff', label: 'Cap Eff', width: 55, align: 'right' },
+  { key: 'noi1', label: 'NOI1 $M', width: 60, align: 'right' },
+  { key: 'v_base', label: 'V Base', width: 70, align: 'right' },
+  { key: 'v_options', label: 'Options', width: 65, align: 'right' },
+  { key: 'v_residual', label: 'Residual', width: 65, align: 'right' },
+  { key: 'v_capex', label: 'Capex', width: 60, align: 'right' },
+  { key: 'v_total', label: 'V Total', width: 75, align: 'right' },
+  { key: 'per_mw', label: '$/MW', width: 60, align: 'right' },
+  { key: 'actions', label: '', width: 50, align: 'center' }
+];
+
+function toggleRentInputs() {
+  const model = document.getElementById('hpc-rent-model').value;
+  document.getElementById('hpc-rent-kw-group').style.display = model === 'per_kw' ? 'block' : 'none';
+  document.getElementById('hpc-direct-noi-group').style.display = model === 'direct_noi' ? 'block' : 'none';
+}
+
+function showHpcProjectModal(id = null) {
+  const modal = document.getElementById('hpc-modal');
+  const title = document.getElementById('hpc-modal-title');
+  const deleteBtn = document.getElementById('btn-delete-hpc');
+
+  // Populate ticker dropdown
+  const tickerSelect = document.getElementById('hpc-ticker');
+  tickerSelect.innerHTML = miners.map(m => `<option value="${m.ticker}">${m.ticker}</option>`).join('');
+
+  if (id !== null) {
+    const p = hpcProjects.find(h => h.id === id);
+    if (!p) return;
+    title.textContent = 'Edit HPC Project';
+    deleteBtn.style.display = 'block';
+    document.getElementById('hpc-edit-id').value = p.id;
+    // Fill all fields
+    document.getElementById('hpc-name').value = p.name || '';
+    document.getElementById('hpc-ticker').value = p.ticker || '';
+    document.getElementById('hpc-location').value = p.location || '';
+    document.getElementById('hpc-tenant').value = p.tenant || '';
+    document.getElementById('hpc-it-mw').value = p.it_mw || '';
+    document.getElementById('hpc-credit-backstop').value = p.credit_backstop || 'hyperscaler';
+    document.getElementById('hpc-credit-score').value = p.credit_score || 90;
+    document.getElementById('hpc-lease-type').value = p.lease_type || 'nnn';
+    document.getElementById('hpc-base-term').value = p.base_term || 15;
+    document.getElementById('hpc-start-date').value = p.start_date || '';
+    document.getElementById('hpc-delay-years').value = p.delay_years || 0;
+    document.getElementById('hpc-rent-model').value = p.rent_model || 'per_kw';
+    document.getElementById('hpc-rent-kw').value = p.rent_kw || 120;
+    document.getElementById('hpc-direct-noi').value = p.direct_noi || '';
+    document.getElementById('hpc-escalator').value = p.escalator || 2.5;
+    document.getElementById('hpc-passthrough').value = p.passthrough || 95;
+    document.getElementById('hpc-opex').value = p.opex || 0;
+    document.getElementById('hpc-reserve').value = p.reserve || 15;
+    document.getElementById('hpc-power-margin').value = p.power_margin || 0;
+    document.getElementById('hpc-service-margin').value = p.service_margin || 0;
+    document.getElementById('hpc-pcod').value = p.pcod || 90;
+    document.getElementById('hpc-base-cap').value = p.base_cap || 8;
+    document.getElementById('hpc-adder-credit').value = p.adder_credit || 0;
+    document.getElementById('hpc-adder-lease').value = p.adder_lease || 0;
+    document.getElementById('hpc-adder-concentration').value = p.adder_concentration || 50;
+    document.getElementById('hpc-adder-ownership').value = p.adder_ownership || 0;
+    document.getElementById('hpc-adder-market').value = p.adder_market || 0;
+    document.getElementById('hpc-capex').value = p.capex || 0;
+    document.getElementById('hpc-ti').value = p.ti || 0;
+    document.getElementById('hpc-build-discount').value = p.build_discount || 10;
+    document.getElementById('hpc-renewal-count').value = p.renewal_count || 2;
+    document.getElementById('hpc-renewal-years').value = p.renewal_years || 5;
+    document.getElementById('hpc-renewal-prob').value = p.renewal_prob || 70;
+    document.getElementById('hpc-expansion-mw').value = p.expansion_mw || 0;
+    document.getElementById('hpc-expansion-date').value = p.expansion_date || '';
+    document.getElementById('hpc-expansion-prob').value = p.expansion_prob || 50;
+    document.getElementById('hpc-residual-model').value = p.residual_model || 'salvage';
+    document.getElementById('hpc-release-prob').value = p.release_prob || 60;
+    document.getElementById('hpc-downtime').value = p.downtime || 6;
+    document.getElementById('hpc-retenant-capex').value = p.retenant_capex || 0;
+    document.getElementById('hpc-reversion-cap').value = p.reversion_cap || 9;
+    document.getElementById('hpc-salvage').value = p.salvage || 0;
+    document.getElementById('hpc-ownership').value = p.ownership || 'fee_simple';
+    document.getElementById('hpc-ground-rent').value = p.ground_rent || 0;
+    document.getElementById('hpc-single-tenant').value = p.single_tenant || 'yes';
+    document.getElementById('hpc-substation').value = p.substation || 'yes';
+    document.getElementById('hpc-interconnect').value = p.interconnect || 'yes';
+  } else {
+    title.textContent = 'Add HPC Project';
+    deleteBtn.style.display = 'none';
+    document.getElementById('hpc-edit-id').value = '';
+    // Reset to defaults
+    document.getElementById('hpc-name').value = '';
+    document.getElementById('hpc-location').value = '';
+    document.getElementById('hpc-tenant').value = '';
+    document.getElementById('hpc-it-mw').value = '';
+    document.getElementById('hpc-credit-backstop').value = 'hyperscaler';
+    document.getElementById('hpc-credit-score').value = 90;
+    document.getElementById('hpc-lease-type').value = 'nnn';
+    document.getElementById('hpc-base-term').value = 15;
+    document.getElementById('hpc-start-date').value = '';
+    document.getElementById('hpc-delay-years').value = 0;
+    document.getElementById('hpc-rent-model').value = 'per_kw';
+    document.getElementById('hpc-rent-kw').value = 120;
+    document.getElementById('hpc-direct-noi').value = '';
+    document.getElementById('hpc-escalator').value = 2.5;
+    document.getElementById('hpc-passthrough').value = 95;
+    document.getElementById('hpc-opex').value = 0;
+    document.getElementById('hpc-reserve').value = 15;
+    document.getElementById('hpc-power-margin').value = 0;
+    document.getElementById('hpc-service-margin').value = 0;
+    document.getElementById('hpc-pcod').value = 90;
+    document.getElementById('hpc-base-cap').value = 8;
+    document.getElementById('hpc-adder-credit').value = 0;
+    document.getElementById('hpc-adder-lease').value = 0;
+    document.getElementById('hpc-adder-concentration').value = 50;
+    document.getElementById('hpc-adder-ownership').value = 0;
+    document.getElementById('hpc-adder-market').value = 0;
+    document.getElementById('hpc-capex').value = 0;
+    document.getElementById('hpc-ti').value = 0;
+    document.getElementById('hpc-build-discount').value = 10;
+    document.getElementById('hpc-renewal-count').value = 2;
+    document.getElementById('hpc-renewal-years').value = 5;
+    document.getElementById('hpc-renewal-prob').value = 70;
+    document.getElementById('hpc-expansion-mw').value = 0;
+    document.getElementById('hpc-expansion-date').value = '';
+    document.getElementById('hpc-expansion-prob').value = 50;
+    document.getElementById('hpc-residual-model').value = 'salvage';
+    document.getElementById('hpc-release-prob').value = 60;
+    document.getElementById('hpc-downtime').value = 6;
+    document.getElementById('hpc-retenant-capex').value = 0;
+    document.getElementById('hpc-reversion-cap').value = 9;
+    document.getElementById('hpc-salvage').value = 0;
+    document.getElementById('hpc-ownership').value = 'fee_simple';
+    document.getElementById('hpc-ground-rent').value = 0;
+    document.getElementById('hpc-single-tenant').value = 'yes';
+    document.getElementById('hpc-substation').value = 'yes';
+    document.getElementById('hpc-interconnect').value = 'yes';
+  }
+  toggleRentInputs();
+  modal.classList.add('active');
+}
+
+function closeHpcModal() {
+  document.getElementById('hpc-modal').classList.remove('active');
+}
+
+function saveHpcProject() {
+  const editId = document.getElementById('hpc-edit-id').value;
+  const data = {
+    id: editId ? parseInt(editId) : Date.now(),
+    name: document.getElementById('hpc-name').value,
+    ticker: document.getElementById('hpc-ticker').value,
+    location: document.getElementById('hpc-location').value,
+    tenant: document.getElementById('hpc-tenant').value,
+    it_mw: parseFloat(document.getElementById('hpc-it-mw').value) || 0,
+    credit_backstop: document.getElementById('hpc-credit-backstop').value,
+    credit_score: parseFloat(document.getElementById('hpc-credit-score').value) || 90,
+    lease_type: document.getElementById('hpc-lease-type').value,
+    base_term: parseFloat(document.getElementById('hpc-base-term').value) || 15,
+    start_date: document.getElementById('hpc-start-date').value,
+    delay_years: parseFloat(document.getElementById('hpc-delay-years').value) || 0,
+    rent_model: document.getElementById('hpc-rent-model').value,
+    rent_kw: parseFloat(document.getElementById('hpc-rent-kw').value) || 120,
+    direct_noi: parseFloat(document.getElementById('hpc-direct-noi').value) || 0,
+    escalator: parseFloat(document.getElementById('hpc-escalator').value) || 2.5,
+    passthrough: parseFloat(document.getElementById('hpc-passthrough').value) || 95,
+    opex: parseFloat(document.getElementById('hpc-opex').value) || 0,
+    reserve: parseFloat(document.getElementById('hpc-reserve').value) || 15,
+    power_margin: parseFloat(document.getElementById('hpc-power-margin').value) || 0,
+    service_margin: parseFloat(document.getElementById('hpc-service-margin').value) || 0,
+    pcod: parseFloat(document.getElementById('hpc-pcod').value) || 90,
+    base_cap: parseFloat(document.getElementById('hpc-base-cap').value) || 8,
+    adder_credit: parseFloat(document.getElementById('hpc-adder-credit').value) || 0,
+    adder_lease: parseFloat(document.getElementById('hpc-adder-lease').value) || 0,
+    adder_concentration: parseFloat(document.getElementById('hpc-adder-concentration').value) || 50,
+    adder_ownership: parseFloat(document.getElementById('hpc-adder-ownership').value) || 0,
+    adder_market: parseFloat(document.getElementById('hpc-adder-market').value) || 0,
+    capex: parseFloat(document.getElementById('hpc-capex').value) || 0,
+    ti: parseFloat(document.getElementById('hpc-ti').value) || 0,
+    build_discount: parseFloat(document.getElementById('hpc-build-discount').value) || 10,
+    renewal_count: parseInt(document.getElementById('hpc-renewal-count').value) || 2,
+    renewal_years: parseInt(document.getElementById('hpc-renewal-years').value) || 5,
+    renewal_prob: parseFloat(document.getElementById('hpc-renewal-prob').value) || 70,
+    expansion_mw: parseFloat(document.getElementById('hpc-expansion-mw').value) || 0,
+    expansion_date: document.getElementById('hpc-expansion-date').value,
+    expansion_prob: parseFloat(document.getElementById('hpc-expansion-prob').value) || 50,
+    residual_model: document.getElementById('hpc-residual-model').value,
+    release_prob: parseFloat(document.getElementById('hpc-release-prob').value) || 60,
+    downtime: parseInt(document.getElementById('hpc-downtime').value) || 6,
+    retenant_capex: parseFloat(document.getElementById('hpc-retenant-capex').value) || 0,
+    reversion_cap: parseFloat(document.getElementById('hpc-reversion-cap').value) || 9,
+    salvage: parseFloat(document.getElementById('hpc-salvage').value) || 0,
+    ownership: document.getElementById('hpc-ownership').value,
+    ground_rent: parseFloat(document.getElementById('hpc-ground-rent').value) || 0,
+    single_tenant: document.getElementById('hpc-single-tenant').value,
+    substation: document.getElementById('hpc-substation').value,
+    interconnect: document.getElementById('hpc-interconnect').value
+  };
+
+  if (editId) {
+    const idx = hpcProjects.findIndex(h => h.id === parseInt(editId));
+    if (idx !== -1) hpcProjects[idx] = data;
+  } else {
+    hpcProjects.push(data);
+  }
+
+  localStorage.setItem('hpcProjects', JSON.stringify(hpcProjects));
+  closeHpcModal();
+  renderHpcTable();
+}
+
+function deleteHpcProject() {
+  const id = parseInt(document.getElementById('hpc-edit-id').value);
+  if (!id || !confirm('Delete this HPC project?')) return;
+  hpcProjects = hpcProjects.filter(h => h.id !== id);
+  localStorage.setItem('hpcProjects', JSON.stringify(hpcProjects));
+  closeHpcModal();
+  renderHpcTable();
+}
+
+// Core HPC Valuation Calculation
+function calculateHpcValuation(p) {
+  // Cap_eff = Base cap + sum of adders (in bps)
+  const capEff = (p.base_cap / 100) + (p.adder_credit + p.adder_lease + p.adder_concentration + p.adder_ownership + p.adder_market) / 10000;
+  const g = p.escalator / 100; // Growth rate
+  const T = p.base_term;
+  const delta = p.delay_years;
+  const pCod = p.pcod / 100;
+
+  // Calculate NOI1 (stabilized year 1 NOI)
+  let noi1;
+  if (p.rent_model === 'direct_noi') {
+    noi1 = p.direct_noi;
+  } else {
+    // Rent in $/kW-month × IT_MW × 1000 kW/MW × 12 months / 1,000,000 = $M/yr
+    const rentRevenue = (p.rent_kw * p.it_mw * 1000 * 12) / 1000000;
+    const powerMarginRev = (p.power_margin * p.it_mw * 1000 * 12) / 1000000;
+    const serviceMarginRev = p.service_margin;
+    const reserveCost = (p.reserve * p.it_mw * 1000) / 1000000;
+    const opexCost = p.opex;
+    const groundRent = p.ground_rent;
+    noi1 = rentRevenue + powerMarginRev + serviceMarginRev - reserveCost - opexCost - groundRent;
+  }
+
+  // Discount factor for delay
+  const delayDiscount = Math.pow(1 + capEff + g, -delta);
+
+  // Annuity factor for base term with growth
+  // PV = NOI1 * (1 - ((1+g)/(1+r))^T) / (r - g)
+  const annuityFactor = (1 - Math.pow((1 + g) / (1 + capEff), T)) / (capEff - g);
+
+  // Base value
+  const vBase = pCod * noi1 * annuityFactor * delayDiscount;
+
+  // Capex PV (net of TI)
+  const netCapex = p.capex - p.ti;
+  const buildRate = p.build_discount / 100;
+  const vCapex = netCapex / Math.pow(1 + buildRate, delta);
+
+  // Renewal options value
+  let vRenewals = 0;
+  let renewalStartYear = T;
+  for (let i = 0; i < p.renewal_count; i++) {
+    const renewalProb = Math.pow(p.renewal_prob / 100, i + 1);
+    const renewalDelay = renewalStartYear + delta;
+    const renewalAnnuity = (1 - Math.pow((1 + g) / (1 + capEff), p.renewal_years)) / (capEff - g);
+    const noiAtRenewal = noi1 * Math.pow(1 + g, renewalStartYear);
+    const renewalPv = renewalProb * pCod * noiAtRenewal * renewalAnnuity / Math.pow(1 + capEff, renewalDelay);
+    vRenewals += renewalPv;
+    renewalStartYear += p.renewal_years;
+  }
+
+  // Expansion option value
+  let vExpansion = 0;
+  if (p.expansion_mw > 0 && p.expansion_date) {
+    const expansionYears = Math.max(0, (new Date(p.expansion_date).getFullYear() - new Date().getFullYear()));
+    const expansionProb = p.expansion_prob / 100;
+    // Assume similar economics to base
+    const expansionNoi = noi1 * (p.expansion_mw / p.it_mw);
+    const expansionAnnuity = (1 - Math.pow((1 + g) / (1 + capEff), T)) / (capEff - g);
+    vExpansion = expansionProb * pCod * expansionNoi * expansionAnnuity / Math.pow(1 + capEff, expansionYears + delta);
+  }
+
+  // Residual value
+  let vResidual = 0;
+  const endYear = T + (p.renewal_count * p.renewal_years * (p.renewal_prob / 100));
+  if (p.residual_model === 'salvage') {
+    vResidual = p.salvage / Math.pow(1 + capEff, endYear + delta);
+  } else {
+    // Re-lease model
+    const releaseProb = p.release_prob / 100;
+    const downtimeYears = p.downtime / 12;
+    const reversionCap = p.reversion_cap / 100;
+    const noiAtEnd = noi1 * Math.pow(1 + g, endYear);
+    const releaseValue = (noiAtEnd / reversionCap) - p.retenant_capex;
+    vResidual = releaseProb * releaseValue / Math.pow(1 + capEff, endYear + delta + downtimeYears);
+  }
+
+  const vOptions = vRenewals + vExpansion;
+  const vTotal = vBase + vOptions + vResidual - vCapex;
+  const perMw = p.it_mw > 0 ? vTotal / p.it_mw : 0;
+  const perKwMonth = p.it_mw > 0 ? (vTotal * 1000000) / (p.it_mw * 1000 * 12 * T) : 0;
+
+  return {
+    noi1,
+    cap_eff: capEff * 100,
+    v_base: vBase,
+    v_options: vOptions,
+    v_renewals: vRenewals,
+    v_expansion: vExpansion,
+    v_residual: vResidual,
+    v_capex: vCapex,
+    v_total: vTotal,
+    per_mw: perMw,
+    per_kw_month: perKwMonth
+  };
+}
+
+function renderHpcHeader() {
+  const tr = document.getElementById('hpcval-header');
+  tr.innerHTML = hpcColumns.map(col => {
+    const alignClass = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : '';
+    return `<th style="width:${col.width}px" class="${alignClass}">${col.label}</th>`;
+  }).join('');
+}
+
+function renderHpcTable() {
+  renderHpcHeader();
+  const tbody = document.getElementById('hpcval-table');
+  let html = '';
+  let totalValue = 0, totalMw = 0;
+
+  hpcProjects.forEach(p => {
+    const val = calculateHpcValuation(p);
+    totalValue += val.v_total;
+    totalMw += p.it_mw;
+
+    html += `<tr class="data-row" onclick="showHpcProjectModal(${p.id})">`;
+    hpcColumns.forEach(col => {
+      const alignClass = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : '';
+      let cellVal = '';
+
+      if (col.key === 'name') cellVal = `<strong>${truncate(p.name, 18)}</strong>`;
+      else if (col.key === 'ticker') cellVal = p.ticker;
+      else if (col.key === 'tenant') cellVal = truncate(p.tenant, 10);
+      else if (col.key === 'it_mw') cellVal = p.it_mw;
+      else if (col.key === 'cap_eff') cellVal = val.cap_eff.toFixed(1) + '%';
+      else if (col.key === 'noi1') cellVal = '$' + val.noi1.toFixed(1);
+      else if (col.key === 'v_base') cellVal = '$' + fmtNum(val.v_base, 1);
+      else if (col.key === 'v_options') cellVal = '$' + fmtNum(val.v_options, 1);
+      else if (col.key === 'v_residual') cellVal = '$' + fmtNum(val.v_residual, 1);
+      else if (col.key === 'v_capex') cellVal = `<span class="text-danger">-$${fmtNum(val.v_capex, 1)}</span>`;
+      else if (col.key === 'v_total') cellVal = `<strong class="text-success">$${fmtNum(val.v_total, 1)}</strong>`;
+      else if (col.key === 'per_mw') cellVal = '$' + fmtNum(val.per_mw, 1) + 'M';
+      else if (col.key === 'actions') cellVal = `<button class="secondary" onclick="event.stopPropagation();showHpcProjectModal(${p.id})" style="padding:2px 4px">Ed</button>`;
+
+      html += `<td class="${alignClass}">${cellVal}</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  tbody.innerHTML = html;
+
+  // Summary
+  document.getElementById('hpcval-summary').innerHTML = `
+    <div class="stat"><div class="stat-label">Projects</div><div class="stat-value">${hpcProjects.length}</div></div>
+    <div class="stat"><div class="stat-label">Total IT MW</div><div class="stat-value">${fmtNum(totalMw, 0)}</div></div>
+    <div class="stat"><div class="stat-label">Total Value</div><div class="stat-value text-success">$${fmtNum(totalValue, 0)}M</div></div>
+    <div class="stat"><div class="stat-label">Avg $/MW</div><div class="stat-value">${totalMw > 0 ? '$' + fmtNum(totalValue / totalMw, 1) + 'M' : '-'}</div></div>
+  `;
+}
+
+// Initialize HPC table when tab is shown
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(renderHpcTable, 100);
+});

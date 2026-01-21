@@ -37,7 +37,7 @@ const valuationColumns = [
   { key: 'cash', label: 'Cash', width: 60, sortable: true, align: 'right', format: 'money', hasSource: true },
   { key: 'debt', label: 'Debt', width: 60, sortable: true, align: 'right', format: 'money', class: 'text-danger', hasSource: true },
   { key: 'net_value', label: 'Net Val', width: 80, sortable: true, align: 'right', format: 'money' },
-  { key: 'fd_shares_m', label: 'Shares', width: 60, sortable: true, align: 'right', format: 'number' },
+  { key: 'fd_shares_m', label: 'Shares', width: 60, sortable: true, align: 'right', format: 'number', hasSource: true },
   { key: 'current_price', label: 'Price', width: 60, sortable: true, align: 'right', format: 'price' },
   { key: 'implied_value', label: 'Impl/Sh', width: 60, sortable: true, align: 'right', format: 'price' },
   { key: 'upside_pct', label: 'Upside', width: 60, sortable: true, align: 'right', format: 'percent' }
@@ -403,12 +403,23 @@ function renderValuationTable() {
         const rawVal = v.components[col.key];
         const override = minerOverrides[v.ticker]?.[col.key];
         const source = minerOverrides[v.ticker]?.[col.key + '_source'] || getDefaultSource(v.ticker, col.key);
+        const sourceUrl = minerOverrides[v.ticker]?.[col.key + '_url'] || getDefaultSourceUrl(v.ticker);
         const hasOverride = override !== undefined;
         const displayVal = hasOverride ? override : rawVal;
-        val = `<span class="source-cell ${hasOverride ? 'has-override' : ''}"
-          title="${source}"
-          onclick="event.stopPropagation();showEditSourceModal('${v.ticker}', '${col.key}', ${displayVal || 0}, '${source.replace(/'/g, "\\'")}')">
-          ${fmtNum(displayVal, 1)}<span class="source-indicator">ⓘ</span>
+        val = `<span class="source-cell ${hasOverride ? 'has-override' : ''}" title="${source}">
+          <span onclick="event.stopPropagation();showEditSourceModal('${v.ticker}', '${col.key}', ${displayVal || 0}, '${source.replace(/'/g, "\\'")}', '${sourceUrl}')">${fmtNum(displayVal, 1)}</span>
+          <a href="${sourceUrl}" target="_blank" onclick="event.stopPropagation()" class="source-link-icon" title="View SEC Filing">🔗</a>
+        </span>`;
+      } else if (col.hasSource && col.key === 'fd_shares_m') {
+        const rawVal = ps.fd_shares_m;
+        const override = minerOverrides[v.ticker]?.fd_shares_m;
+        const source = minerOverrides[v.ticker]?.fd_shares_m_source || 'Fully diluted shares from company filings';
+        const sourceUrl = minerOverrides[v.ticker]?.fd_shares_m_url || getDefaultSourceUrl(v.ticker);
+        const hasOverride = override !== undefined;
+        const displayVal = hasOverride ? override : rawVal;
+        val = `<span class="source-cell ${hasOverride ? 'has-override' : ''}" title="${source}">
+          <span onclick="event.stopPropagation();showEditSourceModal('${v.ticker}', 'fd_shares_m', ${displayVal || 0}, '${source.replace(/'/g, "\\'")}', '${sourceUrl}')">${displayVal ? fmtNum(displayVal, 1) : '-'}</span>
+          <a href="${sourceUrl}" target="_blank" onclick="event.stopPropagation()" class="source-link-icon" title="View SEC Filing">🔗</a>
         </span>`;
       } else if (col.format === 'money') {
         val = fmtNum(v.components[col.key], 1);
@@ -663,6 +674,25 @@ function clearFidoodleFactor(projectId) {
 
 // ============== SOURCE TOOLTIPS & OVERRIDES ==============
 
+// Default source URLs for each miner's SEC filings
+const minerSourceUrls = {
+  MARA: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001507605&type=10&dateb=&owner=include&count=40',
+  RIOT: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001167419&type=10&dateb=&owner=include&count=40',
+  CLSK: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001515816&type=10&dateb=&owner=include&count=40',
+  CIFR: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001819989&type=10&dateb=&owner=include&count=40',
+  CORZ: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001839341&type=10&dateb=&owner=include&count=40',
+  WULF: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001783407&type=10&dateb=&owner=include&count=40',
+  HUT: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001964789&type=10&dateb=&owner=include&count=40',
+  IREN: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001878848&type=10&dateb=&owner=include&count=40',
+  BITF: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001725079&type=10&dateb=&owner=include&count=40',
+  HIVE: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001720424&type=10&dateb=&owner=include&count=40',
+  BTDR: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001899123&type=10&dateb=&owner=include&count=40',
+  APLD: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001144879&type=10&dateb=&owner=include&count=40',
+  GLXY: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001825681&type=10&dateb=&owner=include&count=40',
+  SLNH: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001816581&type=10&dateb=&owner=include&count=40',
+  FUFU: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001957413&type=10&dateb=&owner=include&count=40'
+};
+
 function getDefaultSource(ticker, field) {
   const sources = {
     hodl_value: 'BTC holdings × current BTC price (from company filings)',
@@ -672,14 +702,19 @@ function getDefaultSource(ticker, field) {
   return sources[field] || 'Company data';
 }
 
-function showEditSourceModal(ticker, field, currentValue, currentSource) {
-  const fieldLabels = { hodl_value: 'HODL Value', cash: 'Cash', debt: 'Debt' };
+function getDefaultSourceUrl(ticker) {
+  return minerSourceUrls[ticker] || `https://www.sec.gov/cgi-bin/browse-edgar?company=${ticker}&CIK=&type=10&owner=include&count=40&action=getcompany`;
+}
+
+function showEditSourceModal(ticker, field, currentValue, currentSource, currentUrl) {
+  const fieldLabels = { hodl_value: 'HODL Value', cash: 'Cash', debt: 'Debt', fd_shares_m: 'FD Shares (M)' };
   const modal = document.getElementById('source-modal');
   document.getElementById('source-modal-title').textContent = `Edit ${fieldLabels[field]} - ${ticker}`;
   document.getElementById('source-edit-ticker').value = ticker;
   document.getElementById('source-edit-field').value = field;
   document.getElementById('source-value').value = currentValue || '';
   document.getElementById('source-note').value = currentSource || '';
+  document.getElementById('source-url').value = currentUrl || '';
   modal.classList.add('active');
 }
 
@@ -692,10 +727,12 @@ function saveSourceOverride() {
   const field = document.getElementById('source-edit-field').value;
   const value = parseFloat(document.getElementById('source-value').value);
   const source = document.getElementById('source-note').value;
+  const url = document.getElementById('source-url').value;
 
   if (!minerOverrides[ticker]) minerOverrides[ticker] = {};
   minerOverrides[ticker][field] = value;
   minerOverrides[ticker][field + '_source'] = source;
+  minerOverrides[ticker][field + '_url'] = url;
 
   localStorage.setItem('minerOverrides', JSON.stringify(minerOverrides));
   closeSourceModal();
@@ -709,6 +746,7 @@ function clearSourceOverride() {
   if (minerOverrides[ticker]) {
     delete minerOverrides[ticker][field];
     delete minerOverrides[ticker][field + '_source'];
+    delete minerOverrides[ticker][field + '_url'];
     if (Object.keys(minerOverrides[ticker]).length === 0) {
       delete minerOverrides[ticker];
     }
@@ -1011,6 +1049,487 @@ function getConfidenceClass(c) {
 // HPC Projects stored in localStorage
 let hpcProjects = JSON.parse(localStorage.getItem('hpcProjects') || '[]');
 
+// Seed HPC projects with actual lease data if empty
+function seedHpcProjects() {
+  if (hpcProjects.length > 0) return; // Already has data
+
+  const seedData = [
+    // APLD - CoreWeave Deal ($11B, 400MW)
+    {
+      id: 1001,
+      name: 'Ellendale HPC Campus',
+      ticker: 'APLD',
+      location: 'Ellendale, ND',
+      tenant: 'CoreWeave',
+      it_mw: 400,
+      credit_backstop: 'hyperscaler',
+      credit_score: 85,
+      lease_type: 'nnn',
+      base_term: 15,
+      start_date: '2025-06-01',
+      delay_years: 0.5,
+      rent_model: 'per_kw',
+      rent_kw: 153,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 85,
+      base_cap: 8,
+      adder_credit: 25,
+      adder_lease: 0,
+      adder_concentration: 100,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 2200,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 70,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 60,
+      downtime: 6,
+      retenant_capex: 50,
+      reversion_cap: 9,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://ir.applieddigital.com/news-events/press-releases/detail/83/applied-digital-announces-15-year-lease-with-coreweave-for'
+    },
+    // CORZ - CoreWeave Deal (590MW total across multiple sites)
+    {
+      id: 1002,
+      name: 'Denton HPC Campus',
+      ticker: 'CORZ',
+      location: 'Denton, TX',
+      tenant: 'CoreWeave',
+      it_mw: 200,
+      credit_backstop: 'hyperscaler',
+      credit_score: 85,
+      lease_type: 'nnn',
+      base_term: 12,
+      start_date: '2025-03-01',
+      delay_years: 0.25,
+      rent_model: 'per_kw',
+      rent_kw: 120,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 90,
+      base_cap: 8,
+      adder_credit: 25,
+      adder_lease: 0,
+      adder_concentration: 75,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 1100,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 65,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 60,
+      downtime: 6,
+      retenant_capex: 40,
+      reversion_cap: 9,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://corescientific.com/press/core-scientific-signs-15-year-200-mw-contract-with-coreweave'
+    },
+    {
+      id: 1003,
+      name: 'Big Spring HPC',
+      ticker: 'CORZ',
+      location: 'Big Spring, TX',
+      tenant: 'CoreWeave',
+      it_mw: 200,
+      credit_backstop: 'hyperscaler',
+      credit_score: 85,
+      lease_type: 'nnn',
+      base_term: 12,
+      start_date: '2025-06-01',
+      delay_years: 0.5,
+      rent_model: 'per_kw',
+      rent_kw: 125,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 85,
+      base_cap: 8,
+      adder_credit: 25,
+      adder_lease: 0,
+      adder_concentration: 75,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 1100,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 65,
+      expansion_mw: 190,
+      expansion_date: '2026-12-01',
+      expansion_prob: 60,
+      residual_model: 'release',
+      release_prob: 60,
+      downtime: 6,
+      retenant_capex: 40,
+      reversion_cap: 9,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://corescientific.com/press/core-scientific-expands-coreweave-partnership'
+    },
+    // CIFR - AWS/Amazon Deal (300MW)
+    {
+      id: 1004,
+      name: 'HPC.1 Texas',
+      ticker: 'CIFR',
+      location: 'Texas',
+      tenant: 'AWS/Amazon',
+      it_mw: 300,
+      credit_backstop: 'hyperscaler',
+      credit_score: 95,
+      lease_type: 'nnn',
+      base_term: 15,
+      start_date: '2025-12-01',
+      delay_years: 1,
+      rent_model: 'per_kw',
+      rent_kw: 102,
+      direct_noi: 0,
+      escalator: 2.0,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 80,
+      base_cap: 7.5,
+      adder_credit: 0,
+      adder_lease: 0,
+      adder_concentration: 100,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 1500,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 75,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 65,
+      downtime: 6,
+      retenant_capex: 35,
+      reversion_cap: 8.5,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://www.ciphermining.com/news/cipher-mining-announces-major-hpc-hosting-deal-with-amazon-web-services'
+    },
+    // IREN - Microsoft GPU Cloud (200MW - Sweetwater)
+    {
+      id: 1005,
+      name: 'Sweetwater GPU Cloud',
+      ticker: 'IREN',
+      location: 'Sweetwater, TX',
+      tenant: 'Microsoft',
+      it_mw: 200,
+      credit_backstop: 'hyperscaler',
+      credit_score: 95,
+      lease_type: 'nnn',
+      base_term: 5,
+      start_date: '2025-06-01',
+      delay_years: 0.5,
+      rent_model: 'direct_noi',
+      rent_kw: 0,
+      direct_noi: 150,
+      escalator: 3.0,
+      passthrough: 100,
+      opex: 0,
+      reserve: 0,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 90,
+      base_cap: 9,
+      adder_credit: 0,
+      adder_lease: 50,
+      adder_concentration: 100,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 800,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 3,
+      renewal_years: 5,
+      renewal_prob: 60,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 55,
+      downtime: 9,
+      retenant_capex: 60,
+      reversion_cap: 10,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://iren.com/news/iren-announces-strategic-partnership-with-microsoft-for-ai-cloud-services'
+    },
+    // WULF - Fluidstack/Google Lake Mariner (360MW)
+    {
+      id: 1006,
+      name: 'Lake Mariner HPC',
+      ticker: 'WULF',
+      location: 'Lake Mariner, NY',
+      tenant: 'Google/Fluidstack',
+      it_mw: 360,
+      credit_backstop: 'hyperscaler',
+      credit_score: 95,
+      lease_type: 'nnn',
+      base_term: 10,
+      start_date: '2025-09-01',
+      delay_years: 0.75,
+      rent_model: 'per_kw',
+      rent_kw: 155,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 85,
+      base_cap: 8,
+      adder_credit: 0,
+      adder_lease: 0,
+      adder_concentration: 75,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 1500,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 70,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 65,
+      downtime: 6,
+      retenant_capex: 40,
+      reversion_cap: 9,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://www.terawulf.com/news/terawulf-announces-major-ai-hpc-deal-at-lake-mariner'
+    },
+    // WULF - Fluidstack Abernathy (168MW)
+    {
+      id: 1007,
+      name: 'Abernathy HPC Campus',
+      ticker: 'WULF',
+      location: 'Abernathy, TX',
+      tenant: 'Google/Fluidstack',
+      it_mw: 168,
+      credit_backstop: 'hyperscaler',
+      credit_score: 95,
+      lease_type: 'nnn',
+      base_term: 25,
+      start_date: '2026-06-01',
+      delay_years: 1.5,
+      rent_model: 'per_kw',
+      rent_kw: 189,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 80,
+      base_cap: 8,
+      adder_credit: 0,
+      adder_lease: 0,
+      adder_concentration: 50,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 900,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 1,
+      renewal_years: 10,
+      renewal_prob: 60,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 70,
+      downtime: 6,
+      retenant_capex: 35,
+      reversion_cap: 8.5,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://www.terawulf.com/news/terawulf-expands-hpc-portfolio-abernathy-texas'
+    },
+    // HUT - Fluidstack/Anthropic (245MW)
+    {
+      id: 1008,
+      name: 'Vega HPC Campus',
+      ticker: 'HUT',
+      location: 'Vega, TX',
+      tenant: 'Anthropic/Fluidstack',
+      it_mw: 245,
+      credit_backstop: 'hyperscaler',
+      credit_score: 80,
+      lease_type: 'nnn',
+      base_term: 15,
+      start_date: '2026-01-01',
+      delay_years: 1,
+      rent_model: 'per_kw',
+      rent_kw: 159,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 85,
+      base_cap: 8.5,
+      adder_credit: 50,
+      adder_lease: 0,
+      adder_concentration: 100,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 1200,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 70,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 60,
+      downtime: 6,
+      retenant_capex: 45,
+      reversion_cap: 9.5,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://hut8.com/news/hut-8-announces-strategic-ai-infrastructure-deal-with-anthropic'
+    },
+    // GLXY - CoreWeave (526MW across 4 sites)
+    {
+      id: 1009,
+      name: 'Helios Multi-Site HPC',
+      ticker: 'GLXY',
+      location: 'Multiple US Sites',
+      tenant: 'CoreWeave',
+      it_mw: 526,
+      credit_backstop: 'hyperscaler',
+      credit_score: 85,
+      lease_type: 'nnn',
+      base_term: 15,
+      start_date: '2025-09-01',
+      delay_years: 0.75,
+      rent_model: 'per_kw',
+      rent_kw: 158,
+      direct_noi: 0,
+      escalator: 2.5,
+      passthrough: 95,
+      opex: 0,
+      reserve: 15,
+      power_margin: 0,
+      service_margin: 0,
+      pcod: 90,
+      base_cap: 7.5,
+      adder_credit: 25,
+      adder_lease: 0,
+      adder_concentration: 50,
+      adder_ownership: 0,
+      adder_market: 0,
+      capex: 2800,
+      ti: 0,
+      build_discount: 10,
+      renewal_count: 2,
+      renewal_years: 5,
+      renewal_prob: 75,
+      expansion_mw: 0,
+      expansion_date: '',
+      expansion_prob: 0,
+      residual_model: 'release',
+      release_prob: 65,
+      downtime: 6,
+      retenant_capex: 50,
+      reversion_cap: 8.5,
+      salvage: 0,
+      ownership: 'fee_simple',
+      ground_rent: 0,
+      single_tenant: 'yes',
+      substation: 'yes',
+      interconnect: 'yes',
+      source_url: 'https://www.galaxy.com/news/galaxy-digital-helios-coreweave-data-center-deal'
+    }
+  ];
+
+  hpcProjects = seedData;
+  localStorage.setItem('hpcProjects', JSON.stringify(hpcProjects));
+}
+
+// Call seed on load
+seedHpcProjects();
+
 const hpcColumns = [
   { key: 'name', label: 'Project', width: 120, align: 'left' },
   { key: 'ticker', label: 'Ticker', width: 50, align: 'left' },
@@ -1024,6 +1543,7 @@ const hpcColumns = [
   { key: 'v_capex', label: 'Capex', width: 60, align: 'right' },
   { key: 'v_total', label: 'V Total', width: 75, align: 'right' },
   { key: 'per_mw', label: '$/MW', width: 60, align: 'right' },
+  { key: 'source', label: 'Src', width: 30, align: 'center' },
   { key: 'actions', label: '', width: 50, align: 'center' }
 ];
 
@@ -1096,6 +1616,7 @@ function showHpcProjectModal(id = null) {
     document.getElementById('hpc-single-tenant').value = p.single_tenant || 'yes';
     document.getElementById('hpc-substation').value = p.substation || 'yes';
     document.getElementById('hpc-interconnect').value = p.interconnect || 'yes';
+    document.getElementById('hpc-source-url').value = p.source_url || '';
   } else {
     title.textContent = 'Add HPC Project';
     deleteBtn.style.display = 'none';
@@ -1147,6 +1668,7 @@ function showHpcProjectModal(id = null) {
     document.getElementById('hpc-single-tenant').value = 'yes';
     document.getElementById('hpc-substation').value = 'yes';
     document.getElementById('hpc-interconnect').value = 'yes';
+    document.getElementById('hpc-source-url').value = '';
   }
   toggleRentInputs();
   modal.classList.add('active');
@@ -1206,7 +1728,8 @@ function saveHpcProject() {
     ground_rent: parseFloat(document.getElementById('hpc-ground-rent').value) || 0,
     single_tenant: document.getElementById('hpc-single-tenant').value,
     substation: document.getElementById('hpc-substation').value,
-    interconnect: document.getElementById('hpc-interconnect').value
+    interconnect: document.getElementById('hpc-interconnect').value,
+    source_url: document.getElementById('hpc-source-url').value || ''
   };
 
   if (editId) {
@@ -1342,10 +1865,21 @@ function renderHpcTable() {
   let html = '';
   let totalValue = 0, totalMw = 0;
 
+  // Group by ticker for company summaries
+  const tickerSummary = {};
+
   hpcProjects.forEach(p => {
     const val = calculateHpcValuation(p);
     totalValue += val.v_total;
     totalMw += p.it_mw;
+
+    // Track by ticker
+    if (!tickerSummary[p.ticker]) {
+      tickerSummary[p.ticker] = { mw: 0, value: 0, projects: 0 };
+    }
+    tickerSummary[p.ticker].mw += p.it_mw;
+    tickerSummary[p.ticker].value += val.v_total;
+    tickerSummary[p.ticker].projects += 1;
 
     html += `<tr class="data-row" onclick="showHpcProjectModal(${p.id})">`;
     hpcColumns.forEach(col => {
@@ -1364,6 +1898,7 @@ function renderHpcTable() {
       else if (col.key === 'v_capex') cellVal = `<span class="text-danger">-$${fmtNum(val.v_capex, 1)}</span>`;
       else if (col.key === 'v_total') cellVal = `<strong class="text-success">$${fmtNum(val.v_total, 1)}</strong>`;
       else if (col.key === 'per_mw') cellVal = '$' + fmtNum(val.per_mw, 1) + 'M';
+      else if (col.key === 'source') cellVal = p.source_url ? `<a href="${p.source_url}" target="_blank" onclick="event.stopPropagation()" title="${p.source_url}" class="source-link">🔗</a>` : '-';
       else if (col.key === 'actions') cellVal = `<button class="secondary" onclick="event.stopPropagation();showHpcProjectModal(${p.id})" style="padding:2px 4px">Ed</button>`;
 
       html += `<td class="${alignClass}">${cellVal}</td>`;
@@ -1373,13 +1908,42 @@ function renderHpcTable() {
 
   tbody.innerHTML = html;
 
+  // Company-level breakdown
+  const companyBreakdown = Object.entries(tickerSummary)
+    .sort((a, b) => b[1].value - a[1].value)
+    .map(([ticker, data]) => `
+      <div class="company-hpc-row">
+        <span class="company-ticker">${ticker}</span>
+        <span class="company-mw">${data.mw} MW</span>
+        <span class="company-value text-success">$${fmtNum(data.value, 0)}M</span>
+        <span class="company-per-mw">$${fmtNum(data.value / data.mw, 1)}M/MW</span>
+      </div>
+    `).join('');
+
   // Summary
   document.getElementById('hpcval-summary').innerHTML = `
-    <div class="stat"><div class="stat-label">Projects</div><div class="stat-value">${hpcProjects.length}</div></div>
-    <div class="stat"><div class="stat-label">Total IT MW</div><div class="stat-value">${fmtNum(totalMw, 0)}</div></div>
-    <div class="stat"><div class="stat-label">Total Value</div><div class="stat-value text-success">$${fmtNum(totalValue, 0)}M</div></div>
-    <div class="stat"><div class="stat-label">Avg $/MW</div><div class="stat-value">${totalMw > 0 ? '$' + fmtNum(totalValue / totalMw, 1) + 'M' : '-'}</div></div>
+    <div class="hpc-summary-grid">
+      <div class="hpc-totals">
+        <div class="stat"><div class="stat-label">Projects</div><div class="stat-value">${hpcProjects.length}</div></div>
+        <div class="stat"><div class="stat-label">Total IT MW</div><div class="stat-value">${fmtNum(totalMw, 0)}</div></div>
+        <div class="stat"><div class="stat-label">Total Value</div><div class="stat-value text-success">$${fmtNum(totalValue, 0)}M</div></div>
+        <div class="stat"><div class="stat-label">Avg $/MW</div><div class="stat-value">${totalMw > 0 ? '$' + fmtNum(totalValue / totalMw, 1) + 'M' : '-'}</div></div>
+      </div>
+      <div class="hpc-by-company">
+        <h4>Value by Company</h4>
+        ${companyBreakdown}
+      </div>
+    </div>
   `;
+}
+
+// Reset HPC projects to seed data
+function resetHpcProjects() {
+  if (!confirm('Reset all HPC projects to default data? This will remove any custom projects.')) return;
+  localStorage.removeItem('hpcProjects');
+  hpcProjects = [];
+  seedHpcProjects();
+  renderHpcTable();
 }
 
 // Initialize HPC table when tab is shown

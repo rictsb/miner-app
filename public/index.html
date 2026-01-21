@@ -382,6 +382,7 @@
       padding: 1px 3px;
       border-radius: 2px;
       transition: background 0.15s;
+      gap: 2px;
     }
     .source-cell:hover { background: rgba(255,102,0,0.2); }
     .source-cell.has-override { background: rgba(0,255,0,0.1); }
@@ -391,6 +392,13 @@
       opacity: 0.5;
     }
     .source-cell:hover .source-indicator { opacity: 1; }
+    .source-link-icon {
+      font-size: 10px;
+      text-decoration: none;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+    .source-link-icon:hover { opacity: 1; }
 
     .modal-overlay {
       position: fixed;
@@ -449,13 +457,26 @@
     .hpcval-container { padding: 12px; }
     .hpcval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .hpcval-header h2 { margin: 0; font-size: 14px; }
-    .hpcval-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
-    .hpcval-summary .stat { background: var(--bg-card); padding: 8px; border: 1px solid var(--border); }
+    .hpcval-header .header-buttons { display: flex; gap: 8px; }
+    .hpcval-summary { margin-bottom: 12px; }
+    .hpc-summary-grid { display: flex; gap: 20px; align-items: flex-start; }
+    .hpc-totals { display: flex; gap: 12px; flex-wrap: wrap; }
+    .hpcval-summary .stat { background: var(--bg-card); padding: 8px 12px; border: 1px solid var(--border); min-width: 100px; }
     .hpcval-summary .stat-label { font-size: 8px; color: var(--text-muted); text-transform: uppercase; }
     .hpcval-summary .stat-value { font-size: 14px; font-weight: 600; }
+    .hpc-by-company { flex: 1; background: var(--bg-card); padding: 8px 12px; border: 1px solid var(--border); }
+    .hpc-by-company h4 { margin: 0 0 8px 0; font-size: 9px; color: var(--text-muted); text-transform: uppercase; }
+    .company-hpc-row { display: grid; grid-template-columns: 60px 70px 90px 80px; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border-light); font-size: 9px; }
+    .company-hpc-row:last-child { border-bottom: none; }
+    .company-ticker { font-weight: 700; color: var(--accent); }
+    .company-mw { color: var(--text-secondary); }
+    .company-value { font-weight: 600; }
+    .company-per-mw { color: var(--text-secondary); }
     .hpcval-table-container { overflow-x: auto; }
     .hpc-section { margin-bottom: 16px; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); }
     .hpc-section h4 { margin: 0 0 10px 0; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
+    .source-link { text-decoration: none; font-size: 12px; }
+    .source-link:hover { filter: brightness(1.3); }
 
     .badge {
       display: inline-block;
@@ -587,7 +608,10 @@
           <div class="hpcval-container">
             <div class="hpcval-header">
               <h2>Hyperscaler Lease Valuation</h2>
-              <button onclick="showHpcProjectModal()">+ Add HPC Project</button>
+              <div class="header-buttons">
+                <button onclick="showHpcProjectModal()">+ Add HPC Project</button>
+                <button class="secondary" onclick="resetHpcProjects()">Reset to Defaults</button>
+              </div>
             </div>
             <div class="hpcval-summary" id="hpcval-summary"></div>
             <div class="hpcval-table-container">
@@ -786,7 +810,11 @@
         </div>
         <div class="form-group">
           <label>Source / Notes</label>
-          <textarea id="source-note" rows="3" placeholder="Where does this number come from?"></textarea>
+          <textarea id="source-note" rows="2" placeholder="Where does this number come from?"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Source URL</label>
+          <input type="url" id="source-url" placeholder="https://...">
         </div>
       </div>
       <div class="modal-footer">
@@ -983,6 +1011,15 @@
                 <option value="no">No</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <!-- Source -->
+        <div class="hpc-section">
+          <h4>Source</h4>
+          <div class="form-group">
+            <label>Source URL</label>
+            <input type="url" id="hpc-source-url" placeholder="https://...">
           </div>
         </div>
 

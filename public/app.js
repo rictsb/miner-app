@@ -121,6 +121,10 @@ async function refreshValuations() {
   const btcPrice = document.getElementById('btc-price').value || 90000;
   const evPerEh = document.getElementById('ev-per-eh').value || 54;
   try {
+    // Re-fetch factors to get any updates
+    const factorsRes = await fetch(`${API_BASE}/factors`);
+    factors = await factorsRes.json();
+
     const res = await fetch(`${API_BASE}/valuations-enhanced?btc_price=${btcPrice}&ev_per_eh=${evPerEh}`);
     valuations = await res.json();
     calculateProjectValuations();

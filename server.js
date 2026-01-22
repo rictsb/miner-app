@@ -206,13 +206,8 @@ app.get('/api/stocks', async (req, res) => {
     console.log('=== Fetching stock data ===');
     let results = {};
 
-    // Try Yahoo direct
-    results = await fetchYahooQuotes(STOCK_TICKERS);
-
-    // Fallback to proxy
-    if (Object.keys(results).length === 0) {
-        results = await fetchYahooViaProxy(STOCK_TICKERS);
-    }
+    // Use proxy as primary method (Yahoo direct is now blocked with 401)
+    results = await fetchYahooViaProxy(STOCK_TICKERS);
 
     // Fallback to TwelveData
     if (Object.keys(results).length === 0) {

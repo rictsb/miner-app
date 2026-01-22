@@ -996,7 +996,6 @@
     <div class="tabs">
         <button class="tab active" data-tab="dashboard">Dashboard</button>
         <button class="tab" data-tab="projects">Projects</button>
-        <button class="tab" data-tab="hpc-val">HPC Val</button>
         <button class="tab" data-tab="factors">Factors</button>
         <button class="tab" data-tab="map">Map</button>
     </div>
@@ -1121,73 +1120,6 @@
                             <th>Multipliers</th>
                             <th>Fidoodle</th>
                             <th>Value ($M)</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- HPC Val Tab -->
-        <div id="hpc-val" class="tab-content">
-            <div class="summary-cards">
-                <div class="summary-card">
-                    <div class="label">TOTAL HPC PROJECTS</div>
-                    <div class="value" id="hpc-project-count">0</div>
-                    <div class="sub">With leases</div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">CONTRACTED MW</div>
-                    <div class="value" id="hpc-contracted-mw">0 MW</div>
-                    <div class="sub">Operational + Signed</div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">PIPELINE MW</div>
-                    <div class="value" id="hpc-pipeline-mw">0 MW</div>
-                    <div class="sub">Development stage</div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">CONTRACTED VALUE</div>
-                    <div class="value" id="hpc-contracted-value">$0B</div>
-                    <div class="sub">Rule-of-thumb</div>
-                </div>
-                <div class="summary-card">
-                    <div class="label">PIPELINE VALUE</div>
-                    <div class="value" id="hpc-pipeline-value">$0B</div>
-                    <div class="sub">Risk-adjusted</div>
-                </div>
-            </div>
-
-            <div class="controls">
-                <div class="control-group">
-                    <label>Filter Ticker:</label>
-                    <select id="hpc-ticker-filter">
-                        <option value="">All</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Base Cap Rate:</label>
-                    <span id="hpc-base-cap-display" style="color: #ff8c00; font-family: 'Roboto Mono', monospace;">12.0%</span>
-                    <span style="color: #666; font-size: 10px;">(set in Factors)</span>
-                </div>
-                <button class="btn" onclick="openAddProjectModal()">+ Add Project</button>
-            </div>
-
-            <div class="table-container">
-                <table id="hpc-table">
-                    <thead>
-                        <tr>
-                            <th class="col-ticker">Ticker</th>
-                            <th class="col-name">Project</th>
-                            <th class="col-tenant">Tenant</th>
-                            <th>IT MW</th>
-                            <th>NOI ($M)</th>
-                            <th>Cap Eff</th>
-                            <th>Term</th>
-                            <th>Term Factor</th>
-                            <th class="col-status">Status</th>
-                            <th>Multipliers</th>
-                            <th>Lease Value</th>
                             <th class="col-source">Source</th>
                         </tr>
                     </thead>

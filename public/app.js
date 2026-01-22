@@ -918,7 +918,6 @@ function setupEventListeners() {
         document.getElementById(id).addEventListener('change', renderProjectsTable);
     });
 
-    document.getElementById('hpc-ticker-filter').addEventListener('change', renderHpcTable);
 
     ['map-ticker-filter', 'map-status-filter', 'map-mw-filter'].forEach(id => {
         document.getElementById(id).addEventListener('change', updateMapMarkers);
@@ -977,10 +976,8 @@ async function saveData() {
 function renderAll() {
     renderDashboard();
     renderProjectsTable();
-    renderHpcTable();
     renderCountryFactors();
     populateFilters();
-    updateHpcBaseCap();
 }
 
 // ============================================================
@@ -1094,10 +1091,6 @@ function updatePriceDisplay() {
     }
 }
 
-function updateHpcBaseCap() {
-    document.getElementById('hpc-base-cap-display').textContent = factors.baseCapRate.toFixed(1) + '%';
-}
-
 // ============================================================
 // DASHBOARD RENDERING
 // ============================================================
@@ -1209,7 +1202,7 @@ function renderDashboard() {
         expandedTr.className = 'expanded-content';
         expandedTr.dataset.ticker = ticker;
         expandedTr.innerHTML = `
-            <td colspan="15">
+            <td colspan="16">
                 <div class="project-summary">
                     ${projects.map(p => {
                         const overrides = projectOverrides[p.id] || {};
@@ -1328,6 +1321,7 @@ function renderProjectsTable() {
                         <span class="fidoodle-edit-icon">✎</span>
                     </td>
                     <td class="positive">${formatNumber(valuation.value, 1)}</td>
+                    <td class="col-source">${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank" onclick="event.stopPropagation();">Link</a>` : '-'}</td>
                 `;
             } else {
                 // HPC/AI Site
@@ -1355,6 +1349,7 @@ function renderProjectsTable() {
                         <span class="fidoodle-edit-icon">✎</span>
                     </td>
                     <td class="positive">${formatNumber(valuation.value, 1)}</td>
+                    <td class="col-source">${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank" onclick="event.stopPropagation();">Link</a>` : '-'}</td>
                 `;
             }
 
@@ -1367,7 +1362,7 @@ function renderProjectsTable() {
 
             if (valuation.isBtcSite) {
                 expandedTr.innerHTML = `
-                    <td colspan="15">
+                    <td colspan="16">
                         <div class="valuation-details">
                             <div class="valuation-section">
                                 <h4>BTC Mining Valuation</h4>
@@ -1418,7 +1413,7 @@ function renderProjectsTable() {
                 `;
             } else {
                 expandedTr.innerHTML = `
-                    <td colspan="15">
+                    <td colspan="16">
                         <div class="valuation-details">
                             <div class="valuation-section">
                                 <h4>HPC Lease Valuation</h4>
@@ -1555,7 +1550,6 @@ function openFidoodleEditor(projectId) {
             saveData();
             renderProjectsTable();
             renderDashboard();
-            renderHpcTable();
         }
         popup.remove();
     });
@@ -1569,7 +1563,6 @@ function openFidoodleEditor(projectId) {
             saveData();
             renderProjectsTable();
             renderDashboard();
-            renderHpcTable();
         }
         popup.remove();
     });
@@ -1586,85 +1579,6 @@ function openFidoodleEditor(projectId) {
     // Focus input
     document.getElementById('fidoodle-input').focus();
     document.getElementById('fidoodle-input').select();
-}
-
-// ============================================================
-// HPC VAL TABLE RENDERING
-// ============================================================
-function renderHpcTable() {
-    const tbody = document.querySelector('#hpc-table tbody');
-    tbody.innerHTML = '';
-
-    const tickerFilter = document.getElementById('hpc-ticker-filter').value;
-    const allProjects = [...ALL_PROJECTS, ...customProjects];
-
-    let totalProjects = 0;
-    let contractedMw = 0, pipelineMw = 0;
-    let contractedValue = 0, pipelineValue = 0;
-
-    allProjects
-        .filter(p => {
-            if (p.current_use !== 'AI/HPC' && !isHyperscaler(p.lessee)) return false;
-            if (tickerFilter && p.ticker !== tickerFilter) return false;
-            return true;
-        })
-        .forEach(project => {
-            const overrides = projectOverrides[project.id] || {};
-            const valuation = calculateProjectValue(project, overrides);
-            const c = valuation.components;
-
-            totalProjects++;
-            const isContracted = project.status === 'Operational' || project.status === 'Contracted';
-
-            if (isContracted) {
-                contractedMw += project.it_mw || 0;
-                contractedValue += valuation.value;
-            } else {
-                pipelineMw += project.it_mw || 0;
-                pipelineValue += valuation.value;
-            }
-
-            const tr = document.createElement('tr');
-            tr.className = 'project-row';
-            tr.dataset.projectId = project.id;
-
-            tr.innerHTML = `
-                <td class="col-ticker"><span class="ticker">${project.ticker}</span></td>
-                <td class="col-name">${project.name}</td>
-                <td class="col-tenant">${project.lessee || '-'}</td>
-                <td>${project.it_mw || 0}</td>
-                <td>${formatNumber(c.noi, 1)}</td>
-                <td>${(c.capEff * 100).toFixed(1)}%</td>
-                <td>${c.T}</td>
-                <td>${c.termFactor.toFixed(3)}</td>
-                <td class="col-status">
-                    <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
-                </td>
-                <td class="has-tooltip" data-tooltip="F_credit: ${c.fCredit.toFixed(2)}
-F_lease: ${c.fLease.toFixed(2)}
-F_ownership: ${c.fOwnership.toFixed(2)}
-F_build: ${c.fBuild.toFixed(2)}
-F_concentration: ${c.fConcentration.toFixed(2)}
-F_size: ${c.fSize.toFixed(2)}
-F_country: ${c.fCountry.toFixed(2)}
-F_grid: ${c.fGrid.toFixed(2)}
-Fidoodle: ${c.fidoodle.toFixed(2)}">${c.combinedMult.toFixed(3)} x ${c.fidoodle.toFixed(2)}</td>
-                <td class="positive">$${formatNumber(valuation.value, 1)}M</td>
-                <td class="col-source">
-                    ${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank">Link</a>` : '-'}
-                </td>
-            `;
-
-            tr.addEventListener('click', () => openProjectModal(project));
-            tbody.appendChild(tr);
-        });
-
-    // Update summary cards
-    document.getElementById('hpc-project-count').textContent = totalProjects;
-    document.getElementById('hpc-contracted-mw').textContent = contractedMw.toLocaleString() + ' MW';
-    document.getElementById('hpc-pipeline-mw').textContent = pipelineMw.toLocaleString() + ' MW';
-    document.getElementById('hpc-contracted-value').textContent = '$' + formatNumber(contractedValue / 1000, 2) + 'B';
-    document.getElementById('hpc-pipeline-value').textContent = '$' + formatNumber(pipelineValue / 1000, 2) + 'B';
 }
 
 // ============================================================
@@ -2194,19 +2108,16 @@ function populateFilters() {
     // Project filters
     const tickerFilter = document.getElementById('project-ticker-filter');
     const countryFilter = document.getElementById('project-country-filter');
-    const hpcTickerFilter = document.getElementById('hpc-ticker-filter');
 
-    [tickerFilter, hpcTickerFilter].forEach(select => {
-        const current = select.value;
-        select.innerHTML = '<option value="">All</option>';
-        tickers.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t;
-            opt.textContent = t;
-            select.appendChild(opt);
-        });
-        select.value = current;
+    const currentTicker = tickerFilter.value;
+    tickerFilter.innerHTML = '<option value="">All</option>';
+    tickers.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        tickerFilter.appendChild(opt);
     });
+    tickerFilter.value = currentTicker;
 
     countryFilter.innerHTML = '<option value="">All</option>';
     countries.forEach(c => {

@@ -761,6 +761,217 @@
         .btc-site {
             background: rgba(255, 140, 0, 0.05);
         }
+
+        /* Expandable rows for Projects table */
+        .col-expand {
+            width: 30px;
+            text-align: center;
+        }
+
+        .expand-icon {
+            cursor: pointer;
+            color: #666;
+            font-size: 10px;
+            transition: color 0.2s;
+        }
+
+        .expandable-row:hover .expand-icon {
+            color: #ff8c00;
+        }
+
+        .expandable-row.expanded .expand-icon {
+            color: #ff8c00;
+        }
+
+        .project-details-row {
+            display: none;
+        }
+
+        .project-details-row.show {
+            display: table-row;
+        }
+
+        .project-details-row td {
+            background: #0a0a0a;
+            border-top: none;
+            padding: 0;
+        }
+
+        .valuation-details {
+            padding: 15px 20px;
+            border-left: 3px solid #ff8c00;
+            margin: 10px 0;
+        }
+
+        .valuation-section {
+            margin-bottom: 15px;
+        }
+
+        .valuation-section h4 {
+            color: #ff8c00;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .formula-display {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        .formula-label {
+            color: #888;
+        }
+
+        .formula-part {
+            background: #1a1a1a;
+            padding: 3px 8px;
+            border-radius: 3px;
+            border: 1px solid #333;
+        }
+
+        .formula-op {
+            color: #666;
+            padding: 0 2px;
+        }
+
+        .formula-result {
+            color: #00ff00;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .multipliers-breakdown {
+            margin-top: 10px;
+        }
+
+        .multiplier-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .mult-item {
+            background: #1a1a1a;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .mult-label {
+            color: #888;
+        }
+
+        .mult-value {
+            color: #ff8c00;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .valuation-total {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+            color: #00ff00;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-small {
+            padding: 4px 12px;
+            font-size: 11px;
+        }
+
+        .edit-project-btn {
+            margin-left: auto;
+        }
+
+        /* Fidoodle cell styling */
+        .fidoodle-cell {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .fidoodle-cell:hover {
+            background: rgba(255, 140, 0, 0.1);
+        }
+
+        .fidoodle-edit-icon {
+            opacity: 0;
+            margin-left: 4px;
+            font-size: 10px;
+            color: #ff8c00;
+            transition: opacity 0.2s;
+        }
+
+        .fidoodle-cell:hover .fidoodle-edit-icon {
+            opacity: 1;
+        }
+
+        .fidoodle-cell.has-override .fidoodle-value {
+            color: #00bfff;
+        }
+
+        /* Fidoodle popup editor */
+        .fidoodle-popup {
+            position: fixed;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.5);
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        .fidoodle-popup-content {
+            position: absolute;
+            background: #1a1a1a;
+            border: 1px solid #ff8c00;
+            border-radius: 6px;
+            padding: 15px;
+            min-width: 300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .fidoodle-popup-content h4 {
+            color: #ff8c00;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .fidoodle-desc {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 12px;
+        }
+
+        .fidoodle-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .fidoodle-input-row input {
+            width: 80px;
+            background: #0a0a0a;
+            border: 1px solid #444;
+            color: #ff8c00;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+        }
+
+        .fidoodle-input-row input:focus {
+            outline: none;
+            border-color: #ff8c00;
+        }
     </style>
 </head>
 <body>
@@ -889,12 +1100,13 @@
                 <button class="btn" onclick="exportProjects()">Export Projects</button>
             </div>
 
-            <p style="color: #666; font-size: 11px; margin-bottom: 15px;">Click any project row to edit overrides and view valuation details</p>
+            <p style="color: #666; font-size: 11px; margin-bottom: 15px;">Click any row to expand and see valuation formula. Click the Fidoodle cell to edit per-project adjustment.</p>
 
             <div class="table-container">
                 <table id="projects-table">
                     <thead>
                         <tr>
+                            <th class="col-expand"></th>
                             <th class="col-ticker">Ticker</th>
                             <th class="col-name">Site Name</th>
                             <th class="col-location">Location</th>

@@ -6,8 +6,10 @@
 // ============================================================
 let btcPrice = 89668;
 let ethPrice = 2994;
+let stockPrices = {};  // Ticker -> { price, marketCap, change }
 let map = null;
 let markers = [];
+let expandedRows = new Set();  // Track expanded project rows
 
 // User data (persisted)
 let projectOverrides = {};  // Per-project overrides
@@ -928,7 +930,22 @@ function renderAll() {
 // ============================================================
 // PRICE FETCHING
 // ============================================================
+
+// Stock tickers for Yahoo Finance
+const STOCK_TICKERS = ['MARA', 'RIOT', 'CLSK', 'CIFR', 'CORZ', 'WULF', 'HUT', 'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH', 'FUFU'];
+
 async function fetchPrices() {
+    // Fetch BTC and stock prices in parallel
+    await Promise.all([
+        fetchCryptoPrices(),
+        fetchStockPrices()
+    ]);
+
+    updatePriceDisplay();
+    renderDashboard();
+}
+
+async function fetchCryptoPrices() {
     let success = false;
 
     // Try CoinGecko first
@@ -982,15 +999,104 @@ async function fetchPrices() {
             console.error('Blockchain.info API error:', error);
         }
     }
+}
 
-    updatePriceDisplay();
-    renderDashboard();
+async function fetchStockPrices() {
+    // Use Yahoo Finance via a CORS proxy or direct API
+    // We'll use the yfinance public endpoint
+    const tickers = STOCK_TICKERS.join(',');
+
+    try {
+        // Try Yahoo Finance v8 API (works with CORS in some cases)
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
+        const response = await fetch(url);
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.quoteResponse && data.quoteResponse.result) {
+                data.quoteResponse.result.forEach(quote => {
+                    stockPrices[quote.symbol] = {
+                        price: quote.regularMarketPrice || 0,
+                        marketCap: quote.marketCap || 0,
+                        change: quote.regularMarketChangePercent || 0,
+                        volume: quote.regularMarketVolume || 0
+                    };
+                });
+                return;
+            }
+        }
+    } catch (error) {
+        console.log('Yahoo Finance direct API failed, trying proxy...', error);
+    }
+
+    // Fallback: Use AllOrigins CORS proxy
+    try {
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+
+        if (response.ok) {
+            const proxyData = await response.json();
+            const data = JSON.parse(proxyData.contents);
+            if (data.quoteResponse && data.quoteResponse.result) {
+                data.quoteResponse.result.forEach(quote => {
+                    stockPrices[quote.symbol] = {
+                        price: quote.regularMarketPrice || 0,
+                        marketCap: quote.marketCap || 0,
+                        change: quote.regularMarketChangePercent || 0,
+                        volume: quote.regularMarketVolume || 0
+                    };
+                });
+                return;
+            }
+        }
+    } catch (error) {
+        console.log('AllOrigins proxy failed, trying corsproxy...', error);
+    }
+
+    // Second fallback: corsproxy.io
+    try {
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.quoteResponse && data.quoteResponse.result) {
+                data.quoteResponse.result.forEach(quote => {
+                    stockPrices[quote.symbol] = {
+                        price: quote.regularMarketPrice || 0,
+                        marketCap: quote.marketCap || 0,
+                        change: quote.regularMarketChangePercent || 0,
+                        volume: quote.regularMarketVolume || 0
+                    };
+                });
+            }
+        }
+    } catch (error) {
+        console.error('All stock price APIs failed:', error);
+    }
+}
+
+function getStockPrice(ticker) {
+    return stockPrices[ticker] || { price: 0, marketCap: 0, change: 0 };
 }
 
 function updatePriceDisplay() {
     document.getElementById('btc-price').textContent = '$' + btcPrice.toLocaleString();
     document.getElementById('eth-price').textContent = '$' + ethPrice.toLocaleString();
     document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+    // Calculate total market cap from Yahoo data
+    let totalMcap = 0;
+    STOCK_TICKERS.forEach(ticker => {
+        const stock = getStockPrice(ticker);
+        totalMcap += stock.marketCap || 0;
+    });
+
+    if (totalMcap > 0) {
+        document.getElementById('total-mcap').textContent = '$' + formatNumber(totalMcap / 1e9, 1) + 'B';
+    }
 }
 
 function updateHpcBaseCap() {
@@ -1050,11 +1156,19 @@ function renderDashboard() {
         const fairValue = equityValue / miner.fdShares;
         const hasHyperscaler = projects.some(p => isHyperscaler(p.lessee) && (p.status === 'Operational' || p.status === 'Contracted'));
 
+        // Get stock price data from Yahoo Finance
+        const stock = getStockPrice(ticker);
+        const stockPrice = stock.price || 0;
+        const marketCap = stock.marketCap || 0;
+        const priceChange = stock.change || 0;
+        const upside = stockPrice > 0 ? ((fairValue / stockPrice - 1) * 100) : 0;
+
         totalBtc += miner.btc;
         totalHpcContracted += contractedEv;
         totalHpcPipeline += pipelineEv;
         totalMiningEv += miningEV;
         totalFairValue += equityValue;
+        totalMcap += marketCap;
 
         // Main row
         const tr = document.createElement('tr');
@@ -1066,8 +1180,8 @@ function renderDashboard() {
                 <span class="ticker">${ticker}</span>
                 ${hasHyperscaler ? '<span class="hyperscaler-badge">HPC</span>' : ''}
             </td>
-            <td>--</td>
-            <td>--</td>
+            <td class="${priceChange >= 0 ? 'positive' : 'negative'}">$${stockPrice > 0 ? stockPrice.toFixed(2) : '--'}</td>
+            <td class="has-tooltip" data-tooltip="Yahoo Finance market cap">${marketCap > 0 ? '$' + formatNumber(marketCap / 1e9, 2) + 'B' : '--'}</td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.hodl}">
                 <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(hodlValue, 1)}M</a>
             </td>
@@ -1085,8 +1199,8 @@ function renderDashboard() {
             <td>${formatNumber(miningEV, 1)}M</td>
             <td class="positive">${formatNumber(contractedEv, 1)}M</td>
             <td class="neutral">${formatNumber(pipelineEv, 1)}M</td>
-            <td class="positive">${formatNumber(fairValue, 2)}</td>
-            <td class="positive">--</td>
+            <td class="positive">$${formatNumber(fairValue, 2)}</td>
+            <td class="${upside >= 0 ? 'positive' : 'negative'}">${stockPrice > 0 ? (upside >= 0 ? '+' : '') + upside.toFixed(0) + '%' : '--'}</td>
         `;
         tbody.appendChild(tr);
 
@@ -1125,6 +1239,9 @@ function renderDashboard() {
     });
 
     // Update summary cards
+    if (totalMcap > 0) {
+        document.getElementById('total-mcap').textContent = '$' + formatNumber(totalMcap / 1e9, 1) + 'B';
+    }
     document.getElementById('total-btc').textContent = totalBtc.toLocaleString();
     document.getElementById('total-btc-value').textContent = '$' + formatNumber(totalBtc * btcPrice / 1e6, 0) + 'M';
     document.getElementById('total-hpc-contracted').textContent = '$' + formatNumber(totalHpcContracted / 1000, 2) + 'B';
@@ -1159,9 +1276,10 @@ function renderProjectsTable() {
             const valuation = calculateProjectValue(project, overrides);
             const hasOverrides = Object.keys(overrides).length > 0;
             const c = valuation.components;
+            const isExpanded = expandedRows.has(project.id);
 
             const tr = document.createElement('tr');
-            tr.className = 'project-row';
+            tr.className = `project-row expandable-row ${isExpanded ? 'expanded' : ''}`;
             tr.dataset.projectId = project.id;
 
             const location = project.state ? `${project.state}, ${project.country}` : project.country;
@@ -1173,6 +1291,7 @@ function renderProjectsTable() {
                 const convDisplay = convYear === 'never' ? 'Never' : convYear;
 
                 tr.innerHTML = `
+                    <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
                     <td class="col-ticker">
                         <span class="ticker">${project.ticker}</span>
                         ${hasOverrides ? '<span class="override-dot"></span>' : ''}
@@ -1185,10 +1304,8 @@ function renderProjectsTable() {
                         <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
                     </td>
                     <td class="col-tenant">${project.lessee || '-'}</td>
-                    <td class="has-tooltip" data-tooltip="BTC Mining EBITDA
-EBITDA/MW: $${c.ebitdaPerMw?.toFixed(2) || 0}M
-Total EBITDA: $${c.ebitda?.toFixed(1) || 0}M">${formatNumber(c.ebitda || 0, 1)}</td>
-                    <td class="has-tooltip" data-tooltip="EBITDA Multiple for BTC mining">${c.ebitdaMultiple?.toFixed(1) || 0}x</td>
+                    <td>${formatNumber(c.ebitda || 0, 1)}</td>
+                    <td>${c.ebitdaMultiple?.toFixed(1) || 0}x</td>
                     <td>
                         <select class="hpc-conversion-select" data-project-id="${project.id}" onclick="event.stopPropagation();">
                             <option value="never" ${convYear === 'never' ? 'selected' : ''}>Never</option>
@@ -1201,16 +1318,17 @@ Total EBITDA: $${c.ebitda?.toFixed(1) || 0}M">${formatNumber(c.ebitda || 0, 1)}<
                             <option value="2031" ${convYear === '2031' ? 'selected' : ''}>2031</option>
                         </select>
                     </td>
-                    <td class="has-tooltip" data-tooltip="Mining: $${formatNumber(c.miningValue || 0, 1)}M
-Option: $${formatNumber(c.conversionValue || 0, 1)}M
-(${convDisplay} @ ${((c.conversionDiscount || 0) * 100).toFixed(0)}%)">${formatNumber(c.fCountry || 1, 2)}</td>
-                    <td class="${hasOverrides && overrides.fidoodle ? 'has-override' : ''}">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</td>
-                    <td class="positive has-tooltip" data-tooltip="Mining: $${formatNumber(c.miningValue || 0, 1)}M
-HPC Option: $${formatNumber(c.conversionValue || 0, 1)}M">${formatNumber(valuation.value, 1)}</td>
+                    <td>${formatNumber(c.fCountry || 1, 2)}</td>
+                    <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
+                        <span class="fidoodle-value">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</span>
+                        <span class="fidoodle-edit-icon">✎</span>
+                    </td>
+                    <td class="positive">${formatNumber(valuation.value, 1)}</td>
                 `;
             } else {
                 // HPC/AI Site
                 tr.innerHTML = `
+                    <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
                     <td class="col-ticker">
                         <span class="ticker">${project.ticker}</span>
                         ${hasOverrides ? '<span class="override-dot"></span>' : ''}
@@ -1223,25 +1341,124 @@ HPC Option: $${formatNumber(c.conversionValue || 0, 1)}M">${formatNumber(valuati
                         <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
                     </td>
                     <td class="col-tenant">${project.lessee || '-'}</td>
-                    <td class="has-tooltip" data-tooltip="Year 1 NOI from HPC lease">${formatNumber(c.noi || 0, 1)}</td>
-                    <td class="has-tooltip" data-tooltip="Effective Cap Rate (Base + Credit adj)">${((c.capEff || 0) * 100).toFixed(1)}%</td>
-                    <td class="neutral has-tooltip" data-tooltip="HPC site - term factor: ${(c.termFactor || 0).toFixed(3)}">-</td>
-                    <td class="has-tooltip" data-tooltip="Credit: ${(c.fCredit || 1).toFixed(2)}
-Size: ${(c.fSize || 1).toFixed(2)}
-Country: ${(c.fCountry || 1).toFixed(2)}
-Grid: ${(c.fGrid || 1).toFixed(2)}
-Build: ${(c.fBuild || 1).toFixed(2)}">${(c.combinedMult || 0).toFixed(3)}</td>
-                    <td class="${hasOverrides && overrides.fidoodle ? 'has-override' : ''}">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</td>
+                    <td>${formatNumber(c.noi || 0, 1)}</td>
+                    <td>${((c.capEff || 0) * 100).toFixed(1)}%</td>
+                    <td class="neutral">T=${(c.termFactor || 0).toFixed(2)}</td>
+                    <td>${(c.combinedMult || 0).toFixed(3)}</td>
+                    <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
+                        <span class="fidoodle-value">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</span>
+                        <span class="fidoodle-edit-icon">✎</span>
+                    </td>
                     <td class="positive">${formatNumber(valuation.value, 1)}</td>
                 `;
             }
 
-            tr.addEventListener('click', (e) => {
-                // Don't open modal if clicking the conversion dropdown
-                if (e.target.classList.contains('hpc-conversion-select')) return;
-                openProjectModal(project);
-            });
             tbody.appendChild(tr);
+
+            // Create expanded details row
+            const expandedTr = document.createElement('tr');
+            expandedTr.className = `expanded-content project-details-row ${isExpanded ? 'show' : ''}`;
+            expandedTr.dataset.projectId = project.id;
+
+            if (valuation.isBtcSite) {
+                expandedTr.innerHTML = `
+                    <td colspan="14">
+                        <div class="valuation-details">
+                            <div class="valuation-section">
+                                <h4>BTC Mining Valuation</h4>
+                                <div class="formula-display">
+                                    <span class="formula-label">Mining Value =</span>
+                                    <span class="formula-part">EBITDA/MW ($${(c.ebitdaPerMw || 0).toFixed(2)}M)</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">IT MW (${project.it_mw || 0})</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Multiple (${(c.ebitdaMultiple || 0).toFixed(1)}x)</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Country (${(c.fCountry || 1).toFixed(2)})</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Fidoodle (${(c.fidoodle || 1).toFixed(2)})</span>
+                                    <span class="formula-result">= $${formatNumber(c.miningValue || 0, 1)}M</span>
+                                </div>
+                            </div>
+                            ${c.conversionValue > 0 ? `
+                            <div class="valuation-section">
+                                <h4>HPC Conversion Option</h4>
+                                <div class="formula-display">
+                                    <span class="formula-label">Option Value =</span>
+                                    <span class="formula-part">Potential HPC ($${formatNumber(c.potentialHpcValue || 0, 1)}M)</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Discount (${((c.conversionDiscount || 0) * 100).toFixed(0)}% for ${c.conversionYear})</span>
+                                    <span class="formula-result">= $${formatNumber(c.conversionValue || 0, 1)}M</span>
+                                </div>
+                            </div>
+                            ` : ''}
+                            <div class="valuation-total">
+                                <strong>Total Value: $${formatNumber(valuation.value, 1)}M</strong>
+                                (Mining: $${formatNumber(c.miningValue || 0, 1)}M + Option: $${formatNumber(c.conversionValue || 0, 1)}M)
+                            </div>
+                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit All Overrides</button>
+                        </div>
+                    </td>
+                `;
+            } else {
+                expandedTr.innerHTML = `
+                    <td colspan="14">
+                        <div class="valuation-details">
+                            <div class="valuation-section">
+                                <h4>HPC Lease Valuation</h4>
+                                <div class="formula-display">
+                                    <span class="formula-label">Value =</span>
+                                    <span class="formula-part">NOI ($${formatNumber(c.noi || 0, 1)}M)</span>
+                                    <span class="formula-op">÷</span>
+                                    <span class="formula-part">Cap Rate (${((c.capEff || 0) * 100).toFixed(1)}%)</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Term Factor (${(c.termFactor || 0).toFixed(3)})</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Multipliers (${(c.combinedMult || 0).toFixed(3)})</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Fidoodle (${(c.fidoodle || 1).toFixed(2)})</span>
+                                    <span class="formula-result">= $${formatNumber(valuation.value, 1)}M</span>
+                                </div>
+                            </div>
+                            <div class="valuation-section multipliers-breakdown">
+                                <h4>Multiplier Breakdown</h4>
+                                <div class="multiplier-grid">
+                                    <div class="mult-item"><span class="mult-label">Credit:</span> <span class="mult-value">${(c.fCredit || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Lease:</span> <span class="mult-value">${(c.fLease || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Ownership:</span> <span class="mult-value">${(c.fOwnership || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Build:</span> <span class="mult-value">${(c.fBuild || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Concentration:</span> <span class="mult-value">${(c.fConcentration || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Size:</span> <span class="mult-value">${(c.fSize || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Country:</span> <span class="mult-value">${(c.fCountry || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Grid:</span> <span class="mult-value">${(c.fGrid || 1).toFixed(2)}</span></div>
+                                </div>
+                            </div>
+                            <div class="valuation-total">
+                                <strong>Total Value: $${formatNumber(valuation.value, 1)}M</strong>
+                                ${project.source_url ? `<a href="${project.source_url}" target="_blank" class="source-link">View Source</a>` : ''}
+                            </div>
+                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit All Overrides</button>
+                        </div>
+                    </td>
+                `;
+            }
+
+            tbody.appendChild(expandedTr);
+
+            // Click handler for row expansion
+            tr.addEventListener('click', (e) => {
+                // Don't expand if clicking on special elements
+                if (e.target.classList.contains('hpc-conversion-select') ||
+                    e.target.classList.contains('fidoodle-edit-icon') ||
+                    e.target.closest('.fidoodle-cell')) return;
+
+                if (expandedRows.has(project.id)) {
+                    expandedRows.delete(project.id);
+                } else {
+                    expandedRows.add(project.id);
+                }
+                renderProjectsTable();
+            });
         });
 
     // Add event listeners for HPC conversion dropdowns
@@ -1258,6 +1475,101 @@ Build: ${(c.fBuild || 1).toFixed(2)}">${(c.combinedMult || 0).toFixed(3)}</td>
             renderDashboard();
         });
     });
+
+    // Add event listeners for fidoodle edit cells
+    document.querySelectorAll('.fidoodle-cell').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const projectId = parseInt(cell.dataset.projectId);
+            openFidoodleEditor(projectId);
+        });
+    });
+
+    // Add event listeners for edit buttons in expanded rows
+    document.querySelectorAll('.edit-project-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const projectId = parseInt(btn.dataset.projectId);
+            const project = allProjects.find(p => p.id === projectId);
+            if (project) openProjectModal(project);
+        });
+    });
+}
+
+// Fidoodle editor popup
+function openFidoodleEditor(projectId) {
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
+    const project = allProjects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const overrides = projectOverrides[projectId] || {};
+    const currentFidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
+
+    // Create popup
+    const popup = document.createElement('div');
+    popup.className = 'fidoodle-popup';
+    popup.innerHTML = `
+        <div class="fidoodle-popup-content">
+            <h4>Edit Fidoodle: ${project.name}</h4>
+            <p class="fidoodle-desc">Adjustment factor for this project (default: ${factors.fidoodleDefault.toFixed(2)})</p>
+            <div class="fidoodle-input-row">
+                <input type="number" id="fidoodle-input" value="${currentFidoodle.toFixed(2)}" step="0.05" min="0" max="5">
+                <button class="btn btn-small" id="fidoodle-save">Save</button>
+                <button class="btn btn-small btn-secondary" id="fidoodle-reset">Reset</button>
+                <button class="btn btn-small btn-secondary" id="fidoodle-cancel">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(popup);
+
+    // Position near the cursor
+    const rect = event.target.getBoundingClientRect();
+    popup.style.top = `${rect.bottom + 5}px`;
+    popup.style.left = `${rect.left}px`;
+
+    // Event handlers
+    document.getElementById('fidoodle-save').addEventListener('click', () => {
+        const newValue = parseFloat(document.getElementById('fidoodle-input').value);
+        if (!isNaN(newValue) && newValue >= 0) {
+            if (!projectOverrides[projectId]) {
+                projectOverrides[projectId] = {};
+            }
+            projectOverrides[projectId].fidoodle = newValue;
+            saveData();
+            renderProjectsTable();
+            renderDashboard();
+            renderHpcTable();
+        }
+        popup.remove();
+    });
+
+    document.getElementById('fidoodle-reset').addEventListener('click', () => {
+        if (projectOverrides[projectId]) {
+            delete projectOverrides[projectId].fidoodle;
+            if (Object.keys(projectOverrides[projectId]).length === 0) {
+                delete projectOverrides[projectId];
+            }
+            saveData();
+            renderProjectsTable();
+            renderDashboard();
+            renderHpcTable();
+        }
+        popup.remove();
+    });
+
+    document.getElementById('fidoodle-cancel').addEventListener('click', () => {
+        popup.remove();
+    });
+
+    // Close on click outside
+    popup.addEventListener('click', (e) => {
+        if (e.target === popup) popup.remove();
+    });
+
+    // Focus input
+    document.getElementById('fidoodle-input').focus();
+    document.getElementById('fidoodle-input').select();
 }
 
 // ============================================================

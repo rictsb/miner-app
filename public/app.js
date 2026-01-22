@@ -1002,79 +1002,19 @@ async function fetchCryptoPrices() {
 }
 
 async function fetchStockPrices() {
-    // Use Yahoo Finance via a CORS proxy or direct API
-    // We'll use the yfinance public endpoint
-    const tickers = STOCK_TICKERS.join(',');
-
+    // Fetch stock prices from our server-side Yahoo Finance endpoint
     try {
-        // Try Yahoo Finance v8 API (works with CORS in some cases)
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
-        const response = await fetch(url);
-
+        const response = await fetch('/api/stocks');
         if (response.ok) {
             const data = await response.json();
-            if (data.quoteResponse && data.quoteResponse.result) {
-                data.quoteResponse.result.forEach(quote => {
-                    stockPrices[quote.symbol] = {
-                        price: quote.regularMarketPrice || 0,
-                        marketCap: quote.marketCap || 0,
-                        change: quote.regularMarketChangePercent || 0,
-                        volume: quote.regularMarketVolume || 0
-                    };
-                });
-                return;
-            }
+            // Merge into stockPrices object
+            Object.assign(stockPrices, data);
+            console.log('Stock prices updated:', Object.keys(stockPrices).length, 'tickers');
+        } else {
+            console.error('Stock API returned error:', response.status);
         }
     } catch (error) {
-        console.log('Yahoo Finance direct API failed, trying proxy...', error);
-    }
-
-    // Fallback: Use AllOrigins CORS proxy
-    try {
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-
-        if (response.ok) {
-            const proxyData = await response.json();
-            const data = JSON.parse(proxyData.contents);
-            if (data.quoteResponse && data.quoteResponse.result) {
-                data.quoteResponse.result.forEach(quote => {
-                    stockPrices[quote.symbol] = {
-                        price: quote.regularMarketPrice || 0,
-                        marketCap: quote.marketCap || 0,
-                        change: quote.regularMarketChangePercent || 0,
-                        volume: quote.regularMarketVolume || 0
-                    };
-                });
-                return;
-            }
-        }
-    } catch (error) {
-        console.log('AllOrigins proxy failed, trying corsproxy...', error);
-    }
-
-    // Second fallback: corsproxy.io
-    try {
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-
-        if (response.ok) {
-            const data = await response.json();
-            if (data.quoteResponse && data.quoteResponse.result) {
-                data.quoteResponse.result.forEach(quote => {
-                    stockPrices[quote.symbol] = {
-                        price: quote.regularMarketPrice || 0,
-                        marketCap: quote.marketCap || 0,
-                        change: quote.regularMarketChangePercent || 0,
-                        volume: quote.regularMarketVolume || 0
-                    };
-                });
-            }
-        }
-    } catch (error) {
-        console.error('All stock price APIs failed:', error);
+        console.error('Error fetching stock prices:', error);
     }
 }
 

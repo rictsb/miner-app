@@ -659,24 +659,68 @@ function calculateBtcMiningValue(project, overrides = {}) {
 function calculateHpcConversionValue(project, overrides = {}) {
     const conversionYear = overrides.hpcConversionYear || 'never';
     if (conversionYear === 'never') {
-        return { value: 0, conversionYear: 'never', discountFactor: 0, potentialHpcValue: 0 };
+        return { value: 0, conversionYear: 'never', discountFactor: 0, potentialHpcValue: 0, components: {} };
     }
 
     const itMw = overrides.itMw || project.it_mw || 0;
     const discountFactor = factors.hpcConversion[conversionYear] || 0;
 
-    // Calculate what the site would be worth as HPC (using default HPC assumptions)
-    // Use base NOI per MW and base cap rate for potential value
-    const potentialNoi = factors.baseNoiPerMw * itMw;
-    const potentialCapRate = factors.baseCapRate / 100;
-    const fSize = getSizeMultiplier(itMw, null);
+    // Calculate FULL HPC lease value using all the override parameters
+    // This allows user to specify prospective tenant, term, fidoodle, etc.
+
+    // 1. Calculate NOI (use override NOI, or calculate from rent, or use base)
+    let noi;
+    if (overrides.noi !== undefined && overrides.noi !== null && overrides.noi !== '') {
+        noi = parseFloat(overrides.noi);
+    } else if (overrides.rentKw && overrides.passthrough) {
+        const annualRent = overrides.rentKw * 1000 * itMw * 12 / 1000000;
+        noi = annualRent * (overrides.passthrough / 100);
+    } else {
+        noi = factors.baseNoiPerMw * itMw;
+    }
+
+    // 2. Get effective cap rate (can be overridden or calculated from components)
+    let capEff;
+    if (overrides.capOverride) {
+        capEff = overrides.capOverride / 100;
+    } else {
+        const baseCap = factors.baseCapRate / 100;
+        // Check if user specified a prospective tenant type via credit override
+        const creditAdj = overrides.credit ? (factors.credit[overrides.credit] || 0) / 100 : 0;
+        capEff = baseCap + creditAdj;
+    }
+
+    // 3. Get term parameters
+    const T = overrides.term || factors.defaultTerm;
+    const g = (overrides.escalator ?? factors.escalator) / 100;
+
+    // 4. Calculate term factor
+    const termFactor = calculateTermFactor(T, g, capEff);
+
+    // 5. Get all multipliers
+    // For prospective HPC lease, check if user specified hyperscaler tenant
+    const isProspectiveHyperscaler = overrides.credit === 'hyperscaler';
+    const fCredit = isProspectiveHyperscaler ? factors.hyperscalerPremium : 1.0;
+    const fLease = getLeaseMultiplier(overrides.leaseType);
+    const fOwnership = getOwnershipMultiplier(overrides.ownership);
+    // Use 'pipeline' build status for future conversion (discounted for not yet built/contracted)
+    const fBuild = overrides.buildStatus ? getBuildMultiplier(null, overrides.buildStatus) : factors.build.pipeline;
+    const fConcentration = getConcentrationMultiplier(overrides.concentration, project);
+    const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
     const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
     const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
 
-    // Potential HPC value (simplified - operational, NNN, fee simple assumptions)
-    const potentialHpcValue = (potentialNoi / potentialCapRate) * fSize * fCountry * fGrid;
+    // 6. Get fidoodle
+    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
 
-    // Apply conversion discount
+    // 7. Combined multiplier
+    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid;
+
+    // 8. Calculate potential HPC value (before time discount)
+    const baseValue = capEff > 0 ? noi / capEff : 0;
+    const potentialHpcValue = baseValue * termFactor * combinedMult * fidoodle;
+
+    // 9. Apply conversion year discount
     const optionValue = potentialHpcValue * discountFactor;
 
     return {
@@ -684,9 +728,23 @@ function calculateHpcConversionValue(project, overrides = {}) {
         conversionYear: conversionYear,
         discountFactor: discountFactor,
         potentialHpcValue: potentialHpcValue,
-        fSize: fSize,
-        fCountry: fCountry,
-        fGrid: fGrid
+        components: {
+            noi: noi,
+            capEff: capEff,
+            T: T,
+            g: g,
+            termFactor: termFactor,
+            fCredit: fCredit,
+            fLease: fLease,
+            fOwnership: fOwnership,
+            fBuild: fBuild,
+            fConcentration: fConcentration,
+            fSize: fSize,
+            fCountry: fCountry,
+            fGrid: fGrid,
+            combinedMult: combinedMult,
+            fidoodle: fidoodle
+        }
     };
 }
 
@@ -723,6 +781,7 @@ function calculateProjectValue(project, overrides = {}) {
                 conversionYear: conversionVal.conversionYear,
                 conversionDiscount: conversionVal.discountFactor,
                 potentialHpcValue: conversionVal.potentialHpcValue,
+                conversionComponents: conversionVal.components,  // Full HPC calc details
                 // Common
                 fCountry: miningVal.fCountry,
                 fidoodle: miningVal.fidoodle,
@@ -1326,12 +1385,25 @@ function renderProjectsTable() {
                             </div>
                             ${c.conversionValue > 0 ? `
                             <div class="valuation-section">
-                                <h4>HPC Conversion Option</h4>
+                                <h4>Prospective HPC Lease (${c.conversionYear} conversion)</h4>
                                 <div class="formula-display">
-                                    <span class="formula-label">Option Value =</span>
-                                    <span class="formula-part">Potential HPC ($${formatNumber(c.potentialHpcValue || 0, 1)}M)</span>
+                                    <span class="formula-label">HPC Value =</span>
+                                    <span class="formula-part">NOI ($${formatNumber(c.conversionComponents?.noi || 0, 1)}M)</span>
+                                    <span class="formula-op">÷</span>
+                                    <span class="formula-part">Cap (${((c.conversionComponents?.capEff || 0.12) * 100).toFixed(1)}%)</span>
                                     <span class="formula-op">×</span>
-                                    <span class="formula-part">Discount (${((c.conversionDiscount || 0) * 100).toFixed(0)}% for ${c.conversionYear})</span>
+                                    <span class="formula-part">Term (${(c.conversionComponents?.termFactor || 1).toFixed(2)})</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Mult (${(c.conversionComponents?.combinedMult || 1).toFixed(2)})</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">Fidoodle (${(c.conversionComponents?.fidoodle || 1).toFixed(2)})</span>
+                                    <span class="formula-result">= $${formatNumber(c.potentialHpcValue || 0, 1)}M</span>
+                                </div>
+                                <div class="formula-display" style="margin-top: 8px;">
+                                    <span class="formula-label">Pipeline Value =</span>
+                                    <span class="formula-part">$${formatNumber(c.potentialHpcValue || 0, 1)}M</span>
+                                    <span class="formula-op">×</span>
+                                    <span class="formula-part">${c.conversionYear} discount (${((c.conversionDiscount || 0) * 100).toFixed(0)}%)</span>
                                     <span class="formula-result">= $${formatNumber(c.conversionValue || 0, 1)}M</span>
                                 </div>
                             </div>

@@ -1656,12 +1656,23 @@ function updateValuationPreview() {
     const valuation = calculateProjectValue(project, overrides);
     const c = valuation.components;
 
-    document.getElementById('preview-noi').textContent = '$' + formatNumber(c.noi, 1) + 'M';
-    document.getElementById('preview-cap').textContent = (c.capEff * 100).toFixed(1) + '%';
-    document.getElementById('preview-term').textContent = c.termFactor.toFixed(3);
-    document.getElementById('preview-mult').textContent = c.combinedMult.toFixed(3);
-    document.getElementById('preview-fidoodle').textContent = c.fidoodle.toFixed(3);
-    document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+    if (valuation.isBtcSite) {
+        // BTC site preview
+        document.getElementById('preview-noi').textContent = 'N/A (BTC)';
+        document.getElementById('preview-cap').textContent = 'N/A';
+        document.getElementById('preview-term').textContent = 'N/A';
+        document.getElementById('preview-mult').textContent = (c.fCountry || 1).toFixed(3);
+        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(3);
+        document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+    } else {
+        // HPC site preview
+        document.getElementById('preview-noi').textContent = '$' + formatNumber(c.noi || 0, 1) + 'M';
+        document.getElementById('preview-cap').textContent = ((c.capEff || 0) * 100).toFixed(1) + '%';
+        document.getElementById('preview-term').textContent = (c.termFactor || 0).toFixed(3);
+        document.getElementById('preview-mult').textContent = (c.combinedMult || 0).toFixed(3);
+        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(3);
+        document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+    }
 }
 
 function getOverridesFromForm() {

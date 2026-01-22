@@ -1,13 +1,12 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const yahooFinance = require('yahoo-finance2').default;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-// Stock tickers to track (with proper exchange suffixes where needed)
+// Stock tickers to track
 const STOCK_TICKERS = [
     'MARA',           // Marathon Digital
     'RIOT',           // Riot Platforms
@@ -15,28 +14,22 @@ const STOCK_TICKERS = [
     'CIFR',           // Cipher Mining
     'CORZ',           // Core Scientific
     'WULF',           // TeraWulf
-    'HUT',            // Hut 8 (also trades as HUT.TO on TSX)
+    'HUT',            // Hut 8
     'IREN',           // Iris Energy
     'BITF',           // Bitfarms
-    'HIVE',           // HIVE Blockchain (also HIVE.V on TSX)
-    'GLXY.TO',        // Galaxy Digital (TSX) - not on US exchanges
+    'HIVE',           // HIVE Blockchain
+    'GLXY',           // Galaxy Digital (use US listing)
     'APLD',           // Applied Digital
     'BTDR',           // Bitdeer
     'SLNH',           // Soluna Holdings
-    // 'FUFU' - not a public ticker, skip
 ];
 
-// Map display tickers to Yahoo tickers
-const TICKER_MAP = {
-    'GLXY.TO': 'GLXY',  // Display as GLXY but fetch from TSX
-};
-
-// Cache for stock prices (refresh every 60 seconds)
+// Cache for stock prices (refresh every 5 minutes)
 let stockCache = {
     data: {},
     lastUpdate: 0
 };
-const CACHE_DURATION = 60 * 1000; // 60 seconds
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Middleware
 app.use(express.json());
@@ -95,7 +88,75 @@ app.post('/api/data', (req, res) => {
     }
 });
 
-// Stock prices API endpoint using Yahoo Finance
+// Fetch stock data using Yahoo Finance v8 API (no library needed)
+async function fetchYahooQuotes(tickers) {
+    const results = {};
+
+    // Yahoo Finance v8 quote endpoint
+    const symbols = tickers.join(',');
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Yahoo API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.quoteResponse && data.quoteResponse.result) {
+            for (const quote of data.quoteResponse.result) {
+                const ticker = quote.symbol;
+                results[ticker] = {
+                    price: quote.regularMarketPrice || 0,
+                    marketCap: quote.marketCap || 0,
+                    change: quote.regularMarketChangePercent || 0,
+                    volume: quote.regularMarketVolume || 0,
+                    previousClose: quote.regularMarketPreviousClose || 0,
+                    fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh || 0,
+                    fiftyTwoWeekLow: quote.fiftyTwoWeekLow || 0
+                };
+            }
+        }
+    } catch (error) {
+        console.error('Yahoo Finance API error:', error.message);
+    }
+
+    return results;
+}
+
+// Fallback: Fetch from Alpha Vantage demo (limited but free)
+async function fetchAlphaVantageQuote(ticker) {
+    try {
+        // Alpha Vantage demo API (limited requests)
+        const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=demo`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data['Global Quote']) {
+            const quote = data['Global Quote'];
+            return {
+                price: parseFloat(quote['05. price']) || 0,
+                marketCap: 0, // Not available in this endpoint
+                change: parseFloat(quote['10. change percent']?.replace('%', '')) || 0,
+                volume: parseInt(quote['06. volume']) || 0,
+                previousClose: parseFloat(quote['08. previous close']) || 0,
+                fiftyTwoWeekHigh: 0,
+                fiftyTwoWeekLow: 0
+            };
+        }
+    } catch (error) {
+        console.error(`Alpha Vantage error for ${ticker}:`, error.message);
+    }
+    return null;
+}
+
+// Stock prices API endpoint
 app.get('/api/stocks', async (req, res) => {
     const now = Date.now();
 
@@ -105,43 +166,39 @@ app.get('/api/stocks', async (req, res) => {
         return res.json(stockCache.data);
     }
 
-    console.log('Fetching fresh stock data from Yahoo Finance...');
-    const results = {};
+    console.log('Fetching fresh stock data...');
 
-    // Fetch each ticker individually to handle errors gracefully
-    for (const ticker of STOCK_TICKERS) {
-        try {
-            const quote = await yahooFinance.quote(ticker);
-            if (quote) {
-                // Use mapped display name if exists
-                const displayTicker = TICKER_MAP[ticker] || ticker;
-                results[displayTicker] = {
-                    price: quote.regularMarketPrice || 0,
-                    marketCap: quote.marketCap || 0,
-                    change: quote.regularMarketChangePercent || 0,
-                    volume: quote.regularMarketVolume || 0,
-                    previousClose: quote.regularMarketPreviousClose || 0,
-                    fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh || 0,
-                    fiftyTwoWeekLow: quote.fiftyTwoWeekLow || 0
-                };
-                console.log(`  ${displayTicker}: $${quote.regularMarketPrice?.toFixed(2) || 'N/A'}`);
-            }
-        } catch (error) {
-            console.error(`  Error fetching ${ticker}:`, error.message);
-        }
-    }
+    // Try Yahoo Finance first (batch request)
+    let results = await fetchYahooQuotes(STOCK_TICKERS);
 
-    // Update cache if we got any results
-    if (Object.keys(results).length > 0) {
+    // Log results
+    const successCount = Object.keys(results).length;
+    console.log(`Yahoo Finance returned ${successCount}/${STOCK_TICKERS.length} tickers`);
+
+    // If we got results, cache them
+    if (successCount > 0) {
         stockCache = {
             data: results,
             lastUpdate: now
         };
-        console.log(`Cached ${Object.keys(results).length} stock prices`);
+
+        // Log prices
+        for (const [ticker, data] of Object.entries(results)) {
+            console.log(`  ${ticker}: $${data.price?.toFixed(2) || 'N/A'}`);
+        }
     }
 
-    // Return results (could be empty if all failed)
     res.json(results);
+});
+
+// Debug endpoint to check server status
+app.get('/api/status', (req, res) => {
+    res.json({
+        status: 'ok',
+        tickers: STOCK_TICKERS,
+        cacheAge: stockCache.lastUpdate > 0 ? Date.now() - stockCache.lastUpdate : null,
+        cachedTickers: Object.keys(stockCache.data).length
+    });
 });
 
 // Serve index.html for all other routes

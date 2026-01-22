@@ -1775,8 +1775,21 @@
                 </div>
 
                 <div class="form-section">
-                    <h3>Term & Escalation</h3>
+                    <h3>HPC Conversion (for BTC sites)</h3>
                     <div class="form-row-3">
+                        <div class="form-group">
+                            <label>HPC Conversion Year</label>
+                            <select id="project-hpc-conversion">
+                                <option value="never">Never (BTC only)</option>
+                                <option value="2025">2025</option>
+                                <option value="2026">2026</option>
+                                <option value="2027">2027</option>
+                                <option value="2028">2028</option>
+                                <option value="2029">2029</option>
+                                <option value="2030">2030</option>
+                                <option value="2031">2031+</option>
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label>Lease Term T (years)</label>
                             <input type="number" id="project-term" step="1" placeholder="Global default">
@@ -1784,10 +1797,6 @@
                         <div class="form-group">
                             <label>Rent Escalator g (%)</label>
                             <input type="number" id="project-escalator" step="0.5" placeholder="Global default">
-                        </div>
-                        <div class="form-group">
-                            <label>Energization Delay (months)</label>
-                            <input type="number" id="project-delay" step="1" value="0">
                         </div>
                     </div>
                 </div>

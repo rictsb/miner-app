@@ -1690,10 +1690,10 @@ function openProjectModal(project) {
     document.getElementById('project-build-status').value = overrides.buildStatus || '';
     document.getElementById('project-cap-override').value = overrides.capOverride || '';
 
-    // Term & Escalation
+    // HPC Conversion & Term
+    document.getElementById('project-hpc-conversion').value = overrides.hpcConversionYear || 'never';
     document.getElementById('project-term').value = overrides.term || '';
     document.getElementById('project-escalator').value = overrides.escalator || '';
-    document.getElementById('project-delay').value = overrides.delay ?? '';
 
     // Multiplier Overrides
     document.getElementById('project-size-mult').value = overrides.sizeMult || '';
@@ -1725,27 +1725,41 @@ function updateValuationPreview() {
     const c = valuation.components;
 
     if (valuation.isBtcSite) {
-        // BTC site preview
-        document.getElementById('preview-noi').textContent = 'N/A (BTC)';
-        document.getElementById('preview-cap').textContent = 'N/A';
-        document.getElementById('preview-term').textContent = 'N/A';
-        document.getElementById('preview-mult').textContent = (c.fCountry || 1).toFixed(3);
-        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(3);
-        document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+        // BTC site preview - show prospective HPC lease values if conversion year set
+        const cc = c.conversionComponents || {};
+        if (c.conversionValue > 0) {
+            // Show HPC lease preview
+            document.getElementById('preview-noi').textContent = '$' + formatNumber(cc.noi || 0, 1) + 'M';
+            document.getElementById('preview-cap').textContent = ((cc.capEff || 0.12) * 100).toFixed(1) + '%';
+            document.getElementById('preview-term').textContent = (cc.termFactor || 1).toFixed(3);
+            document.getElementById('preview-mult').textContent = (cc.combinedMult || 1).toFixed(3);
+            document.getElementById('preview-fidoodle').textContent = (cc.fidoodle || 1).toFixed(2);
+            document.getElementById('preview-value').textContent = '$' + formatNumber(c.conversionValue, 1) + 'M (Pipeline)';
+        } else {
+            // No conversion - show mining only
+            document.getElementById('preview-noi').textContent = 'Set HPC Conv Year';
+            document.getElementById('preview-cap').textContent = '-';
+            document.getElementById('preview-term').textContent = '-';
+            document.getElementById('preview-mult').textContent = '-';
+            document.getElementById('preview-fidoodle').textContent = '-';
+            document.getElementById('preview-value').textContent = '$' + formatNumber(c.miningValue || 0, 1) + 'M (Mining)';
+        }
     } else {
         // HPC site preview
         document.getElementById('preview-noi').textContent = '$' + formatNumber(c.noi || 0, 1) + 'M';
         document.getElementById('preview-cap').textContent = ((c.capEff || 0) * 100).toFixed(1) + '%';
         document.getElementById('preview-term').textContent = (c.termFactor || 0).toFixed(3);
         document.getElementById('preview-mult').textContent = (c.combinedMult || 0).toFixed(3);
-        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(3);
+        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(2);
         document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
     }
 }
 
 function getOverridesFromForm() {
+    const hpcConversion = document.getElementById('project-hpc-conversion').value;
     return {
         itMw: parseFloatOrNull(document.getElementById('project-it-mw').value),
+        hpcConversionYear: hpcConversion !== 'never' ? hpcConversion : null,
         noi: parseFloatOrNull(document.getElementById('project-noi').value),
         rentKw: parseFloatOrNull(document.getElementById('project-rent-kw').value),
         passthrough: parseFloatOrNull(document.getElementById('project-passthrough').value),
@@ -1757,7 +1771,6 @@ function getOverridesFromForm() {
         capOverride: parseFloatOrNull(document.getElementById('project-cap-override').value),
         term: parseFloatOrNull(document.getElementById('project-term').value),
         escalator: parseFloatOrNull(document.getElementById('project-escalator').value),
-        delay: parseFloatOrNull(document.getElementById('project-delay').value),
         sizeMult: parseFloatOrNull(document.getElementById('project-size-mult').value),
         countryMult: parseFloatOrNull(document.getElementById('project-country-mult').value),
         gridMult: parseFloatOrNull(document.getElementById('project-grid-mult').value),

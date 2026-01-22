@@ -30,7 +30,7 @@ let stockCache = {
     lastUpdate: 0,
     lastError: null
 };
-const CACHE_DURATION = 60 * 1000; // 1 minute
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (to avoid hitting API rate limits)
 
 // Middleware
 app.use(express.json());
@@ -180,13 +180,14 @@ app.get('/api/stocks', async (req, res) => {
 
     console.log('=== Fetching stock data ===');
 
-    // Fetch quotes
+    // Fetch quotes only (skip market caps to save API calls)
     let results = await fetchFinnhub(STOCK_TICKERS);
 
-    // Fetch market caps if we got quotes
-    if (Object.keys(results).length > 0) {
-        await fetchMarketCaps(STOCK_TICKERS, results);
-    }
+    // Note: Market cap calls disabled to stay within free tier limits (60 calls/min)
+    // Uncomment below if you upgrade to paid tier:
+    // if (Object.keys(results).length > 0) {
+    //     await fetchMarketCaps(STOCK_TICKERS, results);
+    // }
 
     // Cache if successful
     if (Object.keys(results).length > 0) {

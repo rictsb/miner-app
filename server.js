@@ -180,14 +180,13 @@ app.get('/api/stocks', async (req, res) => {
 
     console.log('=== Fetching stock data ===');
 
-    // Fetch quotes only (skip market caps to save API calls)
+    // Fetch quotes
     let results = await fetchFinnhub(STOCK_TICKERS);
 
-    // Note: Market cap calls disabled to stay within free tier limits (60 calls/min)
-    // Uncomment below if you upgrade to paid tier:
-    // if (Object.keys(results).length > 0) {
-    //     await fetchMarketCaps(STOCK_TICKERS, results);
-    // }
+    // Fetch market caps (uses additional API calls)
+    if (Object.keys(results).length > 0) {
+        await fetchMarketCaps(STOCK_TICKERS, results);
+    }
 
     // Cache if successful
     if (Object.keys(results).length > 0) {

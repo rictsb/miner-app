@@ -1073,9 +1073,14 @@ function renderDashboard() {
             const valuation = calculateProjectValue(p, overrides);
 
             if (valuation.isBtcSite) {
-                // BTC mining site - use mining valuation
+                // BTC mining site - split mining value from HPC conversion option
                 miningMw += p.it_mw || 0;
-                miningEV += valuation.value;  // Includes mining value + conversion option
+                // Mining value goes to mining column
+                miningEV += valuation.components.miningValue || 0;
+                // HPC conversion option value goes to pipeline column
+                if (valuation.components.conversionValue > 0) {
+                    pipelineEv += valuation.components.conversionValue;
+                }
             } else {
                 // HPC/AI site
                 const isContracted = p.status === 'Operational' || p.status === 'Contracted';
@@ -2141,25 +2146,33 @@ function exportDashboard() {
         const miner = MINER_DATA[ticker];
         const projects = allProjects.filter(p => p.ticker === ticker);
 
-        let contractedMw = 0, pipelineMw = 0, contractedEv = 0, pipelineEv = 0, miningMw = 0;
+        let contractedMw = 0, pipelineMw = 0, contractedEv = 0, pipelineEv = 0, miningMw = 0, miningEV = 0;
 
         projects.forEach(p => {
             const overrides = projectOverrides[p.id] || {};
             const valuation = calculateProjectValue(p, overrides);
-            const isHpc = p.current_use === 'AI/HPC' || isHyperscaler(p.lessee);
 
-            if (isHpc && (p.status === 'Operational' || p.status === 'Contracted')) {
-                contractedMw += p.it_mw || 0;
-                contractedEv += valuation.value;
-            } else if (isHpc) {
-                pipelineMw += p.it_mw || 0;
-                pipelineEv += valuation.value;
-            } else {
+            if (valuation.isBtcSite) {
+                // BTC mining site - split mining value from HPC conversion option
                 miningMw += p.it_mw || 0;
+                miningEV += valuation.components.miningValue || 0;
+                // HPC conversion option value goes to pipeline
+                if (valuation.components.conversionValue > 0) {
+                    pipelineEv += valuation.components.conversionValue;
+                }
+            } else {
+                // HPC/AI site
+                const isContracted = p.status === 'Operational' || p.status === 'Contracted';
+                if (isContracted) {
+                    contractedMw += p.it_mw || 0;
+                    contractedEv += valuation.value;
+                } else {
+                    pipelineMw += p.it_mw || 0;
+                    pipelineEv += valuation.value;
+                }
             }
         });
 
-        const miningEV = miningMw * factors.baseNoiPerMw / (factors.baseCapRate / 100);
         const hodlValue = miner.btc * btcPrice / 1e6;
         const totalEV = miningEV + contractedEv + pipelineEv;
         const equityValue = totalEV + hodlValue + miner.cash - miner.debt;

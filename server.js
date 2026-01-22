@@ -12,13 +12,24 @@ const STOCK_TICKERS = [
     'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH'
 ];
 
+// ===========================================
+// FREE API KEY SETUP:
+// ===========================================
+// 1. Go to https://finnhub.io/register
+// 2. Sign up for FREE (no credit card needed)
+// 3. Copy your API key from the dashboard
+// 4. Add it as FINNHUB_API_KEY environment variable in Render
+// ===========================================
+
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || '';
+
 // Cache for stock prices
 let stockCache = {
     data: {},
     lastUpdate: 0,
     lastError: null
 };
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 60 * 1000; // 1 minute
 
 // Middleware
 app.use(express.json());
@@ -78,120 +89,82 @@ async function fetchWithTimeout(url, options = {}, timeout = 10000) {
     }
 }
 
-// Method 1: Yahoo Finance v7 API
-async function fetchYahooQuotes(tickers) {
+// Fetch from Finnhub with real API key
+async function fetchFinnhub(tickers) {
     const results = {};
-    const symbols = tickers.join(',');
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
 
-    try {
-        console.log('[Yahoo] Fetching...');
-        const response = await fetchWithTimeout(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json'
-            }
-        }, 15000);
-
-        console.log('[Yahoo] Status:', response.status);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (data.quoteResponse?.result) {
-            for (const quote of data.quoteResponse.result) {
-                results[quote.symbol] = {
-                    price: quote.regularMarketPrice || 0,
-                    marketCap: quote.marketCap || 0,
-                    change: quote.regularMarketChangePercent || 0
-                };
-            }
-            console.log('[Yahoo] Got', Object.keys(results).length, 'quotes');
-        }
-    } catch (error) {
-        console.error('[Yahoo] Error:', error.message);
-        stockCache.lastError = `Yahoo: ${error.message}`;
+    if (!FINNHUB_API_KEY) {
+        console.log('[Finnhub] No API key configured');
+        stockCache.lastError = 'No FINNHUB_API_KEY configured';
+        return results;
     }
 
-    return results;
-}
+    console.log('[Finnhub] Fetching with API key...');
 
-// Method 2: YFinance via RapidAPI proxy (free tier available)
-async function fetchYahooViaProxy(tickers) {
-    const results = {};
-    const symbols = tickers.join(',');
+    for (const ticker of tickers) {
+        try {
+            const url = `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`;
+            const response = await fetchWithTimeout(url, {}, 5000);
 
-    // Try allorigins proxy
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`)}`;
-
-    try {
-        console.log('[Proxy] Fetching via allorigins...');
-        const response = await fetchWithTimeout(proxyUrl, {}, 15000);
-
-        if (response.ok) {
-            const data = await response.json();
-            if (data.quoteResponse?.result) {
-                for (const quote of data.quoteResponse.result) {
-                    results[quote.symbol] = {
-                        price: quote.regularMarketPrice || 0,
-                        marketCap: quote.marketCap || 0,
-                        change: quote.regularMarketChangePercent || 0
+            if (response.ok) {
+                const q = await response.json();
+                if (q.c && q.c > 0) {
+                    results[ticker] = {
+                        price: q.c || 0,           // Current price
+                        marketCap: 0,              // Finnhub doesn't provide this in quote
+                        change: q.dp || 0,         // Percent change
+                        high: q.h || 0,            // Day high
+                        low: q.l || 0,             // Day low
+                        open: q.o || 0,            // Open
+                        prevClose: q.pc || 0       // Previous close
                     };
+                    console.log(`[Finnhub] ${ticker}: $${q.c.toFixed(2)} (${q.dp > 0 ? '+' : ''}${q.dp?.toFixed(2)}%)`);
                 }
-                console.log('[Proxy] Got', Object.keys(results).length, 'quotes');
+            } else {
+                const err = await response.text();
+                console.error(`[Finnhub] ${ticker} error:`, response.status, err);
             }
+
+            // Small delay to avoid rate limits (60 calls/minute on free tier)
+            await new Promise(r => setTimeout(r, 100));
+
+        } catch (e) {
+            console.error(`[Finnhub] ${ticker} failed:`, e.message);
         }
-    } catch (error) {
-        console.error('[Proxy] Error:', error.message);
-        stockCache.lastError = `Proxy: ${error.message}`;
     }
 
     return results;
 }
 
-// Method 3: Twelve Data API (free tier - 8 calls/minute)
-async function fetchTwelveData(tickers) {
-    const results = {};
+// Fetch market caps separately (Finnhub company profile endpoint)
+async function fetchMarketCaps(tickers, existingData) {
+    if (!FINNHUB_API_KEY) return;
 
-    // Free API key from twelvedata.com (demo key)
-    const symbols = tickers.slice(0, 8).join(','); // Limit for free tier
-    const url = `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=demo`;
+    console.log('[Finnhub] Fetching market caps...');
 
-    try {
-        console.log('[TwelveData] Fetching...');
-        const response = await fetchWithTimeout(url, {}, 10000);
+    for (const ticker of tickers) {
+        if (!existingData[ticker]) continue;
 
-        if (response.ok) {
-            const data = await response.json();
+        try {
+            const url = `https://finnhub.io/api/v1/stock/profile2?symbol=${ticker}&token=${FINNHUB_API_KEY}`;
+            const response = await fetchWithTimeout(url, {}, 5000);
 
-            // Handle single vs multiple results
-            if (Array.isArray(data)) {
-                for (const quote of data) {
-                    if (quote.symbol && quote.close) {
-                        results[quote.symbol] = {
-                            price: parseFloat(quote.close) || 0,
-                            marketCap: 0,
-                            change: parseFloat(quote.percent_change) || 0
-                        };
-                    }
+            if (response.ok) {
+                const profile = await response.json();
+                if (profile.marketCapitalization) {
+                    // Finnhub returns market cap in millions
+                    existingData[ticker].marketCap = profile.marketCapitalization * 1000000;
+                    console.log(`[Finnhub] ${ticker} market cap: $${(profile.marketCapitalization / 1000).toFixed(2)}B`);
                 }
-            } else if (data.symbol && data.close) {
-                results[data.symbol] = {
-                    price: parseFloat(data.close) || 0,
-                    marketCap: 0,
-                    change: parseFloat(data.percent_change) || 0
-                };
             }
-            console.log('[TwelveData] Got', Object.keys(results).length, 'quotes');
-        }
-    } catch (error) {
-        console.error('[TwelveData] Error:', error.message);
-    }
 
-    return results;
+            // Delay for rate limits
+            await new Promise(r => setTimeout(r, 100));
+
+        } catch (e) {
+            // Skip errors for market cap
+        }
+    }
 }
 
 // Stock prices API endpoint
@@ -200,18 +173,18 @@ app.get('/api/stocks', async (req, res) => {
 
     // Return cached data if fresh
     if (stockCache.lastUpdate > 0 && (now - stockCache.lastUpdate) < CACHE_DURATION) {
+        console.log('[Cache] Returning cached data');
         return res.json(stockCache.data);
     }
 
     console.log('=== Fetching stock data ===');
-    let results = {};
 
-    // Use proxy as primary method (Yahoo direct is now blocked with 401)
-    results = await fetchYahooViaProxy(STOCK_TICKERS);
+    // Fetch quotes
+    let results = await fetchFinnhub(STOCK_TICKERS);
 
-    // Fallback to TwelveData
-    if (Object.keys(results).length === 0) {
-        results = await fetchTwelveData(STOCK_TICKERS);
+    // Fetch market caps if we got quotes
+    if (Object.keys(results).length > 0) {
+        await fetchMarketCaps(STOCK_TICKERS, results);
     }
 
     // Cache if successful
@@ -219,7 +192,7 @@ app.get('/api/stocks', async (req, res) => {
         stockCache = { data: results, lastUpdate: now, lastError: null };
     }
 
-    console.log('=== Got', Object.keys(results).length, 'tickers ===');
+    console.log('=== Final: Got', Object.keys(results).length, 'tickers ===');
     res.json(results);
 });
 
@@ -228,98 +201,48 @@ app.get('/api/status', (req, res) => {
     res.json({
         status: 'ok',
         nodeVersion: process.version,
+        finnhubConfigured: !!FINNHUB_API_KEY,
         tickers: STOCK_TICKERS,
         cachedTickers: Object.keys(stockCache.data).length,
+        cachedData: stockCache.data,
         cacheAge: stockCache.lastUpdate > 0 ? Math.round((Date.now() - stockCache.lastUpdate) / 1000) + 's' : null,
         lastError: stockCache.lastError,
         time: new Date().toISOString()
     });
 });
 
-// Simple test - just try to fetch Google
-app.get('/api/test-network', async (req, res) => {
-    const tests = {};
-
-    // Test 1: Can we reach Google?
-    try {
-        const r = await fetchWithTimeout('https://www.google.com', {}, 5000);
-        tests.google = { ok: r.ok, status: r.status };
-    } catch (e) {
-        tests.google = { ok: false, error: e.message };
-    }
-
-    // Test 2: Can we reach Yahoo Finance?
-    try {
-        const r = await fetchWithTimeout('https://query1.finance.yahoo.com/v7/finance/quote?symbols=AAPL', {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-        }, 10000);
-        const data = await r.text();
-        tests.yahoo = { ok: r.ok, status: r.status, hasData: data.length > 0, sample: data.substring(0, 200) };
-    } catch (e) {
-        tests.yahoo = { ok: false, error: e.message };
-    }
-
-    // Test 3: Can we reach the proxy?
-    try {
-        const r = await fetchWithTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://httpbin.org/get'), {}, 10000);
-        tests.proxy = { ok: r.ok, status: r.status };
-    } catch (e) {
-        tests.proxy = { ok: false, error: e.message };
-    }
-
-    res.json({
-        nodeVersion: process.version,
-        time: new Date().toISOString(),
-        tests
-    });
-});
-
-// Test fetch endpoint - simple proxy test
+// Test endpoint
 app.get('/api/test-fetch', async (req, res) => {
-    console.log('=== Test fetch triggered ===');
-
     const results = {
         time: new Date().toISOString(),
-        nodeVersion: process.version
+        finnhubKeyConfigured: !!FINNHUB_API_KEY,
+        finnhubKeyPreview: FINNHUB_API_KEY ? FINNHUB_API_KEY.substring(0, 4) + '...' : 'NOT SET'
     };
 
-    // Test the proxy directly and show raw response
-    try {
-        const symbols = 'MARA,RIOT';
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`)}`;
-
-        console.log('[Test] Fetching:', proxyUrl);
-        const response = await fetchWithTimeout(proxyUrl, {}, 15000);
-
-        results.proxyStatus = response.status;
-        results.proxyOk = response.ok;
-
-        const text = await response.text();
-        results.rawLength = text.length;
-        results.rawSample = text.substring(0, 500);
-
-        // Try to parse
+    if (!FINNHUB_API_KEY) {
+        results.error = 'No API key configured';
+        results.instructions = [
+            '1. Go to https://finnhub.io/register',
+            '2. Sign up for FREE',
+            '3. Copy your API key',
+            '4. In Render: Environment > Add FINNHUB_API_KEY',
+            '5. Redeploy'
+        ];
+    } else {
+        // Test with AAPL
         try {
-            const data = JSON.parse(text);
-            results.parsed = true;
-            results.hasQuoteResponse = !!data.quoteResponse;
-            results.hasResult = !!(data.quoteResponse?.result);
-            results.resultCount = data.quoteResponse?.result?.length || 0;
+            const url = `https://finnhub.io/api/v1/quote?symbol=AAPL&token=${FINNHUB_API_KEY}`;
+            const response = await fetchWithTimeout(url, {}, 5000);
+            const data = await response.json();
 
-            if (data.quoteResponse?.result?.[0]) {
-                const q = data.quoteResponse.result[0];
-                results.sampleQuote = {
-                    symbol: q.symbol,
-                    price: q.regularMarketPrice,
-                    marketCap: q.marketCap
-                };
-            }
-        } catch (parseErr) {
-            results.parsed = false;
-            results.parseError = parseErr.message;
+            results.testTicker = 'AAPL';
+            results.status = response.status;
+            results.ok = response.ok;
+            results.data = data;
+            results.price = data.c;
+        } catch (e) {
+            results.error = e.message;
         }
-    } catch (e) {
-        results.error = e.message;
     }
 
     res.json(results);
@@ -334,5 +257,6 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Node ${process.version}`);
+    console.log(`Finnhub API: ${FINNHUB_API_KEY ? 'Configured' : 'NOT SET - get free key at https://finnhub.io/register'}`);
     initDataFile();
 });

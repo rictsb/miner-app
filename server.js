@@ -7,8 +7,29 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-// Stock tickers to track
-const STOCK_TICKERS = ['MARA', 'RIOT', 'CLSK', 'CIFR', 'CORZ', 'WULF', 'HUT', 'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH', 'FUFU'];
+// Stock tickers to track (with proper exchange suffixes where needed)
+const STOCK_TICKERS = [
+    'MARA',           // Marathon Digital
+    'RIOT',           // Riot Platforms
+    'CLSK',           // CleanSpark
+    'CIFR',           // Cipher Mining
+    'CORZ',           // Core Scientific
+    'WULF',           // TeraWulf
+    'HUT',            // Hut 8 (also trades as HUT.TO on TSX)
+    'IREN',           // Iris Energy
+    'BITF',           // Bitfarms
+    'HIVE',           // HIVE Blockchain (also HIVE.V on TSX)
+    'GLXY.TO',        // Galaxy Digital (TSX) - not on US exchanges
+    'APLD',           // Applied Digital
+    'BTDR',           // Bitdeer
+    'SLNH',           // Soluna Holdings
+    // 'FUFU' - not a public ticker, skip
+];
+
+// Map display tickers to Yahoo tickers
+const TICKER_MAP = {
+    'GLXY.TO': 'GLXY',  // Display as GLXY but fetch from TSX
+};
 
 // Cache for stock prices (refresh every 60 seconds)
 let stockCache = {
@@ -80,21 +101,21 @@ app.get('/api/stocks', async (req, res) => {
 
     // Return cached data if still fresh
     if (stockCache.lastUpdate > 0 && (now - stockCache.lastUpdate) < CACHE_DURATION) {
+        console.log('Returning cached stock data');
         return res.json(stockCache.data);
     }
 
-    try {
-        const results = {};
+    console.log('Fetching fresh stock data from Yahoo Finance...');
+    const results = {};
 
-        // Fetch quotes for all tickers
-        const quotes = await yahooFinance.quote(STOCK_TICKERS);
-
-        // Handle both single quote and array of quotes
-        const quotesArray = Array.isArray(quotes) ? quotes : [quotes];
-
-        quotesArray.forEach(quote => {
-            if (quote && quote.symbol) {
-                results[quote.symbol] = {
+    // Fetch each ticker individually to handle errors gracefully
+    for (const ticker of STOCK_TICKERS) {
+        try {
+            const quote = await yahooFinance.quote(ticker);
+            if (quote) {
+                // Use mapped display name if exists
+                const displayTicker = TICKER_MAP[ticker] || ticker;
+                results[displayTicker] = {
                     price: quote.regularMarketPrice || 0,
                     marketCap: quote.marketCap || 0,
                     change: quote.regularMarketChangePercent || 0,
@@ -103,26 +124,24 @@ app.get('/api/stocks', async (req, res) => {
                     fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh || 0,
                     fiftyTwoWeekLow: quote.fiftyTwoWeekLow || 0
                 };
+                console.log(`  ${displayTicker}: $${quote.regularMarketPrice?.toFixed(2) || 'N/A'}`);
             }
-        });
+        } catch (error) {
+            console.error(`  Error fetching ${ticker}:`, error.message);
+        }
+    }
 
-        // Update cache
+    // Update cache if we got any results
+    if (Object.keys(results).length > 0) {
         stockCache = {
             data: results,
             lastUpdate: now
         };
-
-        res.json(results);
-    } catch (error) {
-        console.error('Yahoo Finance API error:', error.message);
-
-        // Return cached data if available, even if stale
-        if (Object.keys(stockCache.data).length > 0) {
-            return res.json(stockCache.data);
-        }
-
-        res.status(500).json({ error: 'Failed to fetch stock prices' });
+        console.log(`Cached ${Object.keys(results).length} stock prices`);
     }
+
+    // Return results (could be empty if all failed)
+    res.json(results);
 });
 
 // Serve index.html for all other routes

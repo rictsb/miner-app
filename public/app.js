@@ -931,8 +931,8 @@ function renderAll() {
 // PRICE FETCHING
 // ============================================================
 
-// Stock tickers for Yahoo Finance
-const STOCK_TICKERS = ['MARA', 'RIOT', 'CLSK', 'CIFR', 'CORZ', 'WULF', 'HUT', 'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH', 'FUFU'];
+// Stock tickers for display (matches server response)
+const STOCK_TICKERS = ['MARA', 'RIOT', 'CLSK', 'CIFR', 'CORZ', 'WULF', 'HUT', 'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH'];
 
 async function fetchPrices() {
     // Fetch BTC and stock prices in parallel
@@ -1002,16 +1002,15 @@ async function fetchCryptoPrices() {
 }
 
 async function fetchStockPrices() {
-    // Fetch stock prices from our server-side Yahoo Finance endpoint
+    // Fetch stock prices from server-side Yahoo Finance endpoint
     try {
         const response = await fetch('/api/stocks');
         if (response.ok) {
             const data = await response.json();
-            // Merge into stockPrices object
             Object.assign(stockPrices, data);
             console.log('Stock prices updated:', Object.keys(stockPrices).length, 'tickers');
         } else {
-            console.error('Stock API returned error:', response.status);
+            console.error('Stock API error:', response.status);
         }
     } catch (error) {
         console.error('Error fetching stock prices:', error);

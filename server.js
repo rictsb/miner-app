@@ -9,7 +9,8 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 // Stock tickers to track
 const STOCK_TICKERS = [
     'MARA', 'RIOT', 'CLSK', 'CIFR', 'CORZ', 'WULF', 'HUT',
-    'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH'
+    'IREN', 'BITF', 'HIVE', 'GLXY', 'APLD', 'BTDR', 'SLNH',
+    'BTBT', 'FUFU', 'ABTC'  // BTBT = Bit Digital, FUFU = BitFuFu, ABTC = American Bitcoin Corp
 ];
 
 // ===========================================

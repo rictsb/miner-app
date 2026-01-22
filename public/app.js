@@ -629,24 +629,23 @@ function isBtcMiningOnly(project, overrides = {}) {
 
 /**
  * Calculate BTC Mining Value
- * Value = EBITDA per MW × IT MW × EBITDA Multiple × Country Factor × Fidoodle
+ * Value = EBITDA per MW × IT MW × EBITDA Multiple × Country Factor
+ * NOTE: Fidoodle does NOT apply to BTC mining - only to HPC leases
  */
 function calculateBtcMiningValue(project, overrides = {}) {
     const itMw = overrides.itMw || project.it_mw || 0;
     const ebitdaPerMw = overrides.btcEbitdaPerMw ?? factors.btcMining.ebitdaPerMw;
     const ebitdaMultiple = overrides.btcEbitdaMultiple ?? factors.btcMining.ebitdaMultiple;
     const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
-    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
 
     const ebitda = ebitdaPerMw * itMw;
-    const miningValue = ebitda * ebitdaMultiple * fCountry * fidoodle;
+    const miningValue = ebitda * ebitdaMultiple * fCountry;
 
     return {
         ebitda: ebitda,
         ebitdaPerMw: ebitdaPerMw,
         ebitdaMultiple: ebitdaMultiple,
         fCountry: fCountry,
-        fidoodle: fidoodle,
         value: miningValue
     };
 }
@@ -771,21 +770,19 @@ function calculateProjectValue(project, overrides = {}) {
             value: totalValue,
             isBtcSite: true,
             components: {
-                // Mining components
+                // Mining components (no fidoodle - that's for HPC only)
                 miningValue: miningVal.value,
                 ebitda: miningVal.ebitda,
                 ebitdaPerMw: miningVal.ebitdaPerMw,
                 ebitdaMultiple: miningVal.ebitdaMultiple,
-                // Conversion option components
+                fCountry: miningVal.fCountry,
+                itMw: itMw,
+                // Conversion option components (HPC lease terms)
                 conversionValue: conversionVal.value,
                 conversionYear: conversionVal.conversionYear,
                 conversionDiscount: conversionVal.discountFactor,
                 potentialHpcValue: conversionVal.potentialHpcValue,
-                conversionComponents: conversionVal.components,  // Full HPC calc details
-                // Common
-                fCountry: miningVal.fCountry,
-                fidoodle: miningVal.fidoodle,
-                itMw: itMw
+                conversionComponents: conversionVal.components  // Full HPC calc details including fidoodle
             }
         };
     }
@@ -1378,8 +1375,6 @@ function renderProjectsTable() {
                                     <span class="formula-part">Multiple (${(c.ebitdaMultiple || 0).toFixed(1)}x)</span>
                                     <span class="formula-op">×</span>
                                     <span class="formula-part">Country (${(c.fCountry || 1).toFixed(2)})</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Fidoodle (${(c.fidoodle || 1).toFixed(2)})</span>
                                     <span class="formula-result">= $${formatNumber(c.miningValue || 0, 1)}M</span>
                                 </div>
                             </div>
@@ -1410,9 +1405,9 @@ function renderProjectsTable() {
                             ` : ''}
                             <div class="valuation-total">
                                 <strong>Total Value: $${formatNumber(valuation.value, 1)}M</strong>
-                                (Mining: $${formatNumber(c.miningValue || 0, 1)}M + Option: $${formatNumber(c.conversionValue || 0, 1)}M)
+                                (Mining: $${formatNumber(c.miningValue || 0, 1)}M${c.conversionValue > 0 ? ` + HPC Pipeline: $${formatNumber(c.conversionValue || 0, 1)}M` : ''})
                             </div>
-                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit All Overrides</button>
+                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit HPC Lease Terms</button>
                         </div>
                     </td>
                 `;

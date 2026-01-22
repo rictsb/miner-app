@@ -72,6 +72,20 @@ app.post('/api/data', (req, res) => {
     res.json({ success: saveData(req.body) });
 });
 
+// Serve seed data (projects and miners from generated JSON)
+const SEED_DATA_FILE = path.join(__dirname, 'seed-data.json');
+app.get('/seed-data.json', (req, res) => {
+    try {
+        if (fs.existsSync(SEED_DATA_FILE)) {
+            res.sendFile(SEED_DATA_FILE);
+        } else {
+            res.status(404).json({ error: 'seed-data.json not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Error loading seed data' });
+    }
+});
+
 // Helper: fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeout = 10000) {
     const controller = new AbortController();

@@ -1,6 +1,6 @@
 {
   "name": "btc-miner-valuation-terminal-v7",
-  "version": "7.0.1",
+  "version": "7.1.0",
   "description": "BTC Miner Valuation Terminal with Rule-of-Thumb HPC/AI Lease Valuation Engine",
   "main": "server.js",
   "engines": {
@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "import-xlsx": "node scripts/import-projects-xlsx.js"
   },
   "keywords": [
     "btc",
@@ -23,5 +24,8 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.22.1"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
   }
 }

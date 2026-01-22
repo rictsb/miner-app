@@ -228,6 +228,18 @@
             font-size: 10px;
         }
 
+        .btn-tiny {
+            padding: 2px 6px;
+            font-size: 9px;
+            background: #222;
+            border: 1px solid #444;
+        }
+
+        .btn-tiny:hover {
+            background: #333;
+            border-color: #ff8c00;
+        }
+
         input, select {
             background: #111;
             border: 1px solid #333;
@@ -1708,10 +1720,32 @@
                 </div>
 
                 <div class="form-section">
-                    <h3>HPC Conversion (for BTC sites)</h3>
+                    <h3>BTC Mining & HPC Conversion (for BTC sites)</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mining EBITDA ($M/yr)</label>
+                            <input type="number" id="project-mining-ebitda" step="0.1" placeholder="Auto from factors">
+                            <small style="color: #888;">Override annual mining EBITDA for this site</small>
+                        </div>
+                        <div class="form-group">
+                            <label>HPC Conversion Date</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="date" id="project-hpc-conversion-date" style="flex: 1;">
+                                <button type="button" class="btn btn-small btn-secondary" onclick="setConversionDateNever()">Never</button>
+                            </div>
+                            <div style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(1)">+1y</button>
+                                <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(2)">+2y</button>
+                                <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2025)">End 2025</button>
+                                <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2026)">End 2026</button>
+                                <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2027)">End 2027</button>
+                            </div>
+                            <small style="color: #888;">Date when BTC mining ends and HPC lease begins</small>
+                        </div>
+                    </div>
                     <div class="form-row-3">
                         <div class="form-group">
-                            <label>HPC Conversion Year</label>
+                            <label>Legacy HPC Conv Year (deprecated)</label>
                             <select id="project-hpc-conversion">
                                 <option value="never">Never (BTC only)</option>
                                 <option value="2025">2025</option>

@@ -628,25 +628,136 @@ function isBtcMiningOnly(project, overrides = {}) {
 }
 
 /**
+ * Parse date string to Date object with timezone safety
+ * Uses UTC to avoid local timezone drift
+ */
+function parseDateSafe(dateStr) {
+    if (!dateStr) return null;
+    // Add T00:00:00Z to ensure UTC parsing
+    const date = new Date(dateStr + 'T00:00:00Z');
+    return isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Calculate years from today to a future date
+ */
+function yearsToDate(dateStr) {
+    const targetDate = parseDateSafe(dateStr);
+    if (!targetDate) return null;
+    const today = new Date();
+    const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffMs = targetDate.getTime() - todayUtc;
+    return Math.max(0, diffMs / (365.25 * 24 * 60 * 60 * 1000));
+}
+
+/**
+ * Calculate truncated mining value when HPC conversion date is set
+ * Uses the EBITDA multiple as an implied discount rate to calculate
+ * the present value of mining cash flows until conversion.
+ *
+ * If conversionDate is null -> perpetual mining value (EBITDA * multiple)
+ * If conversionDate is today or past -> mining value = 0
+ * Otherwise -> NPV of mining EBITDA stream until conversion
+ *
+ * @param {number} ebitda - Annual mining EBITDA ($M)
+ * @param {number} multiple - EBITDA multiple (e.g., 5.0)
+ * @param {string|null} conversionDate - ISO date string (YYYY-MM-DD) or null
+ * @returns {object} { miningValue, yearsToConv, impliedRate }
+ */
+function calculateTruncatedMiningValue(ebitda, multiple, conversionDate) {
+    // Perpetual case - no conversion
+    if (!conversionDate) {
+        return {
+            miningValue: ebitda * multiple,
+            yearsToConv: null,
+            impliedRate: null,
+            isPerpetual: true
+        };
+    }
+
+    const yearsToConv = yearsToDate(conversionDate);
+
+    // Already converted or past date
+    if (yearsToConv === null || yearsToConv <= 0) {
+        return {
+            miningValue: 0,
+            yearsToConv: 0,
+            impliedRate: null,
+            isPerpetual: false
+        };
+    }
+
+    // Implied discount rate from multiple: r = 1/multiple
+    // Multiple = 5 implies r = 20%, meaning EV = EBITDA/0.2 = 5x EBITDA
+    const r = multiple > 0 ? 1 / multiple : 0;
+    const perpetualValue = ebitda * multiple;
+
+    let miningValue;
+    if (r === 0) {
+        // No discounting - just multiply EBITDA by years
+        miningValue = ebitda * yearsToConv;
+    } else {
+        // Present value of annuity: PV = E * (1 - (1+r)^-T) / r
+        miningValue = ebitda * (1 - Math.pow(1 + r, -yearsToConv)) / r;
+    }
+
+    // Never exceed perpetual value
+    miningValue = Math.min(miningValue, perpetualValue);
+
+    return {
+        miningValue: miningValue,
+        yearsToConv: yearsToConv,
+        impliedRate: r,
+        isPerpetual: false
+    };
+}
+
+/**
  * Calculate BTC Mining Value
  * Value = EBITDA per MW × IT MW × EBITDA Multiple × Country Factor
+ * If HPC conversion date is set, truncates mining value to period before conversion
  * NOTE: Fidoodle does NOT apply to BTC mining - only to HPC leases
  */
 function calculateBtcMiningValue(project, overrides = {}) {
     const itMw = overrides.itMw || project.it_mw || 0;
-    const ebitdaPerMw = overrides.btcEbitdaPerMw ?? factors.btcMining.ebitdaPerMw;
+
+    // Effective annual mining EBITDA:
+    // Priority: override > project-level > factors-based estimate
+    let ebitdaAnnual;
+    if (overrides.miningEbitdaAnnualM !== undefined && overrides.miningEbitdaAnnualM !== null) {
+        ebitdaAnnual = parseFloat(overrides.miningEbitdaAnnualM);
+    } else if (project.mining_ebitda_annual_m !== undefined && project.mining_ebitda_annual_m !== null) {
+        ebitdaAnnual = project.mining_ebitda_annual_m;
+    } else {
+        // Fall back to per-MW calculation
+        const ebitdaPerMw = overrides.btcEbitdaPerMw ?? factors.btcMining.ebitdaPerMw;
+        ebitdaAnnual = ebitdaPerMw * itMw;
+    }
+
     const ebitdaMultiple = overrides.btcEbitdaMultiple ?? factors.btcMining.ebitdaMultiple;
     const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
 
-    const ebitda = ebitdaPerMw * itMw;
-    const miningValue = ebitda * ebitdaMultiple * fCountry;
+    // Get HPC conversion date (null = never)
+    const hpcConversionDate = overrides.hpcConversionDate || null;
+
+    // Calculate truncated mining value based on conversion date
+    const truncation = calculateTruncatedMiningValue(ebitdaAnnual, ebitdaMultiple, hpcConversionDate);
+
+    // Apply country factor
+    const miningValue = truncation.miningValue * fCountry;
 
     return {
-        ebitda: ebitda,
-        ebitdaPerMw: ebitdaPerMw,
+        ebitda: ebitdaAnnual,
+        ebitdaPerMw: itMw > 0 ? ebitdaAnnual / itMw : 0,
         ebitdaMultiple: ebitdaMultiple,
         fCountry: fCountry,
-        value: miningValue
+        value: miningValue,
+        // Truncation details
+        hpcConversionDate: hpcConversionDate,
+        yearsToConv: truncation.yearsToConv,
+        impliedRate: truncation.impliedRate,
+        isPerpetual: truncation.isPerpetual,
+        perpetualValue: ebitdaAnnual * ebitdaMultiple * fCountry
     };
 }
 
@@ -760,7 +871,7 @@ function calculateProjectValue(project, overrides = {}) {
     const btcSite = isBtcMiningOnly(project, overrides);
 
     if (btcSite) {
-        // BTC Mining Valuation
+        // BTC Mining Valuation with HPC conversion date-based truncation
         const miningVal = calculateBtcMiningValue(project, overrides);
         const conversionVal = calculateHpcConversionValue(project, overrides);
 
@@ -777,12 +888,20 @@ function calculateProjectValue(project, overrides = {}) {
                 ebitdaMultiple: miningVal.ebitdaMultiple,
                 fCountry: miningVal.fCountry,
                 itMw: itMw,
-                // Conversion option components (HPC lease terms)
+                // HPC conversion date truncation details
+                hpcConversionDate: miningVal.hpcConversionDate,
+                yearsToConv: miningVal.yearsToConv,
+                impliedRate: miningVal.impliedRate,
+                isPerpetual: miningVal.isPerpetual,
+                perpetualMiningValue: miningVal.perpetualValue,
+                // Legacy conversion option components (HPC lease terms)
                 conversionValue: conversionVal.value,
                 conversionYear: conversionVal.conversionYear,
                 conversionDiscount: conversionVal.discountFactor,
                 potentialHpcValue: conversionVal.potentialHpcValue,
-                conversionComponents: conversionVal.components  // Full HPC calc details including fidoodle
+                conversionComponents: conversionVal.components,  // Full HPC calc details including fidoodle
+                // Combined fidoodle from HPC conversion if set
+                fidoodle: conversionVal.components?.fidoodle ?? factors.fidoodleDefault
             }
         };
     }
@@ -936,6 +1055,24 @@ async function loadData() {
         if (data.factors) {
             factors = mergeFactors(DEFAULT_FACTORS, data.factors);
             savedFactors = data.factors;
+        }
+
+        // Migrate legacy hpcConversionYear to hpcConversionDate
+        let needsSave = false;
+        for (const projectId in projectOverrides) {
+            const override = projectOverrides[projectId];
+            if (override.hpcConversionYear && !override.hpcConversionDate) {
+                // Migrate: "never" -> null, year -> "YYYY-12-31"
+                if (override.hpcConversionYear !== 'never') {
+                    override.hpcConversionDate = `${override.hpcConversionYear}-12-31`;
+                    needsSave = true;
+                    console.log(`Migrated project ${projectId} conversion year ${override.hpcConversionYear} to date ${override.hpcConversionDate}`);
+                }
+            }
+        }
+        if (needsSave) {
+            await saveData();
+            console.log('Saved migrated overrides');
         }
     } catch (error) {
         console.error('Error loading data:', error);
@@ -1284,7 +1421,25 @@ function renderProjectsTable() {
             if (valuation.isBtcSite) {
                 // BTC Mining Site
                 const convYear = c.conversionYear || 'never';
-                const convDisplay = convYear === 'never' ? 'Never' : convYear;
+                const convDate = c.hpcConversionDate;
+                const yearsToConv = c.yearsToConv;
+
+                // Format conversion display: prefer date, fall back to year
+                let convDisplay = 'Never';
+                if (convDate) {
+                    const d = new Date(convDate + 'T00:00:00Z');
+                    convDisplay = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                    if (yearsToConv !== null && yearsToConv > 0) {
+                        convDisplay += ` (${yearsToConv.toFixed(1)}y)`;
+                    }
+                } else if (convYear !== 'never') {
+                    convDisplay = convYear;
+                }
+
+                // Show remaining BTC value vs perpetual value
+                const miningValueDisplay = c.isPerpetual ?
+                    formatNumber(c.miningValue || 0, 1) :
+                    `${formatNumber(c.miningValue || 0, 1)} / ${formatNumber(c.perpetualMiningValue || 0, 1)}`;
 
                 tr.innerHTML = `
                     <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
@@ -1303,17 +1458,8 @@ function renderProjectsTable() {
                     <td class="col-tenant">${project.lessee || '-'}</td>
                     <td>${formatNumber(c.ebitda || 0, 1)}</td>
                     <td>${c.ebitdaMultiple?.toFixed(1) || 0}x</td>
-                    <td>
-                        <select class="hpc-conversion-select" data-project-id="${project.id}" onclick="event.stopPropagation();">
-                            <option value="never" ${convYear === 'never' ? 'selected' : ''}>Never</option>
-                            <option value="2025" ${convYear === '2025' ? 'selected' : ''}>2025</option>
-                            <option value="2026" ${convYear === '2026' ? 'selected' : ''}>2026</option>
-                            <option value="2027" ${convYear === '2027' ? 'selected' : ''}>2027</option>
-                            <option value="2028" ${convYear === '2028' ? 'selected' : ''}>2028</option>
-                            <option value="2029" ${convYear === '2029' ? 'selected' : ''}>2029</option>
-                            <option value="2030" ${convYear === '2030' ? 'selected' : ''}>2030</option>
-                            <option value="2031" ${convYear === '2031' ? 'selected' : ''}>2031</option>
-                        </select>
+                    <td class="conv-date-cell ${convDate ? 'has-date' : ''}" title="${convDate || 'Click to set conversion date'}">
+                        ${convDisplay}
                     </td>
                     <td>${formatNumber(c.fCountry || 1, 2)}</td>
                     <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
@@ -1361,26 +1507,56 @@ function renderProjectsTable() {
             expandedTr.dataset.projectId = project.id;
 
             if (valuation.isBtcSite) {
+                // Format HPC conversion date display
+                const convDateDisplay = c.hpcConversionDate ?
+                    new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) :
+                    'Never';
+                const yearsDisplay = c.yearsToConv !== null ? c.yearsToConv.toFixed(2) : '∞';
+                const rateDisplay = c.impliedRate !== null ? (c.impliedRate * 100).toFixed(1) + '%' : '-';
+
                 expandedTr.innerHTML = `
                     <td colspan="16">
                         <div class="valuation-details">
                             <div class="valuation-section">
-                                <h4>BTC Mining Valuation</h4>
+                                <h4>BTC Mining Valuation${c.hpcConversionDate ? ' (Truncated to Conversion Date)' : ''}</h4>
+                                ${c.hpcConversionDate ? `
+                                <div class="formula-display" style="margin-bottom: 10px; background: #1a1a00; padding: 8px; border-radius: 4px;">
+                                    <span class="formula-label" style="color: #ffcc00;">HPC Conversion:</span>
+                                    <span class="formula-part">${convDateDisplay}</span>
+                                    <span class="formula-op">|</span>
+                                    <span class="formula-part">Years remaining: ${yearsDisplay}</span>
+                                    <span class="formula-op">|</span>
+                                    <span class="formula-part">Implied rate: ${rateDisplay}</span>
+                                </div>
+                                ` : ''}
                                 <div class="formula-display">
-                                    <span class="formula-label">Mining Value =</span>
-                                    <span class="formula-part">EBITDA/MW ($${(c.ebitdaPerMw || 0).toFixed(2)}M)</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">IT MW (${project.it_mw || 0})</span>
+                                    <span class="formula-label">Annual EBITDA =</span>
+                                    <span class="formula-part">$${formatNumber(c.ebitda || 0, 2)}M/yr</span>
                                     <span class="formula-op">×</span>
                                     <span class="formula-part">Multiple (${(c.ebitdaMultiple || 0).toFixed(1)}x)</span>
                                     <span class="formula-op">×</span>
                                     <span class="formula-part">Country (${(c.fCountry || 1).toFixed(2)})</span>
-                                    <span class="formula-result">= $${formatNumber(c.miningValue || 0, 1)}M</span>
+                                    ${c.isPerpetual ? `
+                                    <span class="formula-result">= $${formatNumber(c.miningValue || 0, 1)}M (perpetual)</span>
+                                    ` : `
+                                    <span class="formula-result" style="color: #ffcc00;">
+                                        = $${formatNumber(c.miningValue || 0, 1)}M
+                                        <small>(of $${formatNumber(c.perpetualMiningValue || 0, 1)}M perpetual)</small>
+                                    </span>
+                                    `}
                                 </div>
+                                ${!c.isPerpetual && c.yearsToConv !== null ? `
+                                <div class="formula-display" style="margin-top: 8px; font-size: 11px; color: #888;">
+                                    <span class="formula-label">NPV Formula:</span>
+                                    <span class="formula-part">E × (1 - (1+r)^-T) / r</span>
+                                    <span class="formula-op">=</span>
+                                    <span class="formula-part">$${formatNumber(c.ebitda || 0, 2)}M × (1 - (1+${rateDisplay})^-${yearsDisplay}) / ${rateDisplay}</span>
+                                </div>
+                                ` : ''}
                             </div>
                             ${c.conversionValue > 0 ? `
                             <div class="valuation-section">
-                                <h4>Prospective HPC Lease (${c.conversionYear} conversion)</h4>
+                                <h4>Prospective HPC Lease (${c.conversionYear} conversion - legacy)</h4>
                                 <div class="formula-display">
                                     <span class="formula-label">HPC Value =</span>
                                     <span class="formula-part">NOI ($${formatNumber(c.conversionComponents?.noi || 0, 1)}M)</span>
@@ -1407,7 +1583,7 @@ function renderProjectsTable() {
                                 <strong>Total Value: $${formatNumber(valuation.value, 1)}M</strong>
                                 (Mining: $${formatNumber(c.miningValue || 0, 1)}M${c.conversionValue > 0 ? ` + HPC Pipeline: $${formatNumber(c.conversionValue || 0, 1)}M` : ''})
                             </div>
-                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit HPC Lease Terms</button>
+                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit Conversion Date & Terms</button>
                         </div>
                     </td>
                 `;
@@ -1609,7 +1785,11 @@ function openProjectModal(project) {
     document.getElementById('project-build-status').value = overrides.buildStatus || '';
     document.getElementById('project-cap-override').value = overrides.capOverride || '';
 
-    // HPC Conversion & Term
+    // Mining EBITDA override
+    document.getElementById('project-mining-ebitda').value = overrides.miningEbitdaAnnualM ?? '';
+
+    // HPC Conversion Date (new) & Legacy Year
+    document.getElementById('project-hpc-conversion-date').value = overrides.hpcConversionDate || '';
     document.getElementById('project-hpc-conversion').value = overrides.hpcConversionYear || 'never';
     document.getElementById('project-term').value = overrides.term || '';
     document.getElementById('project-escalator').value = overrides.escalator || '';
@@ -1676,9 +1856,12 @@ function updateValuationPreview() {
 
 function getOverridesFromForm() {
     const hpcConversion = document.getElementById('project-hpc-conversion').value;
+    const hpcConversionDate = document.getElementById('project-hpc-conversion-date').value;
     return {
         itMw: parseFloatOrNull(document.getElementById('project-it-mw').value),
-        hpcConversionYear: hpcConversion !== 'never' ? hpcConversion : null,
+        miningEbitdaAnnualM: parseFloatOrNull(document.getElementById('project-mining-ebitda').value),
+        hpcConversionDate: hpcConversionDate || null,  // New: ISO date string or null
+        hpcConversionYear: hpcConversion !== 'never' ? hpcConversion : null,  // Legacy
         noi: parseFloatOrNull(document.getElementById('project-noi').value),
         rentKw: parseFloatOrNull(document.getElementById('project-rent-kw').value),
         passthrough: parseFloatOrNull(document.getElementById('project-passthrough').value),
@@ -1695,6 +1878,25 @@ function getOverridesFromForm() {
         gridMult: parseFloatOrNull(document.getElementById('project-grid-mult').value),
         fidoodle: parseFloatOrNull(document.getElementById('project-fidoodle').value)
     };
+}
+
+// HPC Conversion Date helper functions
+function setConversionDateNever() {
+    document.getElementById('project-hpc-conversion-date').value = '';
+    updateValuationPreview();
+}
+
+function setConversionDateOffset(years) {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + years);
+    const iso = date.toISOString().split('T')[0];
+    document.getElementById('project-hpc-conversion-date').value = iso;
+    updateValuationPreview();
+}
+
+function setConversionDateEnd(year) {
+    document.getElementById('project-hpc-conversion-date').value = `${year}-12-31`;
+    updateValuationPreview();
 }
 
 function parseFloatOrNull(val) {

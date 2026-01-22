@@ -274,28 +274,52 @@ app.get('/api/test-network', async (req, res) => {
     });
 });
 
-// Test fetch endpoint
+// Test fetch endpoint - simple proxy test
 app.get('/api/test-fetch', async (req, res) => {
     console.log('=== Test fetch triggered ===');
-    stockCache.lastUpdate = 0; // Clear cache
 
     const results = {
         time: new Date().toISOString(),
         nodeVersion: process.version
     };
 
-    // Test Yahoo
+    // Test the proxy directly and show raw response
     try {
-        results.yahoo = await fetchYahooQuotes(['MARA', 'RIOT']);
-    } catch (e) {
-        results.yahoo = { error: e.message };
-    }
+        const symbols = 'MARA,RIOT';
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`)}`;
 
-    // Test Proxy
-    try {
-        results.proxy = await fetchYahooViaProxy(['MARA', 'RIOT']);
+        console.log('[Test] Fetching:', proxyUrl);
+        const response = await fetchWithTimeout(proxyUrl, {}, 15000);
+
+        results.proxyStatus = response.status;
+        results.proxyOk = response.ok;
+
+        const text = await response.text();
+        results.rawLength = text.length;
+        results.rawSample = text.substring(0, 500);
+
+        // Try to parse
+        try {
+            const data = JSON.parse(text);
+            results.parsed = true;
+            results.hasQuoteResponse = !!data.quoteResponse;
+            results.hasResult = !!(data.quoteResponse?.result);
+            results.resultCount = data.quoteResponse?.result?.length || 0;
+
+            if (data.quoteResponse?.result?.[0]) {
+                const q = data.quoteResponse.result[0];
+                results.sampleQuote = {
+                    symbol: q.symbol,
+                    price: q.regularMarketPrice,
+                    marketCap: q.marketCap
+                };
+            }
+        } catch (parseErr) {
+            results.parsed = false;
+            results.parseError = parseErr.message;
+        }
     } catch (e) {
-        results.proxy = { error: e.message };
+        results.error = e.message;
     }
 
     res.json(results);

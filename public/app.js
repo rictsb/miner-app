@@ -1695,7 +1695,7 @@ function renderProjectsTable() {
     // Add event listeners for HPC conversion dropdowns
     document.querySelectorAll('.hpc-conversion-select').forEach(select => {
         select.addEventListener('change', (e) => {
-            const projectId = parseInt(e.target.dataset.projectId);
+            const projectId = e.target.dataset.projectId;
             const year = e.target.value;
             if (!projectOverrides[projectId]) {
                 projectOverrides[projectId] = {};
@@ -1711,7 +1711,7 @@ function renderProjectsTable() {
     document.querySelectorAll('.fidoodle-cell').forEach(cell => {
         cell.addEventListener('click', (e) => {
             e.stopPropagation();
-            const projectId = parseInt(cell.dataset.projectId);
+            const projectId = cell.dataset.projectId;
             openFidoodleEditor(projectId);
         });
     });
@@ -1720,8 +1720,10 @@ function renderProjectsTable() {
     document.querySelectorAll('.edit-project-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const projectId = parseInt(btn.dataset.projectId);
-            const project = allProjects.find(p => p.id === projectId);
+            const projectId = btn.dataset.projectId;
+            // Try both string and numeric ID matching
+            const allProjs = [...ALL_PROJECTS, ...customProjects];
+            const project = allProjs.find(p => p.id === projectId || p.id === parseInt(projectId) || String(p.id) === projectId);
             if (project) openProjectModal(project);
         });
     });
@@ -1730,8 +1732,11 @@ function renderProjectsTable() {
 // Fidoodle editor popup
 function openFidoodleEditor(projectId) {
     const allProjects = [...ALL_PROJECTS, ...customProjects];
-    const project = allProjects.find(p => p.id === projectId);
+    // Support both string and numeric IDs
+    const project = allProjects.find(p => p.id === projectId || p.id === parseInt(projectId) || String(p.id) === projectId);
     if (!project) return;
+    // Use the actual project ID for overrides
+    projectId = project.id;
 
     const overrides = projectOverrides[projectId] || {};
     const currentFidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
@@ -1859,8 +1864,9 @@ function closeProjectModal() {
 }
 
 function updateValuationPreview() {
-    const projectId = parseInt(document.getElementById('project-id').value);
-    const project = [...ALL_PROJECTS, ...customProjects].find(p => p.id === projectId);
+    const projectIdStr = document.getElementById('project-id').value;
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
+    const project = allProjects.find(p => p.id === projectIdStr || p.id === parseInt(projectIdStr) || String(p.id) === projectIdStr);
     if (!project) return;
 
     const overrides = getOverridesFromForm();
@@ -1960,7 +1966,8 @@ function parseFloatOrNull(val) {
 
 function saveProjectOverrides(e) {
     e.preventDefault();
-    const projectId = parseInt(document.getElementById('project-id').value);
+    // Use the project ID as stored (could be string or number)
+    const projectId = document.getElementById('project-id').value;
     const overrides = getOverridesFromForm();
 
     // Clean up null values

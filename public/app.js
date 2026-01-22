@@ -1613,7 +1613,7 @@ function openProjectModal(project) {
     // NOI & Revenue
     document.getElementById('project-noi').value = overrides.noi || '';
     document.getElementById('project-rent-kw').value = overrides.rentKw || '';
-    document.getElementById('project-passthrough').value = overrides.passthrough || 85;
+    document.getElementById('project-passthrough').value = overrides.passthrough ?? '';
 
     // Cap Rate Components
     document.getElementById('project-credit').value = overrides.credit || '';
@@ -1626,18 +1626,19 @@ function openProjectModal(project) {
     // Term & Escalation
     document.getElementById('project-term').value = overrides.term || '';
     document.getElementById('project-escalator').value = overrides.escalator || '';
-    document.getElementById('project-delay').value = overrides.delay || 0;
+    document.getElementById('project-delay').value = overrides.delay ?? '';
 
     // Multiplier Overrides
     document.getElementById('project-size-mult').value = overrides.sizeMult || '';
     document.getElementById('project-country-mult').value = overrides.countryMult || '';
     document.getElementById('project-grid-mult').value = overrides.gridMult || '';
 
-    // Fidoodle
-    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
-    document.getElementById('project-fidoodle').value = fidoodle;
-    document.getElementById('project-fidoodle-slider').value = fidoodle;
-    document.getElementById('project-fidoodle-display').textContent = fidoodle.toFixed(2);
+    // Fidoodle - only show override value, not default
+    const fidoodle = overrides.fidoodle;
+    const fidoodleDisplay = fidoodle ?? factors.fidoodleDefault;
+    document.getElementById('project-fidoodle').value = fidoodle ?? '';
+    document.getElementById('project-fidoodle-slider').value = fidoodleDisplay;
+    document.getElementById('project-fidoodle-display').textContent = fidoodleDisplay.toFixed(2);
 
     updateValuationPreview();
     modal.classList.add('active');
@@ -1699,7 +1700,9 @@ function getOverridesFromForm() {
 
 function parseFloatOrNull(val) {
     if (val === '' || val === null || val === undefined) return null;
-    const parsed = parseFloat(val);
+    const str = String(val).trim();
+    if (str === '') return null;
+    const parsed = parseFloat(str);
     return isNaN(parsed) ? null : parsed;
 }
 

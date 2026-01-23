@@ -35,8 +35,8 @@ function isHyperscaler(tenant) {
 // ============================================================
 const DEFAULT_FACTORS = {
     // Global Valuation Parameters
-    baseNoiPerMw: 1.40,      // $M per MW per year (for HPC)
-    baseCapRate: 12.0,       // %
+    baseNoiPerMw: 2.00,      // $M per MW per year (for HPC) - increased from 1.40
+    baseCapRate: 8.0,        // % - lowered from 12% for contracted HPC
     hyperscalerPremium: 1.10, // multiplier
     defaultTerm: 15,          // years
     escalator: 2.5,           // % annual rent growth
@@ -46,7 +46,7 @@ const DEFAULT_FACTORS = {
     // BTC Mining Valuation Parameters
     btcMining: {
         ebitdaPerMw: 0.35,    // $M EBITDA per MW per year
-        ebitdaMultiple: 5.0,  // EV/EBITDA multiple for mining
+        ebitdaMultiple: 3.5,  // EV/EBITDA multiple for mining - reduced from 5.0
     },
 
     // HPC Conversion Option - discount factors by conversion year
@@ -352,12 +352,24 @@ let ALL_PROJECTS = []; // Will be populated from seed-data.json
  * @param {number} T - Lease term in years
  * @param {number} g - Rent escalator (decimal, e.g., 0.025 for 2.5%)
  * @param {number} capEff - Effective cap rate (decimal, e.g., 0.10 for 10%)
+ * @param {boolean} isContractedHyperscaler - If true, apply less discount for long leases
  * @returns {number} Term factor
  */
-function calculateTermFactor(T, g, capEff) {
+function calculateTermFactor(T, g, capEff, isContractedHyperscaler = false) {
     if (T <= 0 || capEff <= 0) return 0;
     const ratio = (1 + g) / (1 + capEff + g);
-    return 1 - Math.pow(ratio, T);
+    const baseFactor = 1 - Math.pow(ratio, T);
+
+    // For contracted hyperscaler leases, long terms are MORE valuable
+    // Apply a "lease certainty premium" that increases with term length
+    if (isContractedHyperscaler && T >= 10) {
+        // Boost the term factor for long contracted leases
+        // 10yr: +10%, 15yr: +15%, 20yr: +20% (capped at 1.0)
+        const certaintBonus = Math.min(0.25, (T - 5) * 0.02);
+        return Math.min(1.0, baseFactor + certaintBonus);
+    }
+
+    return baseFactor;
 }
 
 /**
@@ -880,8 +892,10 @@ function calculateProjectValue(project, overrides = {}) {
     const T = overrides.term || project.lease_years || factors.defaultTerm;
     const g = (overrides.escalator ?? factors.escalator) / 100;
 
-    // 4. Calculate term factor
-    const termFactor = calculateTermFactor(T, g, capEff);
+    // 4. Calculate term factor (give credit for contracted hyperscaler leases)
+    const isContracted = project.status === 'Operational' || project.status === 'Contracted';
+    const isContractedHyperscaler = isContracted && isHyperscaler(project.lessee);
+    const termFactor = calculateTermFactor(T, g, capEff, isContractedHyperscaler);
 
     // 5. Get all multipliers
     const fCredit = isHyperscaler(project.lessee) ? factors.hyperscalerPremium : 1.0;

@@ -51,15 +51,17 @@ const DEFAULT_FACTORS = {
 
     // HPC Conversion Option - discount factors by conversion year
     // Represents probability-weighted present value of future HPC conversion
+    // Steeper curve beyond 2027 reflects execution/permitting/power risk
     hpcConversion: {
-        '2025': 0.80,  // Converting soon - high probability, less discounting
-        '2026': 0.65,
-        '2027': 0.50,
-        '2028': 0.40,
-        '2029': 0.30,
-        '2030': 0.25,
-        '2031': 0.20,
-        'never': 0.00   // No conversion value
+        '2025': 0.85,  // Converting soon - high probability, minimal discount
+        '2026': 0.70,
+        '2027': 0.50,  // Inflection point
+        '2028': 0.30,  // Steep dropoff starts here
+        '2029': 0.18,
+        '2030': 0.12,
+        '2031': 0.08,
+        '2032': 0.05,  // Essentially option value only
+        'never': 0.00
     },
 
     // Credit Quality (Cap Rate Adders in %)

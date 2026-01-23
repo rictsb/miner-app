@@ -500,9 +500,24 @@ function calculateNOI(project, overrides = {}) {
         return annualRent * passthrough;
     }
 
+    // Calculate annual revenue from lease terms if available
+    let annualRev = project.annual_rev;
+
+    // If lease_value_m and lease_years exist, derive annual rev from that
+    // (more reliable than annual_rev_m which may be incorrect)
+    if (project.lease_value_m && project.lease_years && project.lease_years > 0) {
+        annualRev = project.lease_value_m / project.lease_years;
+    }
+
     // Use project's stated annual rev and NOI %
-    if (project.annual_rev && project.noi_pct) {
-        return project.annual_rev * (project.noi_pct / 100);
+    if (annualRev && annualRev > 0) {
+        // Handle noi_pct as either decimal (0.85) or percentage (85)
+        let noiPct = project.noi_pct ?? 85;
+        if (noiPct > 0 && noiPct <= 1) {
+            // It's a decimal, convert to percentage
+            noiPct = noiPct * 100;
+        }
+        return annualRev * (noiPct / 100);
     }
 
     // Default: Base NOI per MW * IT MW
@@ -1034,6 +1049,7 @@ async function loadData() {
                     status: p.status,
                     lessee: p.lessee,
                     lease_years: p.lease_years,
+                    lease_value_m: p.lease_value_m,  // Total lease value in $M
                     annual_rev: p.annual_rev_m,
                     noi_pct: p.noi_pct,
                     source_url: p.source_url,

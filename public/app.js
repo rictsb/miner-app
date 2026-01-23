@@ -1250,7 +1250,8 @@ function updatePriceDisplay() {
     });
 
     if (totalMcap > 0) {
-        document.getElementById('total-mcap').textContent = '$' + formatNumber(totalMcap / 1e9, 1) + 'B';
+        // totalMcap is now total lease value in $M
+        document.getElementById('total-mcap').textContent = '$' + formatNumber(totalMcap / 1000, 1) + 'B';
     }
 }
 
@@ -1279,10 +1280,16 @@ function renderDashboard() {
         let contractedEv = 0, pipelineEv = 0;
         let miningMw = 0;
         let miningEV = 0;  // Now calculated per-project
+        let totalLeaseValue = 0;  // Total nominal HPC lease value
 
         projects.forEach(p => {
             const overrides = projectOverrides[p.id] || {};
             const valuation = calculateProjectValue(p, overrides);
+
+            // Add lease value if it's an HPC project with known lease terms
+            if (p.lease_value_m && p.lease_value_m > 0 && !isBtcMiningOnly(p, overrides)) {
+                totalLeaseValue += p.lease_value_m;
+            }
 
             if (valuation.isBtcSite) {
                 // BTC mining site - split mining value from HPC conversion option
@@ -1315,7 +1322,6 @@ function renderDashboard() {
         // Get stock price data from Yahoo Finance
         const stock = getStockPrice(ticker);
         const stockPrice = stock.price || 0;
-        const marketCap = stock.marketCap || 0;
         const priceChange = stock.change || 0;
         const upside = stockPrice > 0 ? ((fairValue / stockPrice - 1) * 100) : 0;
 
@@ -1324,7 +1330,7 @@ function renderDashboard() {
         totalHpcPipeline += pipelineEv;
         totalMiningEv += miningEV;
         totalFairValue += equityValue;
-        totalMcap += marketCap;
+        totalMcap += totalLeaseValue;  // Now tracking total lease value instead of market cap
 
         // Main row
         const tr = document.createElement('tr');
@@ -1337,7 +1343,7 @@ function renderDashboard() {
                 ${hasHyperscaler ? '<span class="hyperscaler-badge">HPC</span>' : ''}
             </td>
             <td class="${priceChange >= 0 ? 'positive' : 'negative'}">$${stockPrice > 0 ? stockPrice.toFixed(2) : '--'}</td>
-            <td class="has-tooltip" data-tooltip="Yahoo Finance market cap">${marketCap > 0 ? '$' + formatNumber(marketCap / 1e9, 2) + 'B' : '--'}</td>
+            <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? '$' + formatNumber(totalLeaseValue / 1000, 2) + 'B' : '--'}</td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.hodl}">
                 <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(hodlValue, 1)}M</a>
             </td>
@@ -1396,7 +1402,8 @@ function renderDashboard() {
 
     // Update summary cards
     if (totalMcap > 0) {
-        document.getElementById('total-mcap').textContent = '$' + formatNumber(totalMcap / 1e9, 1) + 'B';
+        // totalMcap is now total lease value in $M
+        document.getElementById('total-mcap').textContent = '$' + formatNumber(totalMcap / 1000, 1) + 'B';
     }
     document.getElementById('total-btc').textContent = totalBtc.toLocaleString();
     document.getElementById('total-btc-value').textContent = '$' + formatNumber(totalBtc * btcPrice / 1e6, 0) + 'M';

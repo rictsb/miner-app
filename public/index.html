@@ -309,6 +309,206 @@
             border-radius: 4px;
         }
 
+        .modal-content.modal-wide {
+            max-width: 1100px;
+        }
+
+        .modal-body-with-preview {
+            display: flex;
+            gap: 20px;
+        }
+
+        .modal-form-section {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Valuation Preview Sidebar */
+        .valuation-preview-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            max-height: calc(90vh - 100px);
+            overflow-y: auto;
+        }
+
+        .valuation-preview-sidebar h4 {
+            color: #ff8c00;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-align: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .preview-section {
+            margin-bottom: 15px;
+        }
+
+        .preview-section-header {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 6px 8px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+        }
+
+        .preview-section-header.btc-header {
+            background: #2a1a00;
+            color: #ffaa00;
+        }
+
+        .preview-section-header.hpc-header {
+            background: #001a2a;
+            color: #00aaff;
+        }
+
+        .valuation-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+
+        .valuation-row .label {
+            color: #888;
+        }
+
+        .valuation-row .value {
+            color: #fff;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .valuation-subtotal {
+            border-top: 1px solid #333;
+            margin-top: 6px;
+            padding-top: 6px;
+        }
+
+        .valuation-subtotal .value.btc-value {
+            color: #ffaa00;
+            font-weight: 500;
+        }
+
+        .valuation-subtotal .value.hpc-value {
+            color: #00aaff;
+            font-weight: 500;
+        }
+
+        .preview-total-section {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .valuation-total {
+            padding: 8px 0 4px 0;
+        }
+
+        .valuation-total .label {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .valuation-total .value {
+            color: #00ff00;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .valuation-breakdown {
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        /* Section styling */
+        .form-section-btc {
+            border-left: 3px solid #ffaa00;
+            padding-left: 15px;
+        }
+
+        .form-section-hpc {
+            border-left: 3px solid #00aaff;
+            padding-left: 15px;
+        }
+
+        .form-section-advanced {
+            border-left: 3px solid #666;
+            padding-left: 15px;
+        }
+
+        .form-section-advanced summary {
+            cursor: pointer;
+            color: #888;
+        }
+
+        .form-section-advanced summary:hover {
+            color: #fff;
+        }
+
+        .section-tag {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+            font-weight: 400;
+        }
+
+        .section-tag.btc-tag {
+            background: #2a1a00;
+            color: #ffaa00;
+        }
+
+        .section-tag.hpc-tag {
+            background: #001a2a;
+            color: #00aaff;
+        }
+
+        .default-hint {
+            color: #666;
+            font-size: 10px;
+            font-weight: 400;
+        }
+
+        .hint-text {
+            color: #666;
+            font-size: 10px;
+            margin-top: 4px;
+            display: block;
+        }
+
+        .computed-value {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: 'Roboto Mono', monospace;
+            color: #00ff00;
+            font-size: 14px;
+        }
+
+        @media (max-width: 900px) {
+            .modal-body-with-preview {
+                flex-direction: column;
+            }
+            .valuation-preview-sidebar {
+                width: 100%;
+                position: relative;
+                max-height: none;
+            }
+        }
+
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -679,50 +879,6 @@
             color: #00bfff;
             font-weight: 500;
             font-size: 14px;
-        }
-
-        /* Valuation preview in modal */
-        .valuation-preview {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 15px;
-        }
-
-        .valuation-preview h4 {
-            color: #ff8c00;
-            font-size: 12px;
-            margin-bottom: 10px;
-            font-weight: 500;
-        }
-
-        .valuation-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            font-size: 12px;
-        }
-
-        .valuation-row .label {
-            color: #888;
-        }
-
-        .valuation-row .value {
-            color: #fff;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .valuation-total {
-            border-top: 1px solid #444;
-            margin-top: 10px;
-            padding-top: 10px;
-        }
-
-        .valuation-total .value {
-            color: #00ff00;
-            font-size: 16px;
-            font-weight: 500;
         }
 
         /* Clickable project row */
@@ -1600,237 +1756,288 @@
 
     <!-- Project Override Modal -->
     <div id="project-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content modal-wide">
             <div class="modal-header">
                 <h2 id="project-modal-title">Project Valuation Overrides</h2>
                 <button class="modal-close" onclick="closeProjectModal()">&times;</button>
             </div>
 
-            <form id="project-form">
-                <input type="hidden" id="project-id">
+            <div class="modal-body-with-preview">
+                <form id="project-form" class="modal-form-section">
+                    <input type="hidden" id="project-id">
 
-                <div class="form-section">
-                    <h3>Project Info</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Ticker</label>
-                            <input type="text" id="project-ticker" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>Site Name</label>
-                            <input type="text" id="project-name" readonly>
-                        </div>
-                    </div>
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label>Country</label>
-                            <input type="text" id="project-country" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>Grid</label>
-                            <input type="text" id="project-grid" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>IT MW</label>
-                            <input type="number" id="project-it-mw" step="1">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>NOI & Revenue</h3>
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label>NOI Year 1 ($M) <span style="color:#666">(leave blank for default)</span></label>
-                            <input type="number" id="project-noi" step="0.1" placeholder="Auto-calculated">
-                        </div>
-                        <div class="form-group">
-                            <label>Rent per MW/month ($K)</label>
-                            <input type="number" id="project-rent-mw" step="1" placeholder="Optional">
-                        </div>
-                        <div class="form-group">
-                            <label>Pass-through Rate (%)</label>
-                            <input type="number" id="project-passthrough" step="1" value="85" placeholder="85">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>Cap Rate Components</h3>
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label>Credit Tier</label>
-                            <select id="project-credit">
-                                <option value="">Use Global Default</option>
-                                <option value="hyperscaler">Hyperscaler (AAA)</option>
-                                <option value="ig">Investment Grade</option>
-                                <option value="spec">Speculative Grade</option>
-                                <option value="unrated">Unrated/Startup</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Lease Structure</label>
-                            <select id="project-lease-type">
-                                <option value="">Use Global Default</option>
-                                <option value="nnn">Triple Net (NNN)</option>
-                                <option value="gross">Modified Gross</option>
-                                <option value="hosting">Hosting/SLA</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Concentration</label>
-                            <select id="project-concentration">
-                                <option value="">Use Global Default</option>
-                                <option value="multi">Multi-tenant</option>
-                                <option value="single-hyper">Single Hyperscaler</option>
-                                <option value="single-ig">Single IG</option>
-                                <option value="bespoke">Bespoke</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label>Ownership Status</label>
-                            <select id="project-ownership">
-                                <option value="">Use Global Default</option>
-                                <option value="fee">Fee Simple</option>
-                                <option value="ground">Ground Lease</option>
-                                <option value="jv">JV / Partial</option>
-                                <option value="nopower">No Substation</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Build Status</label>
-                            <select id="project-build-status">
-                                <option value="">Use Project Status</option>
-                                <option value="operational">Operational</option>
-                                <option value="contracted">Contracted</option>
-                                <option value="development">Development</option>
-                                <option value="pipeline">Pipeline</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Cap Rate Override (%)</label>
-                            <input type="number" id="project-cap-override" step="0.5" placeholder="Auto-calculated">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>BTC Mining & HPC Conversion (for BTC sites)</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Mining EBITDA ($M/yr)</label>
-                            <input type="number" id="project-mining-ebitda" step="0.1" placeholder="Auto from factors">
-                            <small style="color: #888;">Override annual mining EBITDA for this site</small>
-                        </div>
-                        <div class="form-group">
-                            <label>HPC Conversion Date</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="date" id="project-hpc-conversion-date" style="flex: 1;">
-                                <button type="button" class="btn btn-small btn-secondary" onclick="setConversionDateNever()">Never</button>
+                    <!-- Section 1: Site Basics -->
+                    <div class="form-section">
+                        <h3>Site Basics</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Ticker</label>
+                                <input type="text" id="project-ticker" readonly>
                             </div>
-                            <div style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
-                                <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(1)">+1y</button>
-                                <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(2)">+2y</button>
-                                <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2025)">End 2025</button>
-                                <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2026)">End 2026</button>
-                                <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2027)">End 2027</button>
-                            </div>
-                            <small style="color: #888;">Date when BTC mining ends and HPC lease begins</small>
-                        </div>
-                    </div>
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label>Legacy HPC Conv Year (deprecated)</label>
-                            <select id="project-hpc-conversion">
-                                <option value="never">Never (BTC only)</option>
-                                <option value="2025">2025</option>
-                                <option value="2026">2026</option>
-                                <option value="2027">2027</option>
-                                <option value="2028">2028</option>
-                                <option value="2029">2029</option>
-                                <option value="2030">2030</option>
-                                <option value="2031">2031+</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Lease Term T (years)</label>
-                            <input type="number" id="project-term" step="1" placeholder="Global default">
-                        </div>
-                        <div class="form-group">
-                            <label>Rent Escalator g (%)</label>
-                            <input type="number" id="project-escalator" step="0.5" placeholder="Global default">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>Multiplier Overrides</h3>
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label>Size Multiplier Override</label>
-                            <input type="number" id="project-size-mult" step="0.05" placeholder="Auto from MW">
-                        </div>
-                        <div class="form-group">
-                            <label>Country Multiplier Override</label>
-                            <input type="number" id="project-country-mult" step="0.05" placeholder="Auto from country">
-                        </div>
-                        <div class="form-group">
-                            <label>Grid Multiplier Override</label>
-                            <input type="number" id="project-grid-mult" step="0.05" placeholder="Auto from grid">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Project Fidoodle Factor</label>
-                            <div class="slider-container">
-                                <input type="range" id="project-fidoodle-slider" min="0" max="2" step="0.05" value="1.0">
-                                <span class="slider-value" id="project-fidoodle-display">1.00</span>
+                            <div class="form-group">
+                                <label>Site Name</label>
+                                <input type="text" id="project-name" readonly>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Fidoodle (direct input)</label>
-                            <input type="number" id="project-fidoodle" step="0.05" value="1.0">
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>IT MW</label>
+                                <input type="number" id="project-it-mw" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>Country <span class="default-hint" id="hint-country-mult"></span></label>
+                                <input type="text" id="project-country" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label>Country Multiplier</label>
+                                <input type="number" id="project-country-mult" step="0.05" placeholder="Auto">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: BTC Mining Value -->
+                    <div class="form-section form-section-btc">
+                        <h3>BTC Mining Value <span class="section-tag btc-tag">Current State</span></h3>
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Mining EBITDA <span class="default-hint" id="hint-mining-ebitda"></span></label>
+                                <input type="number" id="project-mining-ebitda" step="0.1" placeholder="$M/year">
+                            </div>
+                            <div class="form-group">
+                                <label>EBITDA Multiple <span class="default-hint" id="hint-btc-multiple"></span></label>
+                                <input type="number" id="project-btc-multiple" step="0.5" placeholder="x">
+                            </div>
+                            <div class="form-group">
+                                <label>BTC Mining Value</label>
+                                <div class="computed-value" id="preview-btc-value">$0.0M</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: HPC Conversion -->
+                    <div class="form-section form-section-hpc">
+                        <h3>HPC/AI Conversion <span class="section-tag hpc-tag">Future State</span></h3>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Conversion Date</label>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="date" id="project-hpc-conversion-date" style="flex: 1;">
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="setConversionDateNever()">Never</button>
+                                </div>
+                                <div style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(1)">+1y</button>
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(2)">+2y</button>
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(3)">+3y</button>
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2025)">End '25</button>
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2026)">End '26</button>
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2027)">End '27</button>
+                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2028)">End '28</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Conversion Probability <span class="default-hint">(default: 50%)</span></label>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="range" id="project-conv-prob-slider" min="0" max="100" step="5" value="50" style="flex: 1;">
+                                    <span class="slider-value" id="project-conv-prob-display">50%</span>
+                                </div>
+                                <input type="number" id="project-conv-prob" step="5" min="0" max="100" placeholder="%" style="margin-top: 6px;">
+                            </div>
+                        </div>
+
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>HPC Rent <span class="default-hint" id="hint-hpc-rent"></span></label>
+                                <input type="number" id="project-rent-mw" step="0.01" placeholder="$M/MW/month">
+                            </div>
+                            <div class="form-group">
+                                <label>Lease Term <span class="default-hint" id="hint-term"></span></label>
+                                <input type="number" id="project-term" step="1" placeholder="years">
+                            </div>
+                            <div class="form-group">
+                                <label>Escalator <span class="default-hint" id="hint-escalator"></span></label>
+                                <input type="number" id="project-escalator" step="0.5" placeholder="%/year">
+                            </div>
+                        </div>
+
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Tenant Credit</label>
+                                <select id="project-credit">
+                                    <option value="">Auto-detect</option>
+                                    <option value="hyperscaler">Hyperscaler (AAA)</option>
+                                    <option value="ig">Investment Grade</option>
+                                    <option value="spec">Speculative Grade</option>
+                                    <option value="unrated">Unrated/Startup</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>NOI Margin <span class="default-hint">(default: 85%)</span></label>
+                                <input type="number" id="project-passthrough" step="1" placeholder="%">
+                            </div>
+                            <div class="form-group">
+                                <label>HPC Conversion Value</label>
+                                <div class="computed-value" id="preview-hpc-value">$0.0M</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Fidoodle Factor <span class="default-hint">(default: 1.00)</span></label>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="range" id="project-fidoodle-slider" min="0" max="2" step="0.05" value="1.0" style="flex: 1;">
+                                    <span class="slider-value" id="project-fidoodle-display">1.00</span>
+                                </div>
+                                <input type="number" id="project-fidoodle" step="0.05" placeholder="0.0 - 2.0" style="margin-top: 6px;">
+                            </div>
+                            <div class="form-group">
+                                <label>Cap Rate Override</label>
+                                <input type="number" id="project-cap-override" step="0.5" placeholder="Auto-calculated %">
+                                <small class="hint-text" id="hint-cap-rate"></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Advanced Overrides (collapsed by default) -->
+                    <details class="form-section form-section-advanced">
+                        <summary><h3 style="display: inline;">Advanced Overrides</h3></summary>
+
+                        <div class="form-row-3" style="margin-top: 15px;">
+                            <div class="form-group">
+                                <label>Lease Structure</label>
+                                <select id="project-lease-type">
+                                    <option value="">Auto</option>
+                                    <option value="nnn">Triple Net (NNN)</option>
+                                    <option value="gross">Modified Gross</option>
+                                    <option value="hosting">Hosting/SLA</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Concentration</label>
+                                <select id="project-concentration">
+                                    <option value="">Auto</option>
+                                    <option value="multi">Multi-tenant</option>
+                                    <option value="single-hyper">Single Hyperscaler</option>
+                                    <option value="single-ig">Single IG</option>
+                                    <option value="bespoke">Bespoke</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Ownership</label>
+                                <select id="project-ownership">
+                                    <option value="">Auto</option>
+                                    <option value="fee">Fee Simple</option>
+                                    <option value="ground">Ground Lease</option>
+                                    <option value="jv">JV / Partial</option>
+                                    <option value="nopower">No Substation</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Build Status</label>
+                                <select id="project-build-status">
+                                    <option value="">Use Project Status</option>
+                                    <option value="operational">Operational</option>
+                                    <option value="contracted">Contracted</option>
+                                    <option value="development">Development</option>
+                                    <option value="pipeline">Pipeline</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Size Multiplier</label>
+                                <input type="number" id="project-size-mult" step="0.05" placeholder="Auto">
+                            </div>
+                            <div class="form-group">
+                                <label>Grid Multiplier</label>
+                                <input type="number" id="project-grid-mult" step="0.05" placeholder="Auto">
+                            </div>
+                        </div>
+
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Grid</label>
+                                <input type="text" id="project-grid" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label>NOI Override ($M)</label>
+                                <input type="number" id="project-noi" step="0.1" placeholder="Auto-calculated">
+                            </div>
+                            <div class="form-group"></div>
+                        </div>
+                    </details>
+
+                    <div style="margin-top: 20px; text-align: right;">
+                        <button type="button" class="btn btn-secondary" onclick="clearProjectOverrides()">Clear All</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeProjectModal()">Cancel</button>
+                        <button type="submit" class="btn">Save & Apply</button>
+                    </div>
+                </form>
+
+                <!-- Live Valuation Preview - Always Visible Sidebar -->
+                <div class="valuation-preview-sidebar" id="valuation-preview">
+                    <h4>Live Valuation</h4>
+
+                    <div class="preview-section">
+                        <div class="preview-section-header btc-header">BTC Mining</div>
+                        <div class="valuation-row">
+                            <span class="label">EBITDA</span>
+                            <span class="value" id="preview-mining-ebitda">$0.0M/yr</span>
+                        </div>
+                        <div class="valuation-row">
+                            <span class="label">Multiple</span>
+                            <span class="value" id="preview-mining-multiple">0.0x</span>
+                        </div>
+                        <div class="valuation-row">
+                            <span class="label">Mining Period</span>
+                            <span class="value" id="preview-mining-period">Perpetual</span>
+                        </div>
+                        <div class="valuation-row valuation-subtotal">
+                            <span class="label">Mining Value</span>
+                            <span class="value btc-value" id="preview-mining-value">$0.0M</span>
+                        </div>
+                    </div>
+
+                    <div class="preview-section">
+                        <div class="preview-section-header hpc-header">HPC Conversion</div>
+                        <div class="valuation-row">
+                            <span class="label">Conversion Date</span>
+                            <span class="value" id="preview-conv-date">Never</span>
+                        </div>
+                        <div class="valuation-row">
+                            <span class="label">Probability</span>
+                            <span class="value" id="preview-conv-prob">0%</span>
+                        </div>
+                        <div class="valuation-row">
+                            <span class="label">HPC NOI</span>
+                            <span class="value" id="preview-hpc-noi">$0.0M/yr</span>
+                        </div>
+                        <div class="valuation-row">
+                            <span class="label">Cap Rate</span>
+                            <span class="value" id="preview-cap">0.0%</span>
+                        </div>
+                        <div class="valuation-row">
+                            <span class="label">Fidoodle</span>
+                            <span class="value" id="preview-fidoodle">1.00</span>
+                        </div>
+                        <div class="valuation-row valuation-subtotal">
+                            <span class="label">HPC Option Value</span>
+                            <span class="value hpc-value" id="preview-hpc-option">$0.0M</span>
+                        </div>
+                    </div>
+
+                    <div class="preview-section preview-total-section">
+                        <div class="valuation-row valuation-total">
+                            <span class="label">TOTAL SITE VALUE</span>
+                            <span class="value" id="preview-value">$0.0M</span>
+                        </div>
+                        <div class="valuation-breakdown" id="preview-breakdown">
+                            Mining + HPC Option
                         </div>
                     </div>
                 </div>
-
-                <!-- Live Valuation Preview -->
-                <div class="valuation-preview" id="valuation-preview">
-                    <h4>Live Valuation Preview</h4>
-                    <div class="valuation-row">
-                        <span class="label">NOI Year 1</span>
-                        <span class="value" id="preview-noi">$0.0M</span>
-                    </div>
-                    <div class="valuation-row">
-                        <span class="label">Effective Cap Rate</span>
-                        <span class="value" id="preview-cap">0.0%</span>
-                    </div>
-                    <div class="valuation-row">
-                        <span class="label">Term Factor</span>
-                        <span class="value" id="preview-term">0.000</span>
-                    </div>
-                    <div class="valuation-row">
-                        <span class="label">Combined Multipliers</span>
-                        <span class="value" id="preview-mult">0.000</span>
-                    </div>
-                    <div class="valuation-row">
-                        <span class="label">Fidoodle</span>
-                        <span class="value" id="preview-fidoodle">1.000</span>
-                    </div>
-                    <div class="valuation-row valuation-total">
-                        <span class="label">PROJECT VALUE</span>
-                        <span class="value" id="preview-value">$0.0M</span>
-                    </div>
-                </div>
-
-                <div style="margin-top: 20px; text-align: right;">
-                    <button type="button" class="btn btn-secondary" onclick="clearProjectOverrides()">Clear Overrides</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeProjectModal()">Cancel</button>
-                    <button type="submit" class="btn">Save & Apply</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 

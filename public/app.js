@@ -474,12 +474,14 @@ function calculateNOI(project, overrides = {}) {
         return parseFloat(overrides.noi);
     }
 
-    // Calculate from rent per MW if provided (rentMw is in $K per MW per month)
-    if (overrides.rentMw && overrides.passthrough) {
-        const mw = overrides.itMw || project.it_mw || 0;
-        // rentMw is $K per MW per month, so: rentMw * MW * 12 months / 1000 = $M/year
-        const annualRent = overrides.rentMw * mw * 12 / 1000;  // Convert to $M
-        return annualRent * (overrides.passthrough / 100);
+    const mw = overrides.itMw || project.it_mw || 0;
+    const passthrough = (overrides.passthrough ?? 85) / 100;
+
+    // Calculate from rent per MW if provided (rentMw is in $M per MW per month)
+    if (overrides.rentMw) {
+        // rentMw is $M per MW per month, so: rentMw * MW * 12 months = $M/year
+        const annualRent = overrides.rentMw * mw * 12;
+        return annualRent * passthrough;
     }
 
     // Use project's stated annual rev and NOI %
@@ -655,28 +657,47 @@ function calculateBtcMiningValue(project, overrides = {}) {
 /**
  * Calculate HPC Conversion Option Value
  * If a BTC site could convert to HPC in the future, calculate the option value
- * Option Value = Potential HPC Value × Conversion Discount Factor × Country Factor
+ * Uses the conversion date to determine when HPC lease begins
+ * Value is discounted to present value based on years until conversion
  */
 function calculateHpcConversionValue(project, overrides = {}) {
+    // Check if conversion is set (either via date or legacy year)
+    const hasConversionDate = !!overrides.hpcConversionDate;
     const conversionYear = overrides.hpcConversionYear || 'never';
-    if (conversionYear === 'never') {
+
+    if (!hasConversionDate && conversionYear === 'never') {
         return { value: 0, conversionYear: 'never', discountFactor: 0, potentialHpcValue: 0, components: {} };
     }
 
     const itMw = overrides.itMw || project.it_mw || 0;
-    const discountFactor = factors.hpcConversion[conversionYear] || 0;
+
+    // Calculate discount factor based on years to conversion
+    let discountFactor = 1.0;
+    let yearsToConversion = 0;
+
+    if (hasConversionDate) {
+        yearsToConversion = yearsToDate(overrides.hpcConversionDate) || 0;
+        // Discount at ~10% per year (roughly matching the legacy factors)
+        // e.g., 1 year = 0.90, 2 years = 0.81, 3 years = 0.73
+        discountFactor = Math.pow(0.90, yearsToConversion);
+    } else {
+        // Legacy: use fixed discount factors by year
+        discountFactor = factors.hpcConversion[conversionYear] || 0;
+    }
 
     // Calculate FULL HPC lease value using all the override parameters
     // This allows user to specify prospective tenant, term, fidoodle, etc.
 
     // 1. Calculate NOI (use override NOI, or calculate from rent, or use base)
     let noi;
+    const passthrough = (overrides.passthrough ?? 85) / 100;
+
     if (overrides.noi !== undefined && overrides.noi !== null && overrides.noi !== '') {
         noi = parseFloat(overrides.noi);
-    } else if (overrides.rentMw && overrides.passthrough) {
-        // rentMw is $K per MW per month, so: rentMw * MW * 12 months / 1000 = $M/year
-        const annualRent = overrides.rentMw * itMw * 12 / 1000;
-        noi = annualRent * (overrides.passthrough / 100);
+    } else if (overrides.rentMw) {
+        // rentMw is $M per MW per month, so: rentMw * MW * 12 months = $M/year
+        const annualRent = overrides.rentMw * itMw * 12;
+        noi = annualRent * passthrough;
     } else {
         noi = factors.baseNoiPerMw * itMw;
     }
@@ -767,7 +788,13 @@ function calculateProjectValue(project, overrides = {}) {
         const miningVal = calculateBtcMiningValue(project, overrides);
         const conversionVal = calculateHpcConversionValue(project, overrides);
 
-        const totalValue = miningVal.value + conversionVal.value;
+        // Get conversion probability (default 50%)
+        const convProb = (overrides.conversionProbability ?? 50) / 100;
+        const hasConversionDate = !!overrides.hpcConversionDate;
+
+        // Apply probability weighting to HPC conversion value
+        const probabilityWeightedHpcValue = hasConversionDate ? conversionVal.value * convProb : 0;
+        const totalValue = miningVal.value + probabilityWeightedHpcValue;
 
         return {
             value: totalValue,
@@ -786,8 +813,10 @@ function calculateProjectValue(project, overrides = {}) {
                 impliedRate: miningVal.impliedRate,
                 isPerpetual: miningVal.isPerpetual,
                 perpetualMiningValue: miningVal.perpetualValue,
-                // Legacy conversion option components (HPC lease terms)
-                conversionValue: conversionVal.value,
+                // HPC conversion option components
+                conversionValue: probabilityWeightedHpcValue,
+                conversionProbability: convProb,
+                rawConversionValue: conversionVal.value,  // Before probability weighting
                 conversionYear: conversionVal.conversionYear,
                 conversionDiscount: conversionVal.discountFactor,
                 potentialHpcValue: conversionVal.potentialHpcValue,
@@ -911,6 +940,25 @@ function setupEventListeners() {
         const val = parseFloat(fidoodleInput.value) || 1.0;
         fidoodleSlider.value = val;
         fidoodleDisplay.textContent = val.toFixed(2);
+        updateValuationPreview();
+    });
+
+    // Conversion probability slider sync
+    const convProbSlider = document.getElementById('project-conv-prob-slider');
+    const convProbInput = document.getElementById('project-conv-prob');
+    const convProbDisplay = document.getElementById('project-conv-prob-display');
+
+    convProbSlider.addEventListener('input', () => {
+        const val = parseInt(convProbSlider.value);
+        convProbInput.value = val;
+        convProbDisplay.textContent = val + '%';
+        updateValuationPreview();
+    });
+
+    convProbInput.addEventListener('input', () => {
+        const val = Math.min(100, Math.max(0, parseInt(convProbInput.value) || 50));
+        convProbSlider.value = val;
+        convProbDisplay.textContent = val + '%';
         updateValuationPreview();
     });
 
@@ -1697,48 +1745,68 @@ function openFidoodleEditor(projectId) {
 function openProjectModal(project) {
     const modal = document.getElementById('project-modal');
     const overrides = projectOverrides[project.id] || {};
+    const itMw = overrides.itMw || project.it_mw || 0;
 
-    document.getElementById('project-modal-title').textContent = `Project Overrides: ${project.name}`;
+    document.getElementById('project-modal-title').textContent = `${project.ticker}: ${project.name}`;
     document.getElementById('project-id').value = project.id;
     document.getElementById('project-ticker').value = project.ticker;
     document.getElementById('project-name').value = project.name;
     document.getElementById('project-country').value = project.country;
     document.getElementById('project-grid').value = project.grid || '';
-    document.getElementById('project-it-mw').value = overrides.itMw || project.it_mw || '';
+    document.getElementById('project-it-mw').value = itMw || '';
 
-    // NOI & Revenue
-    document.getElementById('project-noi').value = overrides.noi || '';
-    document.getElementById('project-rent-mw').value = overrides.rentMw || '';
+    // Country multiplier
+    const countryMult = getCountryMultiplier(project.country);
+    document.getElementById('project-country-mult').value = overrides.countryMult || '';
+    document.getElementById('hint-country-mult').textContent = `(default: ${countryMult.toFixed(2)})`;
+
+    // BTC Mining section
+    const defaultMiningEbitda = factors.btcMining.ebitdaPerMw * itMw;
+    document.getElementById('project-mining-ebitda').value = overrides.miningEbitdaAnnualM ?? '';
+    document.getElementById('hint-mining-ebitda').textContent = `(default: $${defaultMiningEbitda.toFixed(1)}M)`;
+
+    document.getElementById('project-btc-multiple').value = overrides.btcEbitdaMultiple ?? '';
+    document.getElementById('hint-btc-multiple').textContent = `(default: ${factors.btcMining.ebitdaMultiple}x)`;
+
+    // HPC Conversion section
+    document.getElementById('project-hpc-conversion-date').value = overrides.hpcConversionDate || '';
+
+    // Conversion probability
+    const convProb = overrides.conversionProbability ?? 50;
+    document.getElementById('project-conv-prob').value = overrides.conversionProbability ?? '';
+    document.getElementById('project-conv-prob-slider').value = convProb;
+    document.getElementById('project-conv-prob-display').textContent = convProb + '%';
+
+    // HPC lease terms
+    document.getElementById('project-rent-mw').value = overrides.rentMw ?? '';
+    document.getElementById('hint-hpc-rent').textContent = `(default: $${(factors.baseNoiPerMw / 12).toFixed(3)}M)`;
+
+    document.getElementById('project-term').value = overrides.term || '';
+    document.getElementById('hint-term').textContent = `(default: ${factors.defaultTerm}y)`;
+
+    document.getElementById('project-escalator').value = overrides.escalator || '';
+    document.getElementById('hint-escalator').textContent = `(default: ${factors.escalator}%)`;
+
+    document.getElementById('project-credit').value = overrides.credit || '';
     document.getElementById('project-passthrough').value = overrides.passthrough ?? '';
 
-    // Cap Rate Components
-    document.getElementById('project-credit').value = overrides.credit || '';
+    // Fidoodle
+    const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
+    document.getElementById('project-fidoodle').value = overrides.fidoodle ?? '';
+    document.getElementById('project-fidoodle-slider').value = fidoodle;
+    document.getElementById('project-fidoodle-display').textContent = fidoodle.toFixed(2);
+
+    // Cap rate override
+    document.getElementById('project-cap-override').value = overrides.capOverride || '';
+
+    // Advanced overrides
     document.getElementById('project-lease-type').value = overrides.leaseType || '';
     document.getElementById('project-concentration').value = overrides.concentration || '';
     document.getElementById('project-ownership').value = overrides.ownership || '';
     document.getElementById('project-build-status').value = overrides.buildStatus || '';
-    document.getElementById('project-cap-override').value = overrides.capOverride || '';
-
-    // Mining EBITDA override
-    document.getElementById('project-mining-ebitda').value = overrides.miningEbitdaAnnualM ?? '';
-
-    // HPC Conversion Date (new) & Legacy Year
-    document.getElementById('project-hpc-conversion-date').value = overrides.hpcConversionDate || '';
-    document.getElementById('project-hpc-conversion').value = overrides.hpcConversionYear || 'never';
-    document.getElementById('project-term').value = overrides.term || '';
-    document.getElementById('project-escalator').value = overrides.escalator || '';
-
-    // Multiplier Overrides
     document.getElementById('project-size-mult').value = overrides.sizeMult || '';
-    document.getElementById('project-country-mult').value = overrides.countryMult || '';
     document.getElementById('project-grid-mult').value = overrides.gridMult || '';
-
-    // Fidoodle - only show override value, not default
-    const fidoodle = overrides.fidoodle;
-    const fidoodleDisplay = fidoodle ?? factors.fidoodleDefault;
-    document.getElementById('project-fidoodle').value = fidoodle ?? '';
-    document.getElementById('project-fidoodle-slider').value = fidoodleDisplay;
-    document.getElementById('project-fidoodle-display').textContent = fidoodleDisplay.toFixed(2);
+    document.getElementById('project-noi').value = overrides.noi || '';
 
     updateValuationPreview();
     modal.classList.add('active');
@@ -1755,70 +1823,104 @@ function updateValuationPreview() {
     if (!project) return;
 
     const overrides = getOverridesFromForm();
-    const valuation = calculateProjectValue(project, overrides);
-    const c = valuation.components;
+    const itMw = overrides.itMw || project.it_mw || 0;
 
-    if (valuation.isBtcSite) {
-        // BTC site preview - show mining value with truncation info
-        const convDate = c.hpcConversionDate;
-        const yearsToConv = c.yearsToConv;
-        const isPerpetual = c.isPerpetual;
+    // Calculate BTC mining value (regardless of site type, for preview purposes)
+    const miningVal = calculateBtcMiningValue(project, overrides);
 
-        // Show mining EBITDA as "NOI" equivalent
-        document.getElementById('preview-noi').textContent = '$' + formatNumber(c.ebitda || 0, 1) + 'M/yr EBITDA';
+    // Calculate HPC conversion value
+    const conversionVal = calculateHpcConversionValue(project, overrides);
 
-        // Show conversion date info
-        if (convDate && yearsToConv !== null) {
-            document.getElementById('preview-cap').textContent = yearsToConv.toFixed(1) + ' yrs to conv';
-            document.getElementById('preview-term').textContent = c.impliedRate ? (c.impliedRate * 100).toFixed(0) + '% impl. rate' : '-';
-        } else {
-            document.getElementById('preview-cap').textContent = 'No conv date';
-            document.getElementById('preview-term').textContent = 'Perpetual';
-        }
+    // Get conversion probability
+    const convProb = (overrides.conversionProbability ?? 50) / 100;
+    const hasConversionDate = !!overrides.hpcConversionDate;
 
-        document.getElementById('preview-mult').textContent = (c.ebitdaMultiple || 0).toFixed(1) + 'x multiple';
-        document.getElementById('preview-fidoodle').textContent = (c.fCountry || 1).toFixed(2) + ' country';
+    // === BTC Mining Section ===
+    document.getElementById('preview-mining-ebitda').textContent = '$' + formatNumber(miningVal.ebitda || 0, 1) + 'M/yr';
+    document.getElementById('preview-mining-multiple').textContent = (miningVal.ebitdaMultiple || 0).toFixed(1) + 'x';
 
-        // Show truncated value vs perpetual
-        if (isPerpetual) {
-            document.getElementById('preview-value').textContent = '$' + formatNumber(c.miningValue || 0, 1) + 'M (perpetual)';
-        } else {
-            document.getElementById('preview-value').textContent = '$' + formatNumber(c.miningValue || 0, 1) + 'M of $' + formatNumber(c.perpetualMiningValue || 0, 1) + 'M';
-        }
+    if (miningVal.isPerpetual || !hasConversionDate) {
+        document.getElementById('preview-mining-period').textContent = 'Perpetual';
     } else {
-        // HPC site preview
-        document.getElementById('preview-noi').textContent = '$' + formatNumber(c.noi || 0, 1) + 'M';
-        document.getElementById('preview-cap').textContent = ((c.capEff || 0) * 100).toFixed(1) + '%';
-        document.getElementById('preview-term').textContent = (c.termFactor || 0).toFixed(3);
-        document.getElementById('preview-mult').textContent = (c.combinedMult || 0).toFixed(3);
-        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(2);
-        document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+        const years = miningVal.yearsToConv || 0;
+        document.getElementById('preview-mining-period').textContent = years.toFixed(1) + ' years';
+    }
+
+    document.getElementById('preview-mining-value').textContent = '$' + formatNumber(miningVal.value || 0, 1) + 'M';
+    document.getElementById('preview-btc-value').textContent = '$' + formatNumber(miningVal.value || 0, 1) + 'M';
+
+    // === HPC Conversion Section ===
+    if (hasConversionDate) {
+        const convDate = new Date(overrides.hpcConversionDate);
+        const dateStr = convDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        document.getElementById('preview-conv-date').textContent = dateStr;
+    } else {
+        document.getElementById('preview-conv-date').textContent = 'Never';
+    }
+
+    document.getElementById('preview-conv-prob').textContent = (convProb * 100).toFixed(0) + '%';
+
+    // Calculate HPC NOI for preview
+    const hpcNoi = conversionVal.components?.noi || 0;
+    document.getElementById('preview-hpc-noi').textContent = '$' + formatNumber(hpcNoi, 1) + 'M/yr';
+
+    // Cap rate
+    const capRate = conversionVal.components?.capEff || 0;
+    document.getElementById('preview-cap').textContent = (capRate * 100).toFixed(1) + '%';
+    document.getElementById('hint-cap-rate').textContent = 'Effective: ' + (capRate * 100).toFixed(1) + '%';
+
+    // Fidoodle
+    const fidoodle = conversionVal.components?.fidoodle || factors.fidoodleDefault;
+    document.getElementById('preview-fidoodle').textContent = fidoodle.toFixed(2);
+
+    // HPC option value (probability-weighted)
+    const hpcOptionValue = hasConversionDate ? conversionVal.value * convProb : 0;
+    document.getElementById('preview-hpc-option').textContent = '$' + formatNumber(hpcOptionValue, 1) + 'M';
+    document.getElementById('preview-hpc-value').textContent = '$' + formatNumber(hpcOptionValue, 1) + 'M';
+
+    // === Total Value ===
+    const totalValue = miningVal.value + hpcOptionValue;
+    document.getElementById('preview-value').textContent = '$' + formatNumber(totalValue, 1) + 'M';
+
+    // Breakdown text
+    if (hasConversionDate && hpcOptionValue > 0) {
+        document.getElementById('preview-breakdown').textContent =
+            `$${formatNumber(miningVal.value, 1)}M mining + $${formatNumber(hpcOptionValue, 1)}M HPC (${(convProb * 100).toFixed(0)}% prob)`;
+    } else {
+        document.getElementById('preview-breakdown').textContent = 'BTC mining only (no conversion set)';
     }
 }
 
 function getOverridesFromForm() {
-    const hpcConversion = document.getElementById('project-hpc-conversion').value;
     const hpcConversionDate = document.getElementById('project-hpc-conversion-date').value;
     return {
+        // Site basics
         itMw: parseFloatOrNull(document.getElementById('project-it-mw').value),
+        countryMult: parseFloatOrNull(document.getElementById('project-country-mult').value),
+
+        // BTC Mining
         miningEbitdaAnnualM: parseFloatOrNull(document.getElementById('project-mining-ebitda').value),
-        hpcConversionDate: hpcConversionDate || null,  // New: ISO date string or null
-        hpcConversionYear: hpcConversion !== 'never' ? hpcConversion : null,  // Legacy
-        noi: parseFloatOrNull(document.getElementById('project-noi').value),
+        btcEbitdaMultiple: parseFloatOrNull(document.getElementById('project-btc-multiple').value),
+
+        // HPC Conversion
+        hpcConversionDate: hpcConversionDate || null,
+        conversionProbability: parseFloatOrNull(document.getElementById('project-conv-prob').value),
         rentMw: parseFloatOrNull(document.getElementById('project-rent-mw').value),
-        passthrough: parseFloatOrNull(document.getElementById('project-passthrough').value),
+        term: parseFloatOrNull(document.getElementById('project-term').value),
+        escalator: parseFloatOrNull(document.getElementById('project-escalator').value),
         credit: document.getElementById('project-credit').value || null,
+        passthrough: parseFloatOrNull(document.getElementById('project-passthrough').value),
+        fidoodle: parseFloatOrNull(document.getElementById('project-fidoodle').value),
+        capOverride: parseFloatOrNull(document.getElementById('project-cap-override').value),
+
+        // Advanced overrides
         leaseType: document.getElementById('project-lease-type').value || null,
         concentration: document.getElementById('project-concentration').value || null,
         ownership: document.getElementById('project-ownership').value || null,
         buildStatus: document.getElementById('project-build-status').value || null,
-        capOverride: parseFloatOrNull(document.getElementById('project-cap-override').value),
-        term: parseFloatOrNull(document.getElementById('project-term').value),
-        escalator: parseFloatOrNull(document.getElementById('project-escalator').value),
         sizeMult: parseFloatOrNull(document.getElementById('project-size-mult').value),
-        countryMult: parseFloatOrNull(document.getElementById('project-country-mult').value),
         gridMult: parseFloatOrNull(document.getElementById('project-grid-mult').value),
-        fidoodle: parseFloatOrNull(document.getElementById('project-fidoodle').value)
+        noi: parseFloatOrNull(document.getElementById('project-noi').value)
     };
 }
 

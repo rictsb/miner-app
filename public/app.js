@@ -90,8 +90,13 @@ const DEFAULT_FACTORS = {
         operational: 1.00,
         contracted: 0.85,
         development: 0.60,
-        pipeline: 0.40
+        pipeline: 0.40,
+        option: 0.20,      // AI/HPC option - very speculative
+        planned: 0.15      // AI/HPC planned - highly speculative
     },
+
+    // Mining EBITDA cap ($/MW/year) - prevents unrealistic valuations
+    miningEbitdaCap: 0.50,  // $0.5M per MW max (vs $0.35M default)
 
     // Concentration Multipliers
     concentration: {
@@ -425,16 +430,27 @@ function getGridMultiplier(grid, country, override = null) {
 }
 
 /**
- * Get build/energization multiplier based on status
+ * Get build/energization multiplier based on status and current_use
+ * Applies heavy discounts for option/planned HPC projects
  */
-function getBuildMultiplier(status, override = null) {
+function getBuildMultiplier(status, override = null, currentUse = null) {
     if (override !== null && override !== undefined) {
         return factors.build[override] || 1.0;
     }
-    const normalizedStatus = status.toLowerCase();
+
+    const normalizedStatus = (status || '').toLowerCase();
+    const use = (currentUse || '').toLowerCase();
+
+    // Check for option/planned in current_use - these are highly speculative
+    if (use.includes('option')) return factors.build.option;
+    if (use.includes('planned')) return factors.build.planned;
+    if (use === 'power gen') return factors.build.pipeline;  // Power gen sites are speculative
+
     if (normalizedStatus === 'operational') return factors.build.operational;
     if (normalizedStatus === 'contracted') return factors.build.contracted;
     if (normalizedStatus === 'development') return factors.build.development;
+    if (normalizedStatus === 'under construction') return factors.build.development;
+    if (normalizedStatus === 'planning') return factors.build.pipeline;
     return factors.build.pipeline;
 }
 
@@ -477,10 +493,10 @@ function calculateNOI(project, overrides = {}) {
     const mw = overrides.itMw || project.it_mw || 0;
     const passthrough = (overrides.passthrough ?? 85) / 100;
 
-    // Calculate from rent per MW if provided (rentMw is in $M per MW per month)
+    // Calculate from rent per MW if provided (rentMw is in $M per MW per year)
     if (overrides.rentMw) {
-        // rentMw is $M per MW per month, so: rentMw * MW * 12 months = $M/year
-        const annualRent = overrides.rentMw * mw * 12;
+        // rentMw is $M per MW per year
+        const annualRent = overrides.rentMw * mw;
         return annualRent * passthrough;
     }
 
@@ -615,12 +631,23 @@ function calculateBtcMiningValue(project, overrides = {}) {
     const itMw = overrides.itMw || project.it_mw || 0;
 
     // Effective annual mining EBITDA:
-    // Priority: override > project-level > factors-based estimate
+    // Priority: override > project-level (capped) > factors-based estimate
     let ebitdaAnnual;
+    let wasCapped = false;
+
     if (overrides.miningEbitdaAnnualM !== undefined && overrides.miningEbitdaAnnualM !== null) {
+        // User override - trust it
         ebitdaAnnual = parseFloat(overrides.miningEbitdaAnnualM);
     } else if (project.mining_ebitda_annual_m !== undefined && project.mining_ebitda_annual_m !== null) {
-        ebitdaAnnual = project.mining_ebitda_annual_m;
+        // Project-level value - cap it to reasonable range
+        const rawEbitda = project.mining_ebitda_annual_m;
+        const maxEbitda = factors.miningEbitdaCap * itMw;
+        if (rawEbitda > maxEbitda && itMw > 0) {
+            ebitdaAnnual = maxEbitda;
+            wasCapped = true;
+        } else {
+            ebitdaAnnual = rawEbitda;
+        }
     } else {
         // Fall back to per-MW calculation
         const ebitdaPerMw = overrides.btcEbitdaPerMw ?? factors.btcMining.ebitdaPerMw;
@@ -695,8 +722,8 @@ function calculateHpcConversionValue(project, overrides = {}) {
     if (overrides.noi !== undefined && overrides.noi !== null && overrides.noi !== '') {
         noi = parseFloat(overrides.noi);
     } else if (overrides.rentMw) {
-        // rentMw is $M per MW per month, so: rentMw * MW * 12 months = $M/year
-        const annualRent = overrides.rentMw * itMw * 12;
+        // rentMw is $M per MW per year
+        const annualRent = overrides.rentMw * itMw;
         noi = annualRent * passthrough;
     } else {
         noi = factors.baseNoiPerMw * itMw;
@@ -845,7 +872,7 @@ function calculateProjectValue(project, overrides = {}) {
     const fCredit = isHyperscaler(project.lessee) ? factors.hyperscalerPremium : 1.0;
     const fLease = getLeaseMultiplier(overrides.leaseType);
     const fOwnership = getOwnershipMultiplier(overrides.ownership);
-    const fBuild = getBuildMultiplier(project.status, overrides.buildStatus);
+    const fBuild = getBuildMultiplier(project.status, overrides.buildStatus, project.current_use);
     const fConcentration = getConcentrationMultiplier(overrides.concentration, project);
     const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
     const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
@@ -1777,9 +1804,9 @@ function openProjectModal(project) {
     document.getElementById('project-conv-prob-slider').value = convProb;
     document.getElementById('project-conv-prob-display').textContent = convProb + '%';
 
-    // HPC lease terms
+    // HPC lease terms (rent is now $/MW/year)
     document.getElementById('project-rent-mw').value = overrides.rentMw ?? '';
-    document.getElementById('hint-hpc-rent').textContent = `(default: $${(factors.baseNoiPerMw / 12).toFixed(3)}M)`;
+    document.getElementById('hint-hpc-rent').textContent = `(default: $${factors.baseNoiPerMw.toFixed(2)}M)`;
 
     document.getElementById('project-term').value = overrides.term || '';
     document.getElementById('hint-term').textContent = `(default: ${factors.defaultTerm}y)`;
@@ -1824,6 +1851,9 @@ function updateValuationPreview() {
 
     const overrides = getOverridesFromForm();
     const itMw = overrides.itMw || project.it_mw || 0;
+
+    // Update preview title with site MW
+    document.getElementById('preview-title').textContent = `Live Valuation: ${itMw.toLocaleString()} MW site`;
 
     // Calculate BTC mining value (regardless of site type, for preview purposes)
     const miningVal = calculateBtcMiningValue(project, overrides);

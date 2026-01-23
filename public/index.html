@@ -229,15 +229,18 @@
         }
 
         .btn-tiny {
-            padding: 2px 6px;
-            font-size: 9px;
-            background: #222;
-            border: 1px solid #444;
+            padding: 3px 8px;
+            font-size: 10px;
+            background: #1a1a1a;
+            border: 1px solid #00aaff;
+            color: #00aaff;
+            font-weight: 500;
         }
 
         .btn-tiny:hover {
-            background: #333;
-            border-color: #ff8c00;
+            background: #002244;
+            border-color: #00ddff;
+            color: #00ddff;
         }
 
         input, select {
@@ -1848,7 +1851,7 @@
                         <div class="form-row-3">
                             <div class="form-group">
                                 <label>HPC Rent <span class="default-hint" id="hint-hpc-rent"></span></label>
-                                <input type="number" id="project-rent-mw" step="0.01" placeholder="$M/MW/month">
+                                <input type="number" id="project-rent-mw" step="0.1" placeholder="$M/MW/year">
                             </div>
                             <div class="form-group">
                                 <label>Lease Term <span class="default-hint" id="hint-term"></span></label>
@@ -1977,7 +1980,7 @@
 
                 <!-- Live Valuation Preview - Always Visible Sidebar -->
                 <div class="valuation-preview-sidebar" id="valuation-preview">
-                    <h4>Live Valuation</h4>
+                    <h4 id="preview-title">Live Valuation</h4>
 
                     <div class="preview-section">
                         <div class="preview-section-header btc-header">BTC Mining</div>

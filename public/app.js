@@ -1286,7 +1286,8 @@ async function loadData() {
                     energization_date: p.energization_date,
                     mining_ebitda_annual_m: p.mining_ebitda_annual_m,
                     hpc_conv_prob: p.hpc_conv_prob,
-                    lease_start_date: p.lease_start_date
+                    lease_start_date: p.lease_start_date,
+                    compute_model: p.compute_model  // colo or gpu_cloud
                 }));
                 console.log(`Loaded ${ALL_PROJECTS.length} projects from seed-data.json`);
             }
@@ -2094,72 +2095,86 @@ function updateValuationPreview() {
     const overrides = getOverridesFromForm();
     const itMw = overrides.itMw || project.it_mw || 0;
 
-    // Update preview title with site MW
-    document.getElementById('preview-title').textContent = `Live Valuation: ${itMw.toLocaleString()} MW site`;
+    // Use the actual valuation function to get correct value
+    const valuation = calculateProjectValue(project, overrides);
+    const c = valuation.components;
 
-    // Calculate BTC mining value (regardless of site type, for preview purposes)
-    const miningVal = calculateBtcMiningValue(project, overrides);
+    // Update preview title with site type and MW
+    const siteType = valuation.isBtcSite ? 'BTC Mining' : 'HPC Lease';
+    document.getElementById('preview-title').textContent = `${siteType}: ${itMw.toLocaleString()} MW`;
 
-    // Calculate HPC conversion value
-    const conversionVal = calculateHpcConversionValue(project, overrides);
+    // Get DOM elements
+    const btcSection = document.getElementById('preview-btc-section');
+    const hpcSection = document.getElementById('preview-hpc-section');
 
-    // Get conversion probability
-    const convProb = (overrides.conversionProbability ?? 50) / 100;
-    const hasConversionDate = !!overrides.hpcConversionDate;
+    const hpcHeader = document.getElementById('preview-hpc-header');
 
-    // === BTC Mining Section ===
-    document.getElementById('preview-mining-ebitda').textContent = '$' + formatNumber(miningVal.ebitda || 0, 1) + 'M/yr';
-    document.getElementById('preview-mining-multiple').textContent = (miningVal.ebitdaMultiple || 0).toFixed(1) + 'x';
+    if (valuation.isBtcSite) {
+        // === BTC Mining Site ===
+        btcSection.style.display = 'block';
+        hpcHeader.textContent = 'HPC Conversion Option';
 
-    if (miningVal.isPerpetual || !hasConversionDate) {
-        document.getElementById('preview-mining-period').textContent = 'Perpetual';
+        document.getElementById('preview-mining-ebitda').textContent = '$' + formatNumber(c.ebitda || 0, 1) + 'M/yr';
+        document.getElementById('preview-mining-multiple').textContent = (c.ebitdaMultiple || 0).toFixed(1) + 'x';
+
+        if (c.isPerpetual || !c.hpcConversionDate) {
+            document.getElementById('preview-mining-period').textContent = 'Perpetual';
+        } else {
+            const years = c.yearsToConv || 0;
+            document.getElementById('preview-mining-period').textContent = years.toFixed(1) + ' years';
+        }
+
+        document.getElementById('preview-mining-value').textContent = '$' + formatNumber(c.miningValue || 0, 1) + 'M';
+        document.getElementById('preview-btc-value').textContent = '$' + formatNumber(c.miningValue || 0, 1) + 'M';
+
+        // HPC Conversion Option (for BTC sites)
+        hpcSection.style.display = 'block';
+        if (c.hpcConversionDate) {
+            const convDate = new Date(c.hpcConversionDate + 'T00:00:00Z');
+            const dateStr = convDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            document.getElementById('preview-conv-date').textContent = dateStr;
+        } else {
+            document.getElementById('preview-conv-date').textContent = 'Never';
+        }
+
+        const convProb = overrides.conversionProbability ? overrides.conversionProbability / 100 : (project.hpc_conv_prob || 0.5);
+        document.getElementById('preview-conv-prob').textContent = (convProb * 100).toFixed(0) + '%';
+        document.getElementById('preview-hpc-noi').textContent = '$' + formatNumber(c.conversionComponents?.noi || 0, 1) + 'M/yr';
+        document.getElementById('preview-cap').textContent = ((c.conversionComponents?.capEff || 0) * 100).toFixed(1) + '%';
+        document.getElementById('hint-cap-rate').textContent = 'Effective: ' + ((c.conversionComponents?.capEff || 0) * 100).toFixed(1) + '%';
+        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(2);
+        document.getElementById('preview-hpc-option').textContent = '$' + formatNumber(c.conversionValue || 0, 1) + 'M';
+        document.getElementById('preview-hpc-value').textContent = '$' + formatNumber(c.conversionValue || 0, 1) + 'M';
+
+        // Total for BTC site
+        document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+        if (c.conversionValue > 0) {
+            document.getElementById('preview-breakdown').textContent =
+                `$${formatNumber(c.miningValue || 0, 1)}M mining + $${formatNumber(c.conversionValue || 0, 1)}M HPC option`;
+        } else {
+            document.getElementById('preview-breakdown').textContent = 'BTC mining only';
+        }
     } else {
-        const years = miningVal.yearsToConv || 0;
-        document.getElementById('preview-mining-period').textContent = years.toFixed(1) + ' years';
-    }
+        // === HPC Lease Site ===
+        btcSection.style.display = 'none';
+        hpcSection.style.display = 'block';
 
-    document.getElementById('preview-mining-value').textContent = '$' + formatNumber(miningVal.value || 0, 1) + 'M';
-    document.getElementById('preview-btc-value').textContent = '$' + formatNumber(miningVal.value || 0, 1) + 'M';
+        const isGpuCloud = (c.fCompute || 1) > 1;
+        hpcHeader.textContent = isGpuCloud ? 'GPU Cloud Valuation' : 'HPC Lease Valuation';
 
-    // === HPC Conversion Section ===
-    if (hasConversionDate) {
-        const convDate = new Date(overrides.hpcConversionDate);
-        const dateStr = convDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        document.getElementById('preview-conv-date').textContent = dateStr;
-    } else {
-        document.getElementById('preview-conv-date').textContent = 'Never';
-    }
+        // Show HPC values - hide conversion-specific rows
+        document.getElementById('preview-conv-date').textContent = '-';
+        document.getElementById('preview-conv-prob').textContent = '-';
+        document.getElementById('preview-hpc-noi').textContent = '$' + formatNumber(c.noi || 0, 1) + 'M/yr';
+        document.getElementById('preview-cap').textContent = ((c.capEff || 0) * 100).toFixed(1) + '%';
+        document.getElementById('hint-cap-rate').textContent = 'Effective: ' + ((c.capEff || 0) * 100).toFixed(1) + '%';
+        document.getElementById('preview-fidoodle').textContent = (c.fidoodle || 1).toFixed(2);
+        document.getElementById('preview-hpc-option').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+        document.getElementById('preview-hpc-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
 
-    document.getElementById('preview-conv-prob').textContent = (convProb * 100).toFixed(0) + '%';
-
-    // Calculate HPC NOI for preview
-    const hpcNoi = conversionVal.components?.noi || 0;
-    document.getElementById('preview-hpc-noi').textContent = '$' + formatNumber(hpcNoi, 1) + 'M/yr';
-
-    // Cap rate
-    const capRate = conversionVal.components?.capEff || 0;
-    document.getElementById('preview-cap').textContent = (capRate * 100).toFixed(1) + '%';
-    document.getElementById('hint-cap-rate').textContent = 'Effective: ' + (capRate * 100).toFixed(1) + '%';
-
-    // Fidoodle
-    const fidoodle = conversionVal.components?.fidoodle || factors.fidoodleDefault;
-    document.getElementById('preview-fidoodle').textContent = fidoodle.toFixed(2);
-
-    // HPC option value (probability-weighted)
-    const hpcOptionValue = hasConversionDate ? conversionVal.value * convProb : 0;
-    document.getElementById('preview-hpc-option').textContent = '$' + formatNumber(hpcOptionValue, 1) + 'M';
-    document.getElementById('preview-hpc-value').textContent = '$' + formatNumber(hpcOptionValue, 1) + 'M';
-
-    // === Total Value ===
-    const totalValue = miningVal.value + hpcOptionValue;
-    document.getElementById('preview-value').textContent = '$' + formatNumber(totalValue, 1) + 'M';
-
-    // Breakdown text
-    if (hasConversionDate && hpcOptionValue > 0) {
-        document.getElementById('preview-breakdown').textContent =
-            `$${formatNumber(miningVal.value, 1)}M mining + $${formatNumber(hpcOptionValue, 1)}M HPC (${(convProb * 100).toFixed(0)}% prob)`;
-    } else {
-        document.getElementById('preview-breakdown').textContent = 'BTC mining only (no conversion set)';
+        // Total for HPC site
+        document.getElementById('preview-value').textContent = '$' + formatNumber(valuation.value, 1) + 'M';
+        document.getElementById('preview-breakdown').textContent = isGpuCloud ? 'GPU Cloud valuation' : 'HPC Lease valuation';
     }
 }
 

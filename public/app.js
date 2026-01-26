@@ -998,6 +998,7 @@ function calculateProjectValue(project, overrides = {}) {
             fTenant: fTenant,
             fSize: fSize,
             fLocation: fLocation,
+            fCompute: fCompute,
             combinedMult: combinedMult,
             fidoodle: fidoodle,
             baseValue: baseValue
@@ -1841,6 +1842,7 @@ function renderProjectsTable() {
                                     <div class="mult-item"><span class="mult-label">Tenant:</span> <span class="mult-value">${(c.fTenant || 1).toFixed(2)}</span></div>
                                     <div class="mult-item"><span class="mult-label">Size:</span> <span class="mult-value">${(c.fSize || 1).toFixed(2)}</span></div>
                                     <div class="mult-item"><span class="mult-label">Location:</span> <span class="mult-value">${(c.fLocation || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Compute:</span> <span class="mult-value">${(c.fCompute || 1).toFixed(2)}</span></div>
                                 </div>
                             </div>
                             <div class="valuation-total">
@@ -2001,10 +2003,10 @@ function openProjectModal(project) {
     document.getElementById('project-grid').value = project.grid || '';
     document.getElementById('project-it-mw').value = itMw || '';
 
-    // Country multiplier
-    const countryMult = getCountryMultiplier(project.country);
-    document.getElementById('project-country-mult').value = overrides.countryMult || '';
-    document.getElementById('hint-country-mult').textContent = `(default: ${countryMult.toFixed(2)})`;
+    // Location multiplier
+    const locationMult = getLocationMultiplier(project.country, project.grid);
+    document.getElementById('project-country-mult').value = overrides.locationMult || '';
+    document.getElementById('hint-country-mult').textContent = `(default: ${locationMult.toFixed(2)})`;
 
     // BTC Mining section
     const defaultMiningEbitda = factors.btcMining.ebitdaPerMw * itMw;
@@ -2047,11 +2049,10 @@ function openProjectModal(project) {
 
     // Advanced overrides
     document.getElementById('project-lease-type').value = overrides.leaseType || '';
-    document.getElementById('project-concentration').value = overrides.concentration || '';
+    document.getElementById('project-concentration').value = overrides.tenantMult || '';
     document.getElementById('project-ownership').value = overrides.ownership || '';
     document.getElementById('project-build-status').value = overrides.buildStatus || '';
     document.getElementById('project-size-mult').value = overrides.sizeMult || '';
-    document.getElementById('project-grid-mult').value = overrides.gridMult || '';
     document.getElementById('project-noi').value = overrides.noi || '';
 
     updateValuationPreview();
@@ -2145,7 +2146,7 @@ function getOverridesFromForm() {
     return {
         // Site basics
         itMw: parseFloatOrNull(document.getElementById('project-it-mw').value),
-        countryMult: parseFloatOrNull(document.getElementById('project-country-mult').value),
+        locationMult: parseFloatOrNull(document.getElementById('project-country-mult').value),
 
         // BTC Mining
         miningEbitdaAnnualM: parseFloatOrNull(document.getElementById('project-mining-ebitda').value),
@@ -2164,11 +2165,10 @@ function getOverridesFromForm() {
 
         // Advanced overrides
         leaseType: document.getElementById('project-lease-type').value || null,
-        concentration: document.getElementById('project-concentration').value || null,
+        tenantMult: parseFloatOrNull(document.getElementById('project-concentration').value),
         ownership: document.getElementById('project-ownership').value || null,
         buildStatus: document.getElementById('project-build-status').value || null,
         sizeMult: parseFloatOrNull(document.getElementById('project-size-mult').value),
-        gridMult: parseFloatOrNull(document.getElementById('project-grid-mult').value),
         noi: parseFloatOrNull(document.getElementById('project-noi').value)
     };
 }

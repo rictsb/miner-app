@@ -1143,148 +1143,131 @@
             font-size: 11px;
         }
 
-        /* Waterfall chart visualization */
-        .waterfall-container {
-            display: flex;
-            gap: 20px;
-            margin: 15px 0;
+        /* Simple valuation display */
+        .simple-valuation {
+            padding: 10px 0;
         }
 
-        .waterfall-chart {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .waterfall-bar-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            height: 28px;
-        }
-
-        .waterfall-label {
-            width: 120px;
-            font-size: 11px;
-            color: #888;
-            flex-shrink: 0;
-        }
-
-        .waterfall-bar-track {
-            flex: 1;
-            height: 20px;
-            background: #1a1a1a;
-            border-radius: 3px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .waterfall-bar {
-            height: 100%;
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 8px;
-            font-size: 11px;
-            font-family: 'Roboto Mono', monospace;
-            color: #fff;
-            min-width: 60px;
-            transition: width 0.3s ease;
-        }
-
-        .waterfall-bar.base { background: linear-gradient(90deg, #2a4a2a, #3a6a3a); }
-        .waterfall-bar.positive { background: linear-gradient(90deg, #2a4a6a, #3a6a9a); }
-        .waterfall-bar.negative { background: linear-gradient(90deg, #6a3a3a, #9a4a4a); }
-        .waterfall-bar.multiply { background: linear-gradient(90deg, #4a3a6a, #6a4a9a); }
-        .waterfall-bar.result { background: linear-gradient(90deg, #4a6a3a, #00ff00); }
-
-        .waterfall-value {
-            width: 80px;
-            text-align: right;
-            font-size: 12px;
-            font-family: 'Roboto Mono', monospace;
-            color: #ff8c00;
-            flex-shrink: 0;
-            margin-left: 10px;
-        }
-
-        .waterfall-section {
-            margin-bottom: 20px;
-        }
-
-        .waterfall-section-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: #ff8c00;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #333;
-        }
-
-        .waterfall-section-title.hpc { color: #00aaff; border-color: #00aaff33; }
-        .waterfall-section-title.btc { color: #ffaa00; border-color: #ffaa0033; }
-
-        .waterfall-summary {
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 15px;
-        }
-
-        .waterfall-summary-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            font-size: 12px;
-        }
-
-        .waterfall-summary-row.total {
-            border-top: 1px solid #444;
-            margin-top: 8px;
-            padding-top: 12px;
-            font-weight: 600;
-        }
-
-        .waterfall-summary-label { color: #888; }
-        .waterfall-summary-value {
-            font-family: 'Roboto Mono', monospace;
-            color: #fff;
-        }
-        .waterfall-summary-value.positive { color: #00ff00; }
-        .waterfall-summary-value.hpc { color: #00aaff; }
-        .waterfall-summary-value.btc { color: #ffaa00; }
-
-        /* Side panel for quick stats */
-        .valuation-side-panel {
-            width: 200px;
-            flex-shrink: 0;
+        .formula-box {
             background: #0a0a0a;
             border: 1px solid #333;
             border-radius: 4px;
-            padding: 15px;
+            padding: 12px 15px;
+            margin-bottom: 15px;
         }
 
-        .side-panel-stat {
-            margin-bottom: 12px;
-        }
-
-        .side-panel-stat-label {
-            font-size: 10px;
-            color: #666;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .side-panel-stat-value {
-            font-size: 16px;
+        .formula-equation {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
             font-family: 'Roboto Mono', monospace;
-            color: #ff8c00;
+            font-size: 13px;
         }
 
-        .side-panel-stat-value.large {
-            font-size: 20px;
+        .formula-part {
+            background: #1a1a1a;
+            padding: 4px 10px;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        .formula-part .formula-label {
+            color: #888;
+            font-size: 10px;
+            margin-right: 6px;
+        }
+
+        .formula-op {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .formula-result {
             color: #00ff00;
+            font-weight: 600;
+            font-size: 15px;
+            padding: 4px 12px;
+            background: #1a2a1a;
+            border-radius: 4px;
+        }
+
+        .formula-result.btc { color: #ffaa00; background: #2a2a1a; }
+        .formula-result.hpc { color: #00aaff; background: #1a1a2a; }
+
+        /* Value bar visualization */
+        .value-bar-container {
+            margin: 15px 0;
+        }
+
+        .value-bar-wrapper {
+            display: flex;
+            height: 32px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        .value-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .value-bar.btc-bar {
+            background: linear-gradient(90deg, #8a5a00, #ffaa00);
+        }
+
+        .value-bar.hpc-bar {
+            background: linear-gradient(90deg, #005a8a, #00aaff);
+        }
+
+        .value-bar.gpu-bar {
+            background: linear-gradient(90deg, #5a008a, #aa00ff);
+        }
+
+        .value-bar-label {
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .value-bar-total {
+            text-align: right;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .value-bar-total strong {
+            color: #00ff00;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Multiplier chips */
+        .multiplier-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .mult-chip {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            color: #888;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .mult-chip.gpu {
+            border-color: #aa00ff55;
+            color: #aa00ff;
         }
 
         .edit-project-btn {

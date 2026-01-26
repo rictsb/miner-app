@@ -1029,125 +1029,58 @@ function calculateProjectValue(project, overrides = {}) {
 }
 
 // ============================================================
-// WATERFALL CHART VISUALIZATION
+// SIMPLE VALUE BREAKDOWN VISUALIZATION
 // ============================================================
 
 /**
- * Generate a waterfall bar HTML
- * @param {string} label - Row label
- * @param {number} value - Display value
- * @param {number} percent - Bar width percentage (0-100)
- * @param {string} type - Bar type: 'base', 'positive', 'negative', 'multiply', 'result'
- * @param {string} format - Value format: 'currency', 'percent', 'multiple', 'number'
- */
-function waterfallBar(label, value, percent, type = 'base', format = 'currency') {
-    let displayValue;
-    switch (format) {
-        case 'currency': displayValue = '$' + formatNumber(value, 1) + 'M'; break;
-        case 'percent': displayValue = (value * 100).toFixed(1) + '%'; break;
-        case 'multiple': displayValue = value.toFixed(2) + 'x'; break;
-        default: displayValue = formatNumber(value, 2);
-    }
-
-    return `
-        <div class="waterfall-bar-container">
-            <span class="waterfall-label">${label}</span>
-            <div class="waterfall-bar-track">
-                <div class="waterfall-bar ${type}" style="width: ${Math.max(5, Math.min(100, percent))}%">
-                    ${percent > 20 ? displayValue : ''}
-                </div>
-            </div>
-            <span class="waterfall-value">${displayValue}</span>
-        </div>
-    `;
-}
-
-/**
- * Generate HPC waterfall visualization
+ * Generate simple HPC valuation display
  */
 function generateHpcWaterfall(project, valuation, components) {
     const c = components;
     const finalValue = valuation.value;
-
-    // Calculate intermediate values for visualization
-    const baseValue = c.noi / c.capEff;  // NOI / Cap Rate
-    const afterTerm = baseValue * c.termFactor;
-    const afterMult = afterTerm * c.combinedMult;
-
-    // Calculate percentages relative to final value for bar widths
-    const maxVal = Math.max(baseValue, afterTerm, afterMult, finalValue);
+    const isGpuCloud = (c.fCompute || 1) > 1;
 
     return `
-        <div class="waterfall-container">
-            <div class="waterfall-chart">
-                <div class="waterfall-section">
-                    <div class="waterfall-section-title hpc">Step 1: Base Value (NOI ÷ Cap Rate)</div>
-                    ${waterfallBar('NOI / Year', c.noi, (c.noi / c.baseNoiPerMw / (project.it_mw || 100)) * 100, 'base', 'currency')}
-                    ${waterfallBar('Cap Rate', c.capEff, c.capEff * 100 / 0.15, 'multiply', 'percent')}
-                    ${waterfallBar('= Base Value', baseValue, (baseValue / maxVal) * 100, 'result', 'currency')}
-                </div>
-
-                <div class="waterfall-section">
-                    <div class="waterfall-section-title hpc">Step 2: Term Adjustment</div>
-                    ${waterfallBar('Term Factor', c.termFactor, c.termFactor * 100, 'multiply', 'multiple')}
-                    ${waterfallBar('= After Term', afterTerm, (afterTerm / maxVal) * 100, 'result', 'currency')}
-                </div>
-
-                <div class="waterfall-section">
-                    <div class="waterfall-section-title hpc">Step 3: Quality Multipliers</div>
-                    ${waterfallBar('Credit', c.fCredit, c.fCredit * 50, c.fCredit >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${waterfallBar('Build Status', c.fBuild, c.fBuild * 100, c.fBuild >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${waterfallBar('Tenant', c.fTenant, c.fTenant * 50, c.fTenant >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${waterfallBar('Size', c.fSize, c.fSize * 50, c.fSize >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${waterfallBar('Location', c.fLocation, c.fLocation * 50, c.fLocation >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${c.fCompute !== 1 ? waterfallBar('Compute Model', c.fCompute, c.fCompute * 50, 'positive', 'multiple') : ''}
-                    ${waterfallBar('Combined', c.combinedMult, c.combinedMult * 50, c.combinedMult >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${waterfallBar('= After Mult', afterMult, (afterMult / maxVal) * 100, 'result', 'currency')}
-                </div>
-
-                <div class="waterfall-section">
-                    <div class="waterfall-section-title hpc">Step 4: Fidoodle Adjustment</div>
-                    ${waterfallBar('Fidoodle', c.fidoodle, c.fidoodle * 50, c.fidoodle >= 1 ? 'positive' : 'negative', 'multiple')}
-                    ${waterfallBar('= FINAL VALUE', finalValue, 100, 'result', 'currency')}
+        <div class="simple-valuation">
+            <div class="formula-box">
+                <div class="formula-equation">
+                    <span class="formula-part"><span class="formula-label">NOI</span> $${formatNumber(c.noi, 1)}M</span>
+                    <span class="formula-op">÷</span>
+                    <span class="formula-part"><span class="formula-label">Cap</span> ${(c.capEff * 100).toFixed(1)}%</span>
+                    <span class="formula-op">×</span>
+                    <span class="formula-part"><span class="formula-label">Term</span> ${c.termFactor.toFixed(2)}</span>
+                    <span class="formula-op">×</span>
+                    <span class="formula-part"><span class="formula-label">Mult</span> ${c.combinedMult.toFixed(2)}</span>
+                    <span class="formula-op">×</span>
+                    <span class="formula-part"><span class="formula-label">Fidoodle</span> ${c.fidoodle.toFixed(2)}</span>
+                    <span class="formula-op">=</span>
+                    <span class="formula-result">$${formatNumber(finalValue, 1)}M</span>
                 </div>
             </div>
 
-            <div class="valuation-side-panel">
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">IT Capacity</div>
-                    <div class="side-panel-stat-value">${Math.round(project.it_mw || 0)} MW</div>
+            <div class="value-bar-container">
+                <div class="value-bar-wrapper">
+                    <div class="value-bar hpc-bar" style="width: 100%;">
+                        <span class="value-bar-label">${isGpuCloud ? 'GPU Cloud' : 'HPC Lease'}: $${formatNumber(finalValue, 1)}M</span>
+                    </div>
                 </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">Tenant</div>
-                    <div class="side-panel-stat-value" style="font-size: 14px;">${project.lessee || 'TBD'}</div>
-                </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">Status</div>
-                    <div class="side-panel-stat-value" style="font-size: 14px;">${project.status}</div>
-                </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">NOI/MW/Year</div>
-                    <div class="side-panel-stat-value">$${formatNumber(c.baseNoiPerMw || 0, 2)}M</div>
-                </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">Effective Cap</div>
-                    <div class="side-panel-stat-value">${(c.capEff * 100).toFixed(1)}%</div>
-                </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">Value / MW</div>
-                    <div class="side-panel-stat-value">$${formatNumber(finalValue / (project.it_mw || 1), 1)}M</div>
-                </div>
-                <div class="side-panel-stat" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
-                    <div class="side-panel-stat-label">TOTAL VALUE</div>
-                    <div class="side-panel-stat-value large">$${formatNumber(finalValue, 1)}M</div>
-                </div>
+                <div class="value-bar-total">Total: <strong>$${formatNumber(finalValue, 1)}M</strong></div>
+            </div>
+
+            <div class="multiplier-summary">
+                <span class="mult-chip">Credit ${c.fCredit.toFixed(2)}</span>
+                <span class="mult-chip">Build ${c.fBuild.toFixed(2)}</span>
+                <span class="mult-chip">Tenant ${c.fTenant.toFixed(2)}</span>
+                <span class="mult-chip">Size ${c.fSize.toFixed(2)}</span>
+                <span class="mult-chip">Location ${c.fLocation.toFixed(2)}</span>
+                ${isGpuCloud ? `<span class="mult-chip gpu">Compute ${c.fCompute.toFixed(2)}</span>` : ''}
             </div>
         </div>
     `;
 }
 
 /**
- * Generate BTC Mining waterfall visualization
+ * Generate simple BTC Mining valuation display
  */
 function generateBtcWaterfall(project, valuation, components) {
     const c = components;
@@ -1155,93 +1088,41 @@ function generateBtcWaterfall(project, valuation, components) {
     const miningValue = c.miningValue || 0;
     const conversionValue = c.conversionValue || 0;
 
-    const maxVal = Math.max(miningValue, conversionValue, finalValue, c.perpetualMiningValue || miningValue);
+    // Calculate bar percentages
+    const total = miningValue + conversionValue;
+    const miningPct = total > 0 ? (miningValue / total) * 100 : 100;
+    const hpcPct = total > 0 ? (conversionValue / total) * 100 : 0;
 
-    let html = `
-        <div class="waterfall-container">
-            <div class="waterfall-chart">
-                <div class="waterfall-section">
-                    <div class="waterfall-section-title btc">BTC Mining Value</div>
-                    ${waterfallBar('EBITDA/Year', c.ebitda || 0, 50, 'base', 'currency')}
-                    ${waterfallBar('Multiple', c.ebitdaMultiple || 0, (c.ebitdaMultiple || 0) * 15, 'multiply', 'multiple')}
-                    ${waterfallBar('Location', c.fLocation || 1, (c.fLocation || 1) * 50, c.fLocation >= 1 ? 'positive' : 'negative', 'multiple')}
-    `;
-
-    // If there's a conversion date, show truncation
-    if (c.hpcConversionDate && !c.isPerpetual) {
-        const convDateDisplay = new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        html += `
-                    ${waterfallBar('Perpetual Value', c.perpetualMiningValue || 0, (c.perpetualMiningValue / maxVal) * 100, 'base', 'currency')}
-                    ${waterfallBar('Truncated to ' + convDateDisplay, miningValue, (miningValue / maxVal) * 100, 'negative', 'currency')}
-        `;
-    }
-
-    html += `
-                    ${waterfallBar('= Mining Value', miningValue, (miningValue / maxVal) * 100, 'result', 'currency')}
+    return `
+        <div class="simple-valuation">
+            <div class="formula-box">
+                <div class="formula-equation">
+                    <span class="formula-part"><span class="formula-label">EBITDA</span> $${formatNumber(c.ebitda || 0, 1)}M</span>
+                    <span class="formula-op">×</span>
+                    <span class="formula-part"><span class="formula-label">Multiple</span> ${(c.ebitdaMultiple || 0).toFixed(1)}x</span>
+                    <span class="formula-op">×</span>
+                    <span class="formula-part"><span class="formula-label">Location</span> ${(c.fLocation || 1).toFixed(2)}</span>
+                    <span class="formula-op">=</span>
+                    <span class="formula-result btc">$${formatNumber(miningValue, 1)}M</span>
                 </div>
-    `;
-
-    // HPC Conversion Option section (if applicable)
-    if (conversionValue > 0) {
-        const convYear = c.conversionYear || '?';
-        const convDiscount = c.conversionDiscount || 0;
-        const potentialValue = c.potentialHpcValue || 0;
-
-        html += `
-                <div class="waterfall-section">
-                    <div class="waterfall-section-title hpc">HPC Conversion Option (${convYear})</div>
-                    ${waterfallBar('Potential HPC Value', potentialValue, (potentialValue / maxVal) * 50, 'base', 'currency')}
-                    ${waterfallBar('Discount Factor', convDiscount, convDiscount * 100, 'negative', 'multiple')}
-                    ${waterfallBar('= Option Value', conversionValue, (conversionValue / maxVal) * 100, 'result', 'currency')}
+                ${conversionValue > 0 ? `
+                <div class="formula-equation" style="margin-top: 8px;">
+                    <span class="formula-part"><span class="formula-label">HPC Option (${c.conversionYear})</span></span>
+                    <span class="formula-op">+</span>
+                    <span class="formula-result hpc">$${formatNumber(conversionValue, 1)}M</span>
                 </div>
-        `;
-    }
-
-    html += `
-                <div class="waterfall-summary">
-                    <div class="waterfall-summary-row">
-                        <span class="waterfall-summary-label">BTC Mining Value</span>
-                        <span class="waterfall-summary-value btc">$${formatNumber(miningValue, 1)}M</span>
-                    </div>
-                    ${conversionValue > 0 ? `
-                    <div class="waterfall-summary-row">
-                        <span class="waterfall-summary-label">HPC Option Value</span>
-                        <span class="waterfall-summary-value hpc">$${formatNumber(conversionValue, 1)}M</span>
-                    </div>
-                    ` : ''}
-                    <div class="waterfall-summary-row total">
-                        <span class="waterfall-summary-label">TOTAL SITE VALUE</span>
-                        <span class="waterfall-summary-value positive">$${formatNumber(finalValue, 1)}M</span>
-                    </div>
-                </div>
+                ` : ''}
             </div>
 
-            <div class="valuation-side-panel">
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">IT Capacity</div>
-                    <div class="side-panel-stat-value">${Math.round(project.it_mw || 0)} MW</div>
+            <div class="value-bar-container">
+                <div class="value-bar-wrapper">
+                    ${miningValue > 0 ? `<div class="value-bar btc-bar" style="width: ${miningPct}%;"><span class="value-bar-label">BTC: $${formatNumber(miningValue, 1)}M</span></div>` : ''}
+                    ${conversionValue > 0 ? `<div class="value-bar hpc-bar" style="width: ${hpcPct}%;"><span class="value-bar-label">HPC: $${formatNumber(conversionValue, 1)}M</span></div>` : ''}
                 </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">Current Use</div>
-                    <div class="side-panel-stat-value" style="font-size: 14px;">${project.current_use || 'BTC'}</div>
-                </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">HPC Conversion</div>
-                    <div class="side-panel-stat-value" style="font-size: 14px;">${c.hpcConversionDate ? new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Never'}</div>
-                </div>
-                <div class="side-panel-stat">
-                    <div class="side-panel-stat-label">EBITDA/MW/Year</div>
-                    <div class="side-panel-stat-value">$${formatNumber((c.ebitda || 0) / (project.it_mw || 1), 2)}M</div>
-                </div>
-                <div class="side-panel-stat" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
-                    <div class="side-panel-stat-label">TOTAL VALUE</div>
-                    <div class="side-panel-stat-value large">$${formatNumber(finalValue, 1)}M</div>
-                </div>
+                <div class="value-bar-total">Total: <strong>$${formatNumber(finalValue, 1)}M</strong></div>
             </div>
         </div>
     `;
-
-    return html;
 }
 
 // ============================================================
@@ -1969,22 +1850,23 @@ function renderProjectsTable() {
         expandedTr.className = `expanded-content project-details-row ${isExpanded ? 'show' : ''}`;
         expandedTr.dataset.projectId = project.id;
 
-        // Generate waterfall visualization based on site type
-        const waterfallHtml = valuation.isBtcSite
+        // Generate simple valuation breakdown based on site type
+        const valuationHtml = valuation.isBtcSite
             ? generateBtcWaterfall(project, valuation, c)
             : generateHpcWaterfall(project, valuation, c);
+
+        const isGpuCloud = (c.fCompute || 1) > 1;
+        const siteType = valuation.isBtcSite ? 'BTC Mining' : (isGpuCloud ? 'GPU Cloud' : 'HPC Lease');
+        const siteColor = valuation.isBtcSite ? '#ffaa00' : (isGpuCloud ? '#aa00ff' : '#00aaff');
 
         expandedTr.innerHTML = `
             <td colspan="13">
                 <div class="valuation-details">
-                    <h4 style="color: ${valuation.isBtcSite ? '#ffaa00' : '#00aaff'}; margin-bottom: 15px;">
-                        ${valuation.isBtcSite ? 'BTC Mining Site Valuation' : 'HPC Lease Valuation'}
-                        <span style="font-weight: normal; color: #666; font-size: 12px; margin-left: 10px;">
-                            ${project.name} (${Math.round(project.it_mw || 0)} MW)
-                        </span>
+                    <h4 style="color: ${siteColor}; margin-bottom: 10px;">
+                        ${siteType} · ${Math.round(project.it_mw || 0)} MW · ${project.lessee || project.current_use || 'Self'}
                     </h4>
-                    ${waterfallHtml}
-                    <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+                    ${valuationHtml}
+                    <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
                         <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">
                             ${valuation.isBtcSite ? 'Edit Conversion Date & Terms' : 'Edit All Overrides'}
                         </button>

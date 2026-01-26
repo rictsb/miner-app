@@ -1902,14 +1902,8 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Concentration</label>
-                                <select id="project-concentration">
-                                    <option value="">Auto</option>
-                                    <option value="multi">Multi-tenant</option>
-                                    <option value="single-hyper">Single Hyperscaler</option>
-                                    <option value="single-ig">Single IG</option>
-                                    <option value="bespoke">Bespoke</option>
-                                </select>
+                                <label>Tenant Mult Override</label>
+                                <input type="number" id="project-concentration" step="0.05" min="0" max="2" placeholder="Auto from tenant">
                             </div>
                             <div class="form-group">
                                 <label>Ownership</label>
@@ -1919,6 +1913,14 @@
                                     <option value="ground">Ground Lease</option>
                                     <option value="jv">JV / Partial</option>
                                     <option value="nopower">No Substation</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Compute Model</label>
+                                <select id="project-compute-model">
+                                    <option value="">Auto (colo)</option>
+                                    <option value="colo">Colo (1.00x)</option>
+                                    <option value="gpu_cloud">GPU Cloud (1.75x)</option>
                                 </select>
                             </div>
                         </div>

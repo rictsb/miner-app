@@ -2054,6 +2054,7 @@ function openProjectModal(project) {
     document.getElementById('project-build-status').value = overrides.buildStatus || '';
     document.getElementById('project-size-mult').value = overrides.sizeMult || '';
     document.getElementById('project-noi').value = overrides.noi || '';
+    document.getElementById('project-compute-model').value = overrides.computeModel || project.compute_model || '';
 
     updateValuationPreview();
     modal.classList.add('active');
@@ -2169,7 +2170,8 @@ function getOverridesFromForm() {
         ownership: document.getElementById('project-ownership').value || null,
         buildStatus: document.getElementById('project-build-status').value || null,
         sizeMult: parseFloatOrNull(document.getElementById('project-size-mult').value),
-        noi: parseFloatOrNull(document.getElementById('project-noi').value)
+        noi: parseFloatOrNull(document.getElementById('project-noi').value),
+        computeModel: document.getElementById('project-compute-model').value || null
     };
 }
 

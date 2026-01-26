@@ -1462,7 +1462,7 @@ function renderDashboard() {
         miningMw, miningEV, totalLeaseValue, hodlValue, equityValue, fairValue,
         hasHyperscaler, stockPrice, priceChange, upside }) => {
 
-        // Main row - round values to whole numbers
+        // Main row - round values to whole numbers, units in headers
         const tr = document.createElement('tr');
         tr.className = 'expandable-row';
         tr.dataset.ticker = ticker;
@@ -1473,24 +1473,24 @@ function renderDashboard() {
                 ${hasHyperscaler ? '<span class="hyperscaler-badge">HPC</span>' : ''}
             </td>
             <td class="${priceChange >= 0 ? 'positive' : 'negative'}">$${stockPrice > 0 ? stockPrice.toFixed(2) : '--'}</td>
-            <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? '$' + Math.round(totalLeaseValue) + 'M' : '--'}</td>
+            <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? Math.round(totalLeaseValue).toLocaleString() : '--'}</td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.hodl}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(hodlValue)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(hodlValue).toLocaleString()}</a>
             </td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.cash}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.cash)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.cash).toLocaleString()}</a>
             </td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.debt}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.debt)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.debt).toLocaleString()}</a>
             </td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.shares}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.fdShares)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.fdShares).toLocaleString()}</a>
             </td>
-            <td>${Math.round(miningMw)}</td>
-            <td>${Math.round(contractedMw + pipelineMw)}</td>
-            <td>${Math.round(miningEV)}M</td>
-            <td class="positive">${Math.round(contractedEv)}M</td>
-            <td class="neutral">${Math.round(pipelineEv)}M</td>
+            <td>${Math.round(miningMw).toLocaleString()}</td>
+            <td>${Math.round(contractedMw + pipelineMw).toLocaleString()}</td>
+            <td>${Math.round(miningEV).toLocaleString()}</td>
+            <td class="positive">${Math.round(contractedEv).toLocaleString()}</td>
+            <td class="neutral">${Math.round(pipelineEv).toLocaleString()}</td>
             <td class="positive">$${formatNumber(fairValue, 2)}</td>
             <td class="${upside >= 0 ? 'positive' : 'negative'}">${stockPrice > 0 ? (upside >= 0 ? '+' : '') + upside.toFixed(0) + '%' : '--'}</td>
         `;

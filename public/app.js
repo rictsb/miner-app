@@ -113,12 +113,20 @@ const DEFAULT_FACTORS = {
     // Mining EBITDA cap ($/MW/year) - prevents unrealistic valuations
     miningEbitdaCap: 0.50,  // $0.5M per MW max (vs $0.35M default)
 
-    // Concentration Multipliers
-    concentration: {
-        multi: 1.00,
-        'single-hyper': 0.95,
-        'single-ig': 0.90,
-        bespoke: 0.80
+    // Tenant Multipliers (replaces concentration - can add/remove tenants)
+    tenant: {
+        'Microsoft': 1.10,
+        'CoreWeave': 1.05,
+        'AWS': 1.10,
+        'Google': 1.10,
+        'Meta': 1.05,
+        'Oracle': 1.00,
+        'AMD': 1.00,
+        'Anthropic': 1.00,
+        'Core42': 0.95,
+        'G42': 0.95,
+        'Fluidstack': 0.90,
+        'default': 0.85  // Unknown or unrated tenants
     },
 
     // Size Band Multipliers
@@ -130,29 +138,26 @@ const DEFAULT_FACTORS = {
         0: 0.80
     },
 
-    // Country Multipliers
-    country: {
-        'United States': 1.00,
-        'USA': 1.00,
-        'Canada': 0.90,
-        'Norway': 0.85,
-        'Paraguay': 0.70,
-        'Bhutan': 0.50,
-        'Ethiopia': 0.00,
-        'UAE': 0.80,
-        'Multiple': 0.80
-    },
-
-    // Grid Multipliers
-    grid: {
+    // Location Multipliers (combined country + grid)
+    // US locations use grid, international use country
+    location: {
+        // US Grids
         'ERCOT': 1.05,
         'PJM': 1.00,
         'MISO': 0.95,
         'NYISO': 0.90,
         'SPP': 0.95,
-        'other-us': 0.90,
-        'canada': 0.90,
-        'intl': 0.75
+        'CAISO': 0.90,
+        'USA': 0.95,           // Default for US without specific grid
+        // International
+        'Canada': 0.90,
+        'Norway': 0.85,
+        'Paraguay': 0.70,
+        'UAE': 0.80,
+        'Bhutan': 0.50,
+        'Ethiopia': 0.00,
+        'Multiple': 0.80,
+        'default': 0.75        // Unknown international
     }
 };
 
@@ -436,24 +441,33 @@ function getSizeMultiplier(itMw, override = null) {
 /**
  * Get country multiplier
  */
-function getCountryMultiplier(country, override = null) {
-    if (override !== null && override !== undefined) return override;
-    return factors.country[country] ?? 1.0;
-}
-
 /**
- * Get grid multiplier
+ * Get location multiplier (combined country + grid)
+ * For US locations, use grid if available, otherwise USA default
+ * For international, use country multiplier
  */
-function getGridMultiplier(grid, country, override = null) {
+function getLocationMultiplier(country, grid, override = null) {
     if (override !== null && override !== undefined) return override;
 
-    // Check specific grids
-    if (factors.grid[grid]) return factors.grid[grid];
+    // Normalize country
+    const normalizedCountry = (country === 'United States') ? 'USA' : country;
 
-    // Country-based defaults
-    if (country === 'Canada') return factors.grid['canada'];
-    if (country === 'United States') return factors.grid['other-us'];
-    return factors.grid['intl'];
+    // For US locations, prefer grid-specific multiplier
+    if (normalizedCountry === 'USA') {
+        // Extract grid name from strings like "ERCOT (Texas)" or just "ERCOT"
+        const gridName = grid ? grid.split(/[\s(]/)[0].toUpperCase() : null;
+        if (gridName && factors.location[gridName]) {
+            return factors.location[gridName];
+        }
+        return factors.location['USA'] || 0.95;
+    }
+
+    // For international, use country multiplier
+    if (factors.location[normalizedCountry]) {
+        return factors.location[normalizedCountry];
+    }
+
+    return factors.location['default'] || 0.75;
 }
 
 /**
@@ -518,12 +532,30 @@ function getOwnershipMultiplier(ownership) {
 /**
  * Get concentration multiplier
  */
-function getConcentrationMultiplier(concentration, project) {
-    if (concentration) return factors.concentration[concentration] || 1.0;
-    // Default based on tenant type
-    if (isHyperscaler(project.lessee)) return factors.concentration['single-hyper'];
-    if (project.lessee) return factors.concentration['single-ig'];
-    return factors.concentration.multi;
+/**
+ * Get tenant multiplier based on the lessee
+ * Can be overridden per-project
+ */
+function getTenantMultiplier(lessee, override = null) {
+    if (override !== null && override !== undefined) return override;
+
+    if (!lessee || lessee === 'TBD' || lessee === 'Self') {
+        return factors.tenant['default'] || 0.85;
+    }
+
+    // Check for exact match first
+    if (factors.tenant[lessee]) {
+        return factors.tenant[lessee];
+    }
+
+    // Check for partial match (e.g., "Fluidstack/Google" matches "Fluidstack")
+    for (const tenant in factors.tenant) {
+        if (tenant !== 'default' && lessee.toLowerCase().includes(tenant.toLowerCase())) {
+            return factors.tenant[tenant];
+        }
+    }
+
+    return factors.tenant['default'] || 0.85;
 }
 
 /**
@@ -715,7 +747,7 @@ function calculateBtcMiningValue(project, overrides = {}) {
     }
 
     const ebitdaMultiple = overrides.btcEbitdaMultiple ?? factors.btcMining.ebitdaMultiple;
-    const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
+    const fLocation = getLocationMultiplier(project.country, project.grid, overrides.locationMult);
 
     // Get HPC conversion date (null = never)
     const hpcConversionDate = overrides.hpcConversionDate || null;
@@ -723,21 +755,21 @@ function calculateBtcMiningValue(project, overrides = {}) {
     // Calculate truncated mining value based on conversion date
     const truncation = calculateTruncatedMiningValue(ebitdaAnnual, ebitdaMultiple, hpcConversionDate);
 
-    // Apply country factor
-    const miningValue = truncation.miningValue * fCountry;
+    // Apply location factor
+    const miningValue = truncation.miningValue * fLocation;
 
     return {
         ebitda: ebitdaAnnual,
         ebitdaPerMw: itMw > 0 ? ebitdaAnnual / itMw : 0,
         ebitdaMultiple: ebitdaMultiple,
-        fCountry: fCountry,
+        fLocation: fLocation,
         value: miningValue,
         // Truncation details
         hpcConversionDate: hpcConversionDate,
         yearsToConv: truncation.yearsToConv,
         impliedRate: truncation.impliedRate,
         isPerpetual: truncation.isPerpetual,
-        perpetualValue: ebitdaAnnual * ebitdaMultiple * fCountry
+        perpetualValue: ebitdaAnnual * ebitdaMultiple * fLocation
     };
 }
 
@@ -815,17 +847,16 @@ function calculateHpcConversionValue(project, overrides = {}) {
     const fOwnership = getOwnershipMultiplier(overrides.ownership);
     // Use 'pipeline' build status for future conversion (discounted for not yet built/contracted)
     const fBuild = overrides.buildStatus ? getBuildMultiplier(null, overrides.buildStatus) : factors.build.pipeline;
-    const fConcentration = getConcentrationMultiplier(overrides.concentration, project);
+    const fTenant = getTenantMultiplier(project.lessee, overrides.tenantMult);
     const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
-    const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
-    const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
+    const fLocation = getLocationMultiplier(project.country, project.grid, overrides.locationMult);
     const fCompute = getComputeModelMultiplier(project, overrides.computeModel);
 
     // 6. Get fidoodle
     const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
 
     // 7. Combined multiplier
-    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid * fCompute;
+    const combinedMult = fCredit * fLease * fOwnership * fBuild * fTenant * fSize * fLocation * fCompute;
 
     // 8. Calculate potential HPC value (before time discount)
     const baseValue = capEff > 0 ? noi / capEff : 0;
@@ -849,10 +880,9 @@ function calculateHpcConversionValue(project, overrides = {}) {
             fLease: fLease,
             fOwnership: fOwnership,
             fBuild: fBuild,
-            fConcentration: fConcentration,
+            fTenant: fTenant,
             fSize: fSize,
-            fCountry: fCountry,
-            fGrid: fGrid,
+            fLocation: fLocation,
             combinedMult: combinedMult,
             fidoodle: fidoodle
         }
@@ -893,7 +923,7 @@ function calculateProjectValue(project, overrides = {}) {
                 ebitda: miningVal.ebitda,
                 ebitdaPerMw: miningVal.ebitdaPerMw,
                 ebitdaMultiple: miningVal.ebitdaMultiple,
-                fCountry: miningVal.fCountry,
+                fLocation: miningVal.fLocation,
                 itMw: itMw,
                 // HPC conversion date truncation details
                 hpcConversionDate: miningVal.hpcConversionDate,
@@ -936,17 +966,16 @@ function calculateProjectValue(project, overrides = {}) {
     const fLease = getLeaseMultiplier(overrides.leaseType);
     const fOwnership = getOwnershipMultiplier(overrides.ownership);
     const fBuild = getBuildMultiplier(project.status, overrides.buildStatus, project.current_use);
-    const fConcentration = getConcentrationMultiplier(overrides.concentration, project);
+    const fTenant = getTenantMultiplier(project.lessee, overrides.tenantMult);
     const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
-    const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
-    const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
+    const fLocation = getLocationMultiplier(project.country, project.grid, overrides.locationMult);
     const fCompute = getComputeModelMultiplier(project, overrides.computeModel);
 
     // 6. Get fidoodle
     const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
 
     // 7. Combined multiplier
-    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid * fCompute;
+    const combinedMult = fCredit * fLease * fOwnership * fBuild * fTenant * fSize * fLocation * fCompute;
 
     // 8. Calculate value
     // Value = (NOI / Cap_eff) * TermFactor * CombinedMultipliers * Fidoodle
@@ -966,10 +995,9 @@ function calculateProjectValue(project, overrides = {}) {
             fLease: fLease,
             fOwnership: fOwnership,
             fBuild: fBuild,
-            fConcentration: fConcentration,
+            fTenant: fTenant,
             fSize: fSize,
-            fCountry: fCountry,
-            fGrid: fGrid,
+            fLocation: fLocation,
             combinedMult: combinedMult,
             fidoodle: fidoodle,
             baseValue: baseValue
@@ -1219,7 +1247,7 @@ async function saveData() {
 function renderAll() {
     renderDashboard();
     renderProjectsTable();
-    renderCountryFactors();
+    renderTenantFactors(); renderLocationFactors();
     populateFilters();
 }
 
@@ -1731,7 +1759,7 @@ function renderProjectsTable() {
                                     <span class="formula-op">×</span>
                                     <span class="formula-part">Multiple (${(c.ebitdaMultiple || 0).toFixed(1)}x)</span>
                                     <span class="formula-op">×</span>
-                                    <span class="formula-part">Country (${(c.fCountry || 1).toFixed(2)})</span>
+                                    <span class="formula-part">Location (${(c.fLocation || 1).toFixed(2)})</span>
                                     ${c.isPerpetual ? `
                                     <span class="formula-result">= $${formatNumber(c.miningValue || 0, 1)}M (perpetual)</span>
                                     ` : `
@@ -1810,10 +1838,9 @@ function renderProjectsTable() {
                                     <div class="mult-item"><span class="mult-label">Lease:</span> <span class="mult-value">${(c.fLease || 1).toFixed(2)}</span></div>
                                     <div class="mult-item"><span class="mult-label">Ownership:</span> <span class="mult-value">${(c.fOwnership || 1).toFixed(2)}</span></div>
                                     <div class="mult-item"><span class="mult-label">Build:</span> <span class="mult-value">${(c.fBuild || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Concentration:</span> <span class="mult-value">${(c.fConcentration || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Tenant:</span> <span class="mult-value">${(c.fTenant || 1).toFixed(2)}</span></div>
                                     <div class="mult-item"><span class="mult-label">Size:</span> <span class="mult-value">${(c.fSize || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Country:</span> <span class="mult-value">${(c.fCountry || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Grid:</span> <span class="mult-value">${(c.fGrid || 1).toFixed(2)}</span></div>
+                                    <div class="mult-item"><span class="mult-label">Location:</span> <span class="mult-value">${(c.fLocation || 1).toFixed(2)}</span></div>
                                 </div>
                             </div>
                             <div class="valuation-total">
@@ -2325,12 +2352,6 @@ function saveAllFactors() {
     factors.build.development = parseFloat(document.getElementById('build-development').value);
     factors.build.pipeline = parseFloat(document.getElementById('build-pipeline').value);
 
-    // Concentration
-    factors.concentration.multi = parseFloat(document.getElementById('conc-multi').value);
-    factors.concentration['single-hyper'] = parseFloat(document.getElementById('conc-single-hyper').value);
-    factors.concentration['single-ig'] = parseFloat(document.getElementById('conc-single-ig').value);
-    factors.concentration.bespoke = parseFloat(document.getElementById('conc-bespoke').value);
-
     // Size
     factors.size[500] = parseFloat(document.getElementById('size-500').value);
     factors.size[250] = parseFloat(document.getElementById('size-250').value);
@@ -2338,18 +2359,11 @@ function saveAllFactors() {
     factors.size[50] = parseFloat(document.getElementById('size-50').value);
     factors.size[0] = parseFloat(document.getElementById('size-0').value);
 
-    // Grid
-    factors.grid.ERCOT = parseFloat(document.getElementById('grid-ercot').value);
-    factors.grid.PJM = parseFloat(document.getElementById('grid-pjm').value);
-    factors.grid.MISO = parseFloat(document.getElementById('grid-miso').value);
-    factors.grid.NYISO = parseFloat(document.getElementById('grid-nyiso').value);
-    factors.grid.SPP = parseFloat(document.getElementById('grid-spp').value);
-    factors.grid['other-us'] = parseFloat(document.getElementById('grid-other-us').value);
-    factors.grid.canada = parseFloat(document.getElementById('grid-canada').value);
-    factors.grid.intl = parseFloat(document.getElementById('grid-intl').value);
+    // Save tenant factors from UI
+    saveTenantFactorsFromUI();
 
-    // Save country factors
-    saveCountryFactorsFromUI();
+    // Save location factors from UI
+    saveLocationFactorsFromUI();
 
     saveData();
     renderAll();
@@ -2360,7 +2374,7 @@ function resetAllFactors() {
     if (!confirm('Reset all factors to defaults? This cannot be undone.')) return;
     factors = JSON.parse(JSON.stringify(DEFAULT_FACTORS));
     loadFactorsToUI();
-    renderCountryFactors();
+    renderTenantFactors(); renderLocationFactors();
     saveData();
     renderAll();
     alert('Factors reset to defaults.');
@@ -2369,56 +2383,108 @@ function resetAllFactors() {
 // ============================================================
 // COUNTRY FACTORS
 // ============================================================
-function renderCountryFactors() {
-    const container = document.getElementById('country-factors-container');
+// ============================================================
+// TENANT FACTORS UI
+// ============================================================
+function renderTenantFactors() {
+    const container = document.getElementById('tenant-factors-container');
+    if (!container) return;
     container.innerHTML = '';
 
-    for (const [country, factor] of Object.entries(factors.country)) {
+    for (const [tenant, factor] of Object.entries(factors.tenant)) {
         const div = document.createElement('div');
         div.className = 'factor-row';
         div.innerHTML = `
-            <span class="factor-label">${country}</span>
+            <span class="factor-label">${tenant === 'default' ? 'Default (unknown tenant)' : tenant}</span>
             <div>
-                <input type="number" class="factor-input country-factor-input" data-country="${country}" value="${factor}" step="0.1" min="0" max="2">
+                <input type="number" class="factor-input tenant-factor-input" data-tenant="${tenant}" value="${factor}" step="0.05" min="0" max="2">
                 <span class="factor-unit">x</span>
+                ${tenant !== 'default' ? `<button class="btn-remove" onclick="removeTenantFactor('${tenant}')" title="Remove">×</button>` : ''}
             </div>
         `;
         container.appendChild(div);
     }
 }
 
-function saveCountryFactorsFromUI() {
-    const inputs = document.querySelectorAll('.country-factor-input');
+function saveTenantFactorsFromUI() {
+    const inputs = document.querySelectorAll('.tenant-factor-input');
     inputs.forEach(input => {
-        const country = input.dataset.country;
-        factors.country[country] = parseFloat(input.value);
+        const tenant = input.dataset.tenant;
+        factors.tenant[tenant] = parseFloat(input.value);
     });
 }
 
-function addCountryFactor() {
-    document.getElementById('country-modal').classList.add('active');
-}
+function addTenantFactor() {
+    const name = prompt('Enter tenant name (e.g., "Microsoft", "AWS"):');
+    if (!name || !name.trim()) return;
 
-function closeCountryModal() {
-    document.getElementById('country-modal').classList.remove('active');
-}
+    const factorStr = prompt('Enter multiplier (e.g., 1.05):', '1.00');
+    const factor = parseFloat(factorStr);
+    if (isNaN(factor)) return;
 
-function saveNewCountryFactor() {
-    const name = document.getElementById('new-country-name').value.trim();
-    const factor = parseFloat(document.getElementById('new-country-factor').value);
-
-    if (!name) {
-        alert('Please enter a country name');
-        return;
-    }
-
-    factors.country[name] = factor;
-    renderCountryFactors();
-    closeCountryModal();
+    factors.tenant[name.trim()] = factor;
+    renderTenantFactors();
     saveData();
+}
 
-    document.getElementById('new-country-name').value = '';
-    document.getElementById('new-country-factor').value = '1.0';
+function removeTenantFactor(tenant) {
+    if (confirm(`Remove "${tenant}" from tenant factors?`)) {
+        delete factors.tenant[tenant];
+        renderTenantFactors();
+        saveData();
+    }
+}
+
+// ============================================================
+// LOCATION FACTORS UI
+// ============================================================
+function renderLocationFactors() {
+    const container = document.getElementById('location-factors-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (const [location, factor] of Object.entries(factors.location)) {
+        const div = document.createElement('div');
+        div.className = 'factor-row';
+        div.innerHTML = `
+            <span class="factor-label">${location === 'default' ? 'Default (unknown)' : location}</span>
+            <div>
+                <input type="number" class="factor-input location-factor-input" data-location="${location}" value="${factor}" step="0.05" min="0" max="2">
+                <span class="factor-unit">x</span>
+                ${location !== 'default' ? `<button class="btn-remove" onclick="removeLocationFactor('${location}')" title="Remove">×</button>` : ''}
+            </div>
+        `;
+        container.appendChild(div);
+    }
+}
+
+function saveLocationFactorsFromUI() {
+    const inputs = document.querySelectorAll('.location-factor-input');
+    inputs.forEach(input => {
+        const location = input.dataset.location;
+        factors.location[location] = parseFloat(input.value);
+    });
+}
+
+function addLocationFactor() {
+    const name = prompt('Enter location name (e.g., "ERCOT", "Canada", "Norway"):');
+    if (!name || !name.trim()) return;
+
+    const factorStr = prompt('Enter multiplier (e.g., 0.95):', '1.00');
+    const factor = parseFloat(factorStr);
+    if (isNaN(factor)) return;
+
+    factors.location[name.trim()] = factor;
+    renderLocationFactors();
+    saveData();
+}
+
+function removeLocationFactor(location) {
+    if (confirm(`Remove "${location}" from location factors?`)) {
+        delete factors.location[location];
+        renderLocationFactors();
+        saveData();
+    }
 }
 
 // ============================================================

@@ -859,6 +859,23 @@
             text-align: right;
         }
 
+        .btn-remove {
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            width: 22px;
+            height: 22px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 8px;
+            line-height: 1;
+        }
+
+        .btn-remove:hover {
+            background: #ff6666;
+        }
+
         .factor-unit {
             color: #666;
             font-size: 11px;
@@ -1628,39 +1645,13 @@
                     </div>
                 </div>
 
-                <!-- Concentration Multipliers -->
+                <!-- Tenant Multipliers -->
                 <div class="factors-section">
-                    <h3>Concentration Multipliers (F_concentration)</h3>
-                    <p class="description">Single-tenant re-tenanting risk adjustment</p>
+                    <h3>Tenant Multipliers (F_tenant)</h3>
+                    <p class="description">Credit quality adjustment by tenant. Add/remove tenants as needed.</p>
 
-                    <div class="factor-row">
-                        <span class="factor-label">Multi-tenant / Hyperscale</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conc-multi" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Single Hyperscaler</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conc-single-hyper" value="0.95" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Single IG Tenant</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conc-single-ig" value="0.90" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Bespoke / Non-standard</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conc-bespoke" value="0.80" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
+                    <div id="tenant-factors-container"></div>
+                    <button class="btn btn-small btn-secondary" onclick="addTenantFactor()" style="margin-top: 10px;">+ Add Tenant</button>
                 </div>
 
                 <!-- Size Band Multipliers -->
@@ -1705,76 +1696,13 @@
                     </div>
                 </div>
 
-                <!-- Country Multipliers -->
+                <!-- Location Multipliers (combined Country + Grid) -->
                 <div class="factors-section">
-                    <h3>Country Multipliers (F_country)</h3>
-                    <p class="description">Jurisdictional risk adjustment. Set to 0 to exclude.</p>
+                    <h3>Location Multipliers (F_location)</h3>
+                    <p class="description">US locations use grid (ERCOT, PJM, etc.), international use country. Add/remove as needed.</p>
 
-                    <div id="country-factors-container"></div>
-                    <button class="btn btn-small btn-secondary" onclick="addCountryFactor()" style="margin-top: 10px;">+ Add Country</button>
-                </div>
-
-                <!-- Grid Multipliers -->
-                <div class="factors-section">
-                    <h3>Grid Multipliers (F_grid)</h3>
-                    <p class="description">Power market / interconnection quality</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">ERCOT (Texas)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-ercot" value="1.05" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">PJM</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-pjm" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">MISO</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-miso" value="0.95" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">NYISO</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-nyiso" value="0.90" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">SPP</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-spp" value="0.95" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Other US</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-other-us" value="0.90" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Canada</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-canada" value="0.90" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">International</span>
-                        <div>
-                            <input type="number" class="factor-input" id="grid-intl" value="0.75" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
+                    <div id="location-factors-container"></div>
+                    <button class="btn btn-small btn-secondary" onclick="addLocationFactor()" style="margin-top: 10px;">+ Add Location</button>
                 </div>
             </div>
         </div>

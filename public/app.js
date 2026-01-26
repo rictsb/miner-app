@@ -1,4 +1,4 @@
-// BTC Miner Valuation App v7 - Rule-of-Thumb Valuation Engine
+// BTC Miner Valuation App v8 - Rule-of-Thumb Valuation Engine
 // ============================================================
 
 // ============================================================
@@ -604,27 +604,49 @@ function calculateNOI(project, overrides = {}) {
 
 /**
  * Check if project is a BTC mining site (not HPC/AI)
+ * Returns true ONLY for sites that should be valued using BTC mining methodology
  */
 function isBtcMiningOnly(project, overrides = {}) {
     // If it has a hyperscaler tenant, it's HPC
     if (isHyperscaler(project.lessee)) return false;
 
+    // If compute_model is gpu_cloud, it's HPC (not BTC mining)
+    const computeModel = overrides.computeModel || project.compute_model;
+    if (computeModel === 'gpu_cloud') return false;
+
     const use = (project.current_use || '').toLowerCase();
 
-    // If current_use contains AI/HPC, it's not BTC only (unless it's BTC/HPC mixed)
+    // If current_use contains AI/HPC, it's not BTC only
     if (use.includes('ai/hpc') || use.includes('hpc/ai') || use === 'hpc development' || use === 'amd servers') {
+        return false;
+    }
+
+    // If current_use is planned HPC, it's not BTC
+    if (use.includes('(planned)') || use.includes('(option)')) {
         return false;
     }
 
     // If it has stated annual_rev from HPC lease, treat as HPC
     if (project.annual_rev && project.annual_rev > 0 && project.noi_pct) return false;
 
-    // BTC mining, BTC hosting, or BTC/HPC mixed without HPC tenant = BTC mining
-    if (use.includes('btc') || use === 'mixed') return true;
+    // If it has lease_value_m (HPC lease value), treat as HPC
+    if (project.lease_value_m && project.lease_value_m > 0) return false;
 
-    // Under construction, pipeline, planning, power gen - check if it has mining EBITDA
-    if (project.mining_ebitda_annual_m && project.mining_ebitda_annual_m > 0) return true;
+    // BTC mining, BTC hosting = BTC site
+    if (use.includes('btc mining') || use.includes('btc hosting')) return true;
 
+    // BTC/HPC mixed sites - check if they have actual mining EBITDA
+    if (use.includes('btc/hpc') || use === 'mixed') {
+        return project.mining_ebitda_annual_m && project.mining_ebitda_annual_m > 0;
+    }
+
+    // Sites with explicit mining EBITDA and BTC-related use = BTC
+    if (project.mining_ebitda_annual_m && project.mining_ebitda_annual_m > 0) {
+        // Only treat as BTC if current_use suggests mining
+        if (use.includes('btc') || use === 'mixed' || use.includes('mining')) return true;
+    }
+
+    // Default: sites "Under construction", "Pipeline", etc without BTC indicators = HPC
     return false;
 }
 
@@ -1004,6 +1026,222 @@ function calculateProjectValue(project, overrides = {}) {
             baseValue: baseValue
         }
     };
+}
+
+// ============================================================
+// WATERFALL CHART VISUALIZATION
+// ============================================================
+
+/**
+ * Generate a waterfall bar HTML
+ * @param {string} label - Row label
+ * @param {number} value - Display value
+ * @param {number} percent - Bar width percentage (0-100)
+ * @param {string} type - Bar type: 'base', 'positive', 'negative', 'multiply', 'result'
+ * @param {string} format - Value format: 'currency', 'percent', 'multiple', 'number'
+ */
+function waterfallBar(label, value, percent, type = 'base', format = 'currency') {
+    let displayValue;
+    switch (format) {
+        case 'currency': displayValue = '$' + formatNumber(value, 1) + 'M'; break;
+        case 'percent': displayValue = (value * 100).toFixed(1) + '%'; break;
+        case 'multiple': displayValue = value.toFixed(2) + 'x'; break;
+        default: displayValue = formatNumber(value, 2);
+    }
+
+    return `
+        <div class="waterfall-bar-container">
+            <span class="waterfall-label">${label}</span>
+            <div class="waterfall-bar-track">
+                <div class="waterfall-bar ${type}" style="width: ${Math.max(5, Math.min(100, percent))}%">
+                    ${percent > 20 ? displayValue : ''}
+                </div>
+            </div>
+            <span class="waterfall-value">${displayValue}</span>
+        </div>
+    `;
+}
+
+/**
+ * Generate HPC waterfall visualization
+ */
+function generateHpcWaterfall(project, valuation, components) {
+    const c = components;
+    const finalValue = valuation.value;
+
+    // Calculate intermediate values for visualization
+    const baseValue = c.noi / c.capEff;  // NOI / Cap Rate
+    const afterTerm = baseValue * c.termFactor;
+    const afterMult = afterTerm * c.combinedMult;
+
+    // Calculate percentages relative to final value for bar widths
+    const maxVal = Math.max(baseValue, afterTerm, afterMult, finalValue);
+
+    return `
+        <div class="waterfall-container">
+            <div class="waterfall-chart">
+                <div class="waterfall-section">
+                    <div class="waterfall-section-title hpc">Step 1: Base Value (NOI ÷ Cap Rate)</div>
+                    ${waterfallBar('NOI / Year', c.noi, (c.noi / c.baseNoiPerMw / (project.it_mw || 100)) * 100, 'base', 'currency')}
+                    ${waterfallBar('Cap Rate', c.capEff, c.capEff * 100 / 0.15, 'multiply', 'percent')}
+                    ${waterfallBar('= Base Value', baseValue, (baseValue / maxVal) * 100, 'result', 'currency')}
+                </div>
+
+                <div class="waterfall-section">
+                    <div class="waterfall-section-title hpc">Step 2: Term Adjustment</div>
+                    ${waterfallBar('Term Factor', c.termFactor, c.termFactor * 100, 'multiply', 'multiple')}
+                    ${waterfallBar('= After Term', afterTerm, (afterTerm / maxVal) * 100, 'result', 'currency')}
+                </div>
+
+                <div class="waterfall-section">
+                    <div class="waterfall-section-title hpc">Step 3: Quality Multipliers</div>
+                    ${waterfallBar('Credit', c.fCredit, c.fCredit * 50, c.fCredit >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${waterfallBar('Build Status', c.fBuild, c.fBuild * 100, c.fBuild >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${waterfallBar('Tenant', c.fTenant, c.fTenant * 50, c.fTenant >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${waterfallBar('Size', c.fSize, c.fSize * 50, c.fSize >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${waterfallBar('Location', c.fLocation, c.fLocation * 50, c.fLocation >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${c.fCompute !== 1 ? waterfallBar('Compute Model', c.fCompute, c.fCompute * 50, 'positive', 'multiple') : ''}
+                    ${waterfallBar('Combined', c.combinedMult, c.combinedMult * 50, c.combinedMult >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${waterfallBar('= After Mult', afterMult, (afterMult / maxVal) * 100, 'result', 'currency')}
+                </div>
+
+                <div class="waterfall-section">
+                    <div class="waterfall-section-title hpc">Step 4: Fidoodle Adjustment</div>
+                    ${waterfallBar('Fidoodle', c.fidoodle, c.fidoodle * 50, c.fidoodle >= 1 ? 'positive' : 'negative', 'multiple')}
+                    ${waterfallBar('= FINAL VALUE', finalValue, 100, 'result', 'currency')}
+                </div>
+            </div>
+
+            <div class="valuation-side-panel">
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">IT Capacity</div>
+                    <div class="side-panel-stat-value">${Math.round(project.it_mw || 0)} MW</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">Tenant</div>
+                    <div class="side-panel-stat-value" style="font-size: 14px;">${project.lessee || 'TBD'}</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">Status</div>
+                    <div class="side-panel-stat-value" style="font-size: 14px;">${project.status}</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">NOI/MW/Year</div>
+                    <div class="side-panel-stat-value">$${formatNumber(c.baseNoiPerMw || 0, 2)}M</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">Effective Cap</div>
+                    <div class="side-panel-stat-value">${(c.capEff * 100).toFixed(1)}%</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">Value / MW</div>
+                    <div class="side-panel-stat-value">$${formatNumber(finalValue / (project.it_mw || 1), 1)}M</div>
+                </div>
+                <div class="side-panel-stat" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+                    <div class="side-panel-stat-label">TOTAL VALUE</div>
+                    <div class="side-panel-stat-value large">$${formatNumber(finalValue, 1)}M</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Generate BTC Mining waterfall visualization
+ */
+function generateBtcWaterfall(project, valuation, components) {
+    const c = components;
+    const finalValue = valuation.value;
+    const miningValue = c.miningValue || 0;
+    const conversionValue = c.conversionValue || 0;
+
+    const maxVal = Math.max(miningValue, conversionValue, finalValue, c.perpetualMiningValue || miningValue);
+
+    let html = `
+        <div class="waterfall-container">
+            <div class="waterfall-chart">
+                <div class="waterfall-section">
+                    <div class="waterfall-section-title btc">BTC Mining Value</div>
+                    ${waterfallBar('EBITDA/Year', c.ebitda || 0, 50, 'base', 'currency')}
+                    ${waterfallBar('Multiple', c.ebitdaMultiple || 0, (c.ebitdaMultiple || 0) * 15, 'multiply', 'multiple')}
+                    ${waterfallBar('Location', c.fLocation || 1, (c.fLocation || 1) * 50, c.fLocation >= 1 ? 'positive' : 'negative', 'multiple')}
+    `;
+
+    // If there's a conversion date, show truncation
+    if (c.hpcConversionDate && !c.isPerpetual) {
+        const convDateDisplay = new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        html += `
+                    ${waterfallBar('Perpetual Value', c.perpetualMiningValue || 0, (c.perpetualMiningValue / maxVal) * 100, 'base', 'currency')}
+                    ${waterfallBar('Truncated to ' + convDateDisplay, miningValue, (miningValue / maxVal) * 100, 'negative', 'currency')}
+        `;
+    }
+
+    html += `
+                    ${waterfallBar('= Mining Value', miningValue, (miningValue / maxVal) * 100, 'result', 'currency')}
+                </div>
+    `;
+
+    // HPC Conversion Option section (if applicable)
+    if (conversionValue > 0) {
+        const convYear = c.conversionYear || '?';
+        const convDiscount = c.conversionDiscount || 0;
+        const potentialValue = c.potentialHpcValue || 0;
+
+        html += `
+                <div class="waterfall-section">
+                    <div class="waterfall-section-title hpc">HPC Conversion Option (${convYear})</div>
+                    ${waterfallBar('Potential HPC Value', potentialValue, (potentialValue / maxVal) * 50, 'base', 'currency')}
+                    ${waterfallBar('Discount Factor', convDiscount, convDiscount * 100, 'negative', 'multiple')}
+                    ${waterfallBar('= Option Value', conversionValue, (conversionValue / maxVal) * 100, 'result', 'currency')}
+                </div>
+        `;
+    }
+
+    html += `
+                <div class="waterfall-summary">
+                    <div class="waterfall-summary-row">
+                        <span class="waterfall-summary-label">BTC Mining Value</span>
+                        <span class="waterfall-summary-value btc">$${formatNumber(miningValue, 1)}M</span>
+                    </div>
+                    ${conversionValue > 0 ? `
+                    <div class="waterfall-summary-row">
+                        <span class="waterfall-summary-label">HPC Option Value</span>
+                        <span class="waterfall-summary-value hpc">$${formatNumber(conversionValue, 1)}M</span>
+                    </div>
+                    ` : ''}
+                    <div class="waterfall-summary-row total">
+                        <span class="waterfall-summary-label">TOTAL SITE VALUE</span>
+                        <span class="waterfall-summary-value positive">$${formatNumber(finalValue, 1)}M</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="valuation-side-panel">
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">IT Capacity</div>
+                    <div class="side-panel-stat-value">${Math.round(project.it_mw || 0)} MW</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">Current Use</div>
+                    <div class="side-panel-stat-value" style="font-size: 14px;">${project.current_use || 'BTC'}</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">HPC Conversion</div>
+                    <div class="side-panel-stat-value" style="font-size: 14px;">${c.hpcConversionDate ? new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Never'}</div>
+                </div>
+                <div class="side-panel-stat">
+                    <div class="side-panel-stat-label">EBITDA/MW/Year</div>
+                    <div class="side-panel-stat-value">$${formatNumber((c.ebitda || 0) / (project.it_mw || 1), 2)}M</div>
+                </div>
+                <div class="side-panel-stat" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+                    <div class="side-panel-stat-label">TOTAL VALUE</div>
+                    <div class="side-panel-stat-value large">$${formatNumber(finalValue, 1)}M</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return html;
 }
 
 // ============================================================
@@ -1731,131 +1969,32 @@ function renderProjectsTable() {
         expandedTr.className = `expanded-content project-details-row ${isExpanded ? 'show' : ''}`;
         expandedTr.dataset.projectId = project.id;
 
-        if (valuation.isBtcSite) {
-                // Format HPC conversion date display
-                const convDateDisplay = c.hpcConversionDate ?
-                    new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) :
-                    'Never';
-                const yearsDisplay = c.yearsToConv !== null ? c.yearsToConv.toFixed(2) : '∞';
-                const rateDisplay = c.impliedRate !== null ? (c.impliedRate * 100).toFixed(1) + '%' : '-';
+        // Generate waterfall visualization based on site type
+        const waterfallHtml = valuation.isBtcSite
+            ? generateBtcWaterfall(project, valuation, c)
+            : generateHpcWaterfall(project, valuation, c);
 
-                expandedTr.innerHTML = `
-                    <td colspan="13">
-                        <div class="valuation-details">
-                            <div class="valuation-section">
-                                <h4>BTC Mining Valuation${c.hpcConversionDate ? ' (Truncated to Conversion Date)' : ''}</h4>
-                                ${c.hpcConversionDate ? `
-                                <div class="formula-display" style="margin-bottom: 10px; background: #1a1a00; padding: 8px; border-radius: 4px;">
-                                    <span class="formula-label" style="color: #ffcc00;">HPC Conversion:</span>
-                                    <span class="formula-part">${convDateDisplay}</span>
-                                    <span class="formula-op">|</span>
-                                    <span class="formula-part">Years remaining: ${yearsDisplay}</span>
-                                    <span class="formula-op">|</span>
-                                    <span class="formula-part">Implied rate: ${rateDisplay}</span>
-                                </div>
-                                ` : ''}
-                                <div class="formula-display">
-                                    <span class="formula-label">Annual EBITDA =</span>
-                                    <span class="formula-part">$${formatNumber(c.ebitda || 0, 2)}M/yr</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Multiple (${(c.ebitdaMultiple || 0).toFixed(1)}x)</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Location (${(c.fLocation || 1).toFixed(2)})</span>
-                                    ${c.isPerpetual ? `
-                                    <span class="formula-result">= $${formatNumber(c.miningValue || 0, 1)}M (perpetual)</span>
-                                    ` : `
-                                    <span class="formula-result" style="color: #ffcc00;">
-                                        = $${formatNumber(c.miningValue || 0, 1)}M
-                                        <small>(of $${formatNumber(c.perpetualMiningValue || 0, 1)}M perpetual)</small>
-                                    </span>
-                                    `}
-                                </div>
-                                ${!c.isPerpetual && c.yearsToConv !== null ? `
-                                <div class="formula-display" style="margin-top: 8px; font-size: 11px; color: #888;">
-                                    <span class="formula-label">NPV Formula:</span>
-                                    <span class="formula-part">E × (1 - (1+r)^-T) / r</span>
-                                    <span class="formula-op">=</span>
-                                    <span class="formula-part">$${formatNumber(c.ebitda || 0, 2)}M × (1 - (1+${rateDisplay})^-${yearsDisplay}) / ${rateDisplay}</span>
-                                </div>
-                                ` : ''}
-                            </div>
-                            ${c.conversionValue > 0 ? `
-                            <div class="valuation-section">
-                                <h4>Prospective HPC Lease (${c.conversionYear} conversion - legacy)</h4>
-                                <div class="formula-display">
-                                    <span class="formula-label">HPC Value =</span>
-                                    <span class="formula-part">NOI ($${formatNumber(c.conversionComponents?.noi || 0, 1)}M)</span>
-                                    <span class="formula-op">÷</span>
-                                    <span class="formula-part">Cap (${((c.conversionComponents?.capEff || 0.12) * 100).toFixed(1)}%)</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Term (${(c.conversionComponents?.termFactor || 1).toFixed(2)})</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Mult (${(c.conversionComponents?.combinedMult || 1).toFixed(2)})</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Fidoodle (${(c.conversionComponents?.fidoodle || 1).toFixed(2)})</span>
-                                    <span class="formula-result">= $${formatNumber(c.potentialHpcValue || 0, 1)}M</span>
-                                </div>
-                                <div class="formula-display" style="margin-top: 8px;">
-                                    <span class="formula-label">Pipeline Value =</span>
-                                    <span class="formula-part">$${formatNumber(c.potentialHpcValue || 0, 1)}M</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">${c.conversionYear} discount (${((c.conversionDiscount || 0) * 100).toFixed(0)}%)</span>
-                                    <span class="formula-result">= $${formatNumber(c.conversionValue || 0, 1)}M</span>
-                                </div>
-                            </div>
-                            ` : ''}
-                            <div class="valuation-total">
-                                <strong>Total Value: $${formatNumber(valuation.value, 1)}M</strong>
-                                (Mining: $${formatNumber(c.miningValue || 0, 1)}M${c.conversionValue > 0 ? ` + HPC Pipeline: $${formatNumber(c.conversionValue || 0, 1)}M` : ''})
-                            </div>
-                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit Conversion Date & Terms</button>
-                        </div>
-                    </td>
-                `;
-            } else {
-                expandedTr.innerHTML = `
-                    <td colspan="13">
-                        <div class="valuation-details">
-                            <div class="valuation-section">
-                                <h4>HPC Lease Valuation</h4>
-                                <div class="formula-display">
-                                    <span class="formula-label">Value =</span>
-                                    <span class="formula-part">NOI ($${formatNumber(c.noi || 0, 1)}M)</span>
-                                    <span class="formula-op">÷</span>
-                                    <span class="formula-part">Cap Rate (${((c.capEff || 0) * 100).toFixed(1)}%)</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Term Factor (${(c.termFactor || 0).toFixed(3)})</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Multipliers (${(c.combinedMult || 0).toFixed(3)})</span>
-                                    <span class="formula-op">×</span>
-                                    <span class="formula-part">Fidoodle (${(c.fidoodle || 1).toFixed(2)})</span>
-                                    <span class="formula-result">= $${formatNumber(valuation.value, 1)}M</span>
-                                </div>
-                            </div>
-                            <div class="valuation-section multipliers-breakdown">
-                                <h4>Multiplier Breakdown</h4>
-                                <div class="multiplier-grid">
-                                    <div class="mult-item"><span class="mult-label">Credit:</span> <span class="mult-value">${(c.fCredit || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Lease:</span> <span class="mult-value">${(c.fLease || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Ownership:</span> <span class="mult-value">${(c.fOwnership || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Build:</span> <span class="mult-value">${(c.fBuild || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Tenant:</span> <span class="mult-value">${(c.fTenant || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Size:</span> <span class="mult-value">${(c.fSize || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Location:</span> <span class="mult-value">${(c.fLocation || 1).toFixed(2)}</span></div>
-                                    <div class="mult-item"><span class="mult-label">Compute:</span> <span class="mult-value">${(c.fCompute || 1).toFixed(2)}</span></div>
-                                </div>
-                            </div>
-                            <div class="valuation-total">
-                                <strong>Total Value: $${formatNumber(valuation.value, 1)}M</strong>
-                                ${project.source_url ? `<a href="${project.source_url}" target="_blank" class="source-link">View Source</a>` : ''}
-                            </div>
-                            <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">Edit All Overrides</button>
-                        </div>
-                    </td>
-                `;
-            }
+        expandedTr.innerHTML = `
+            <td colspan="13">
+                <div class="valuation-details">
+                    <h4 style="color: ${valuation.isBtcSite ? '#ffaa00' : '#00aaff'}; margin-bottom: 15px;">
+                        ${valuation.isBtcSite ? 'BTC Mining Site Valuation' : 'HPC Lease Valuation'}
+                        <span style="font-weight: normal; color: #666; font-size: 12px; margin-left: 10px;">
+                            ${project.name} (${Math.round(project.it_mw || 0)} MW)
+                        </span>
+                    </h4>
+                    ${waterfallHtml}
+                    <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-small edit-project-btn" data-project-id="${project.id}">
+                            ${valuation.isBtcSite ? 'Edit Conversion Date & Terms' : 'Edit All Overrides'}
+                        </button>
+                        ${project.source_url ? `<a href="${project.source_url}" target="_blank" class="source-link">View Source</a>` : ''}
+                    </div>
+                </div>
+            </td>
+        `;
 
-            tbody.appendChild(expandedTr);
+        tbody.appendChild(expandedTr);
 
             // Click handler for row expansion
             tr.addEventListener('click', (e) => {

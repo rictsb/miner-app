@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BTC Miner Valuation Terminal v7</title>
+    <title>BTC Miner Valuation Terminal v8</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -117,9 +117,6 @@
             font-weight: 500;
             text-transform: uppercase;
             font-size: 11px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
             text-align: right;
         }
 
@@ -148,7 +145,6 @@
         .sortable-table th.sortable {
             cursor: pointer;
             user-select: none;
-            position: relative;
             padding-right: 18px;
         }
 
@@ -177,10 +173,6 @@
         }
 
         /* Resizable table styles */
-        .resizable-table th {
-            position: relative;
-        }
-
         .resizable-table th:not(.no-sort)::before {
             content: '';
             position: absolute;
@@ -693,7 +685,24 @@
 
         .table-container {
             overflow-x: auto;
+            overflow-y: auto;
             max-height: calc(100vh - 300px);
+            position: relative;
+        }
+
+        /* Sticky headers for tables */
+        .table-container thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table-container thead th {
+            position: sticky;
+            top: 0;
+            background: #111;
+            z-index: 10;
+            box-shadow: 0 1px 0 #333;
         }
 
         /* Expandable rows */
@@ -1134,6 +1143,150 @@
             font-size: 11px;
         }
 
+        /* Waterfall chart visualization */
+        .waterfall-container {
+            display: flex;
+            gap: 20px;
+            margin: 15px 0;
+        }
+
+        .waterfall-chart {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .waterfall-bar-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            height: 28px;
+        }
+
+        .waterfall-label {
+            width: 120px;
+            font-size: 11px;
+            color: #888;
+            flex-shrink: 0;
+        }
+
+        .waterfall-bar-track {
+            flex: 1;
+            height: 20px;
+            background: #1a1a1a;
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .waterfall-bar {
+            height: 100%;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            font-size: 11px;
+            font-family: 'Roboto Mono', monospace;
+            color: #fff;
+            min-width: 60px;
+            transition: width 0.3s ease;
+        }
+
+        .waterfall-bar.base { background: linear-gradient(90deg, #2a4a2a, #3a6a3a); }
+        .waterfall-bar.positive { background: linear-gradient(90deg, #2a4a6a, #3a6a9a); }
+        .waterfall-bar.negative { background: linear-gradient(90deg, #6a3a3a, #9a4a4a); }
+        .waterfall-bar.multiply { background: linear-gradient(90deg, #4a3a6a, #6a4a9a); }
+        .waterfall-bar.result { background: linear-gradient(90deg, #4a6a3a, #00ff00); }
+
+        .waterfall-value {
+            width: 80px;
+            text-align: right;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+            color: #ff8c00;
+            flex-shrink: 0;
+            margin-left: 10px;
+        }
+
+        .waterfall-section {
+            margin-bottom: 20px;
+        }
+
+        .waterfall-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #ff8c00;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #333;
+        }
+
+        .waterfall-section-title.hpc { color: #00aaff; border-color: #00aaff33; }
+        .waterfall-section-title.btc { color: #ffaa00; border-color: #ffaa0033; }
+
+        .waterfall-summary {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .waterfall-summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 12px;
+        }
+
+        .waterfall-summary-row.total {
+            border-top: 1px solid #444;
+            margin-top: 8px;
+            padding-top: 12px;
+            font-weight: 600;
+        }
+
+        .waterfall-summary-label { color: #888; }
+        .waterfall-summary-value {
+            font-family: 'Roboto Mono', monospace;
+            color: #fff;
+        }
+        .waterfall-summary-value.positive { color: #00ff00; }
+        .waterfall-summary-value.hpc { color: #00aaff; }
+        .waterfall-summary-value.btc { color: #ffaa00; }
+
+        /* Side panel for quick stats */
+        .valuation-side-panel {
+            width: 200px;
+            flex-shrink: 0;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+        }
+
+        .side-panel-stat {
+            margin-bottom: 12px;
+        }
+
+        .side-panel-stat-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .side-panel-stat-value {
+            font-size: 16px;
+            font-family: 'Roboto Mono', monospace;
+            color: #ff8c00;
+        }
+
+        .side-panel-stat-value.large {
+            font-size: 20px;
+            color: #00ff00;
+        }
+
         .edit-project-btn {
             margin-left: auto;
         }
@@ -1222,7 +1375,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>BTC MINER VALUATION TERMINAL v7</h1>
+        <h1>BTC MINER VALUATION TERMINAL v8</h1>
         <div class="prices">
             <div class="price-item">
                 <span class="price-label">BTC:</span>
@@ -1323,8 +1476,11 @@
                         <option value="">All</option>
                         <option value="Operational">Operational</option>
                         <option value="Contracted">Contracted</option>
-                        <option value="Development">Development</option>
+                        <option value="In Development">In Development</option>
+                        <option value="Under Construction">Under Construction</option>
                         <option value="Pipeline">Pipeline</option>
+                        <option value="Option">Option</option>
+                        <option value="LOI">LOI</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -1870,7 +2026,7 @@
                             </div>
                         </div>
 
-                        <div class="form-row">
+                        <div class="form-row-3">
                             <div class="form-group">
                                 <label>Fidoodle Factor <span class="default-hint">(default: 1.00)</span></label>
                                 <div style="display: flex; gap: 8px; align-items: center;">
@@ -1883,6 +2039,15 @@
                                 <label>Cap Rate Override</label>
                                 <input type="number" id="project-cap-override" step="0.5" placeholder="Auto-calculated %">
                                 <small class="hint-text" id="hint-cap-rate"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Compute Model</label>
+                                <select id="project-compute-model">
+                                    <option value="">Auto (colo 1.0x)</option>
+                                    <option value="colo">Colo (1.00x)</option>
+                                    <option value="gpu_cloud">GPU Cloud (1.75x)</option>
+                                </select>
+                                <small class="hint-text">GPU cloud = selling FLOPs</small>
                             </div>
                         </div>
                     </div>
@@ -1913,14 +2078,6 @@
                                     <option value="ground">Ground Lease</option>
                                     <option value="jv">JV / Partial</option>
                                     <option value="nopower">No Substation</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Compute Model</label>
-                                <select id="project-compute-model">
-                                    <option value="">Auto (colo)</option>
-                                    <option value="colo">Colo (1.00x)</option>
-                                    <option value="gpu_cloud">GPU Cloud (1.75x)</option>
                                 </select>
                             </div>
                         </div>

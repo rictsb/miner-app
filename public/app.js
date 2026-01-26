@@ -16,6 +16,12 @@ let projectOverrides = {};  // Per-project overrides
 let customProjects = [];    // User-added projects
 let savedFactors = null;    // User-saved global factors
 
+// Table sorting state
+let projectsSortColumn = null;
+let projectsSortDirection = 'asc';
+let dashboardSortColumn = null;
+let dashboardSortDirection = 'asc';
+
 // ============================================================
 // HYPERSCALER TENANTS (includes AMD per user request)
 // ============================================================
@@ -95,6 +101,13 @@ const DEFAULT_FACTORS = {
         pipeline: 0.40,
         option: 0.20,      // AI/HPC option - very speculative
         planned: 0.15      // AI/HPC planned - highly speculative
+    },
+
+    // Compute Model Multipliers
+    // Reflects that GPU cloud operators monetize MW at higher rates than pure colo
+    computeModel: {
+        colo: 1.00,        // Traditional colocation/landlord model
+        gpu_cloud: 1.75    // GPU-as-a-service model (selling FLOPs, not just space)
     },
 
     // Mining EBITDA cap ($/MW/year) - prevents unrealistic valuations
@@ -444,6 +457,24 @@ function getGridMultiplier(grid, country, override = null) {
 }
 
 /**
+ * Get compute model multiplier
+ * GPU cloud operators monetize their MW at higher rates than pure colo landlords
+ */
+function getComputeModelMultiplier(project, override = null) {
+    if (override !== null && override !== undefined) {
+        return factors.computeModel[override] || 1.0;
+    }
+
+    // Check project's compute_model field
+    if (project.compute_model) {
+        return factors.computeModel[project.compute_model] || 1.0;
+    }
+
+    // Default to colo model
+    return factors.computeModel.colo;
+}
+
+/**
  * Get build/energization multiplier based on status and current_use
  * Applies heavy discounts for option/planned HPC projects
  */
@@ -788,12 +819,13 @@ function calculateHpcConversionValue(project, overrides = {}) {
     const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
     const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
     const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
+    const fCompute = getComputeModelMultiplier(project, overrides.computeModel);
 
     // 6. Get fidoodle
     const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
 
     // 7. Combined multiplier
-    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid;
+    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid * fCompute;
 
     // 8. Calculate potential HPC value (before time discount)
     const baseValue = capEff > 0 ? noi / capEff : 0;
@@ -908,12 +940,13 @@ function calculateProjectValue(project, overrides = {}) {
     const fSize = getSizeMultiplier(itMw, overrides.sizeMult);
     const fCountry = getCountryMultiplier(project.country, overrides.countryMult);
     const fGrid = getGridMultiplier(project.grid, project.country, overrides.gridMult);
+    const fCompute = getComputeModelMultiplier(project, overrides.computeModel);
 
     // 6. Get fidoodle
     const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
 
     // 7. Combined multiplier
-    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid;
+    const combinedMult = fCredit * fLease * fOwnership * fBuild * fConcentration * fSize * fCountry * fGrid * fCompute;
 
     // 8. Calculate value
     // Value = (NOI / Cap_eff) * TermFactor * CombinedMultipliers * Fidoodle
@@ -981,6 +1014,37 @@ function initializeTabs() {
 function setupEventListeners() {
     // Project form
     document.getElementById('project-form').addEventListener('submit', saveProjectOverrides);
+
+    // Setup sortable columns for projects table
+    document.querySelectorAll('#projects-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const sortKey = th.dataset.sort;
+            if (projectsSortColumn === sortKey) {
+                projectsSortDirection = projectsSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                projectsSortColumn = sortKey;
+                projectsSortDirection = 'asc';
+            }
+            renderProjectsTable();
+        });
+    });
+
+    // Setup sortable columns for dashboard table
+    document.querySelectorAll('#dashboard-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const sortKey = th.dataset.sort;
+            if (dashboardSortColumn === sortKey) {
+                dashboardSortDirection = dashboardSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                dashboardSortColumn = sortKey;
+                dashboardSortDirection = 'asc';
+            }
+            renderDashboard();
+        });
+    });
+
+    // Setup resizable columns
+    setupResizableColumns();
 
     // Fidoodle slider sync
     const fidoodleSlider = document.getElementById('project-fidoodle-slider');
@@ -1287,7 +1351,8 @@ function renderDashboard() {
 
     const allProjects = [...ALL_PROJECTS, ...customProjects];
 
-    // Calculate per-ticker metrics
+    // Calculate per-ticker metrics and store for sorting
+    let minerRows = [];
     Object.keys(MINER_DATA).forEach(ticker => {
         const miner = MINER_DATA[ticker];
         const projects = allProjects.filter(p => p.ticker === ticker);
@@ -1348,7 +1413,56 @@ function renderDashboard() {
         totalFairValue += equityValue;
         totalMcap += totalLeaseValue;  // Now tracking total lease value instead of market cap
 
-        // Main row
+        minerRows.push({
+            ticker, miner, projects, contractedMw, pipelineMw, contractedEv, pipelineEv,
+            miningMw, miningEV, totalLeaseValue, hodlValue, equityValue, fairValue,
+            hasHyperscaler, stockPrice, priceChange, upside
+        });
+    });
+
+    // Sort if a sort column is set
+    if (dashboardSortColumn) {
+        minerRows.sort((a, b) => {
+            let aVal, bVal;
+            switch (dashboardSortColumn) {
+                case 'ticker': aVal = a.ticker; bVal = b.ticker; break;
+                case 'price': aVal = a.stockPrice; bVal = b.stockPrice; break;
+                case 'hpcLeases': aVal = a.totalLeaseValue; bVal = b.totalLeaseValue; break;
+                case 'hodlValue': aVal = a.hodlValue; bVal = b.hodlValue; break;
+                case 'cash': aVal = a.miner.cash; bVal = b.miner.cash; break;
+                case 'debt': aVal = a.miner.debt; bVal = b.miner.debt; break;
+                case 'fdShares': aVal = a.miner.fdShares; bVal = b.miner.fdShares; break;
+                case 'miningMw': aVal = a.miningMw; bVal = b.miningMw; break;
+                case 'hpcMw': aVal = a.contractedMw + a.pipelineMw; bVal = b.contractedMw + b.pipelineMw; break;
+                case 'miningEv': aVal = a.miningEV; bVal = b.miningEV; break;
+                case 'hpcEvContracted': aVal = a.contractedEv; bVal = b.contractedEv; break;
+                case 'hpcEvPipeline': aVal = a.pipelineEv; bVal = b.pipelineEv; break;
+                case 'fairValue': aVal = a.fairValue; bVal = b.fairValue; break;
+                case 'upside': aVal = a.upside; bVal = b.upside; break;
+                default: aVal = 0; bVal = 0;
+            }
+            if (typeof aVal === 'string') {
+                const cmp = aVal.localeCompare(bVal);
+                return dashboardSortDirection === 'asc' ? cmp : -cmp;
+            }
+            return dashboardSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        });
+    }
+
+    // Update sort indicators
+    document.querySelectorAll('#dashboard-table th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === dashboardSortColumn) {
+            th.classList.add(dashboardSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
+
+    // Render rows
+    minerRows.forEach(({ ticker, miner, projects, contractedMw, pipelineMw, contractedEv, pipelineEv,
+        miningMw, miningEV, totalLeaseValue, hodlValue, equityValue, fairValue,
+        hasHyperscaler, stockPrice, priceChange, upside }) => {
+
+        // Main row - round values to whole numbers
         const tr = document.createElement('tr');
         tr.className = 'expandable-row';
         tr.dataset.ticker = ticker;
@@ -1359,24 +1473,24 @@ function renderDashboard() {
                 ${hasHyperscaler ? '<span class="hyperscaler-badge">HPC</span>' : ''}
             </td>
             <td class="${priceChange >= 0 ? 'positive' : 'negative'}">$${stockPrice > 0 ? stockPrice.toFixed(2) : '--'}</td>
-            <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? '$' + formatNumber(totalLeaseValue / 1000, 2) + 'B' : '--'}</td>
+            <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? '$' + Math.round(totalLeaseValue) + 'M' : '--'}</td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.hodl}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(hodlValue, 1)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(hodlValue)}M</a>
             </td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.cash}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(miner.cash, 1)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.cash)}M</a>
             </td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.debt}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(miner.debt, 1)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.debt)}M</a>
             </td>
             <td class="has-tooltip" data-tooltip="${miner.snippets.shares}">
-                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${formatNumber(miner.fdShares, 0)}M</a>
+                <a href="${miner.sourceUrl}" class="source-link" target="_blank">${Math.round(miner.fdShares)}M</a>
             </td>
-            <td>${miningMw.toLocaleString()}</td>
-            <td>${(contractedMw + pipelineMw).toLocaleString()}</td>
-            <td>${formatNumber(miningEV, 1)}M</td>
-            <td class="positive">${formatNumber(contractedEv, 1)}M</td>
-            <td class="neutral">${formatNumber(pipelineEv, 1)}M</td>
+            <td>${Math.round(miningMw)}</td>
+            <td>${Math.round(contractedMw + pipelineMw)}</td>
+            <td>${Math.round(miningEV)}M</td>
+            <td class="positive">${Math.round(contractedEv)}M</td>
+            <td class="neutral">${Math.round(pipelineEv)}M</td>
             <td class="positive">$${formatNumber(fairValue, 2)}</td>
             <td class="${upside >= 0 ? 'positive' : 'negative'}">${stockPrice > 0 ? (upside >= 0 ? '+' : '') + upside.toFixed(0) + '%' : '--'}</td>
         `;
@@ -1387,7 +1501,7 @@ function renderDashboard() {
         expandedTr.className = 'expanded-content';
         expandedTr.dataset.ticker = ticker;
         expandedTr.innerHTML = `
-            <td colspan="13">
+            <td colspan="15">
                 <div class="project-summary">
                     ${projects.map(p => {
                         const overrides = projectOverrides[p.id] || {};
@@ -1442,7 +1556,8 @@ function renderProjectsTable() {
 
     const allProjects = [...ALL_PROJECTS, ...customProjects];
 
-    allProjects
+    // Filter and calculate values for sorting
+    let filteredProjects = allProjects
         .filter(p => {
             if (tickerFilter && p.ticker !== tickerFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
@@ -1450,106 +1565,144 @@ function renderProjectsTable() {
             if (countryFilter && p.country !== countryFilter) return false;
             return true;
         })
-        .forEach(project => {
+        .map(project => {
             const overrides = projectOverrides[project.id] || {};
             const valuation = calculateProjectValue(project, overrides);
-            const hasOverrides = Object.keys(overrides).length > 0;
-            const c = valuation.components;
-            const isExpanded = expandedRows.has(project.id);
+            return { project, overrides, valuation };
+        });
 
-            const tr = document.createElement('tr');
-            tr.className = `project-row expandable-row ${isExpanded ? 'expanded' : ''}`;
-            tr.dataset.projectId = project.id;
+    // Sort if a sort column is set
+    if (projectsSortColumn) {
+        filteredProjects.sort((a, b) => {
+            let aVal, bVal;
+            switch (projectsSortColumn) {
+                case 'ticker': aVal = a.project.ticker || ''; bVal = b.project.ticker || ''; break;
+                case 'project': aVal = a.project.name || ''; bVal = b.project.name || ''; break;
+                case 'it_mw': aVal = a.project.it_mw || 0; bVal = b.project.it_mw || 0; break;
+                case 'current_use': aVal = a.project.current_use || ''; bVal = b.project.current_use || ''; break;
+                case 'status': aVal = a.project.status || ''; bVal = b.project.status || ''; break;
+                case 'energization_date': aVal = a.project.energization_date || ''; bVal = b.project.energization_date || ''; break;
+                case 'lessee': aVal = a.project.lessee || ''; bVal = b.project.lessee || ''; break;
+                case 'hpc_conv_prob': aVal = a.project.hpc_conv_prob || 0; bVal = b.project.hpc_conv_prob || 0; break;
+                case 'fidoodle': aVal = a.valuation.components.fidoodle || 1; bVal = b.valuation.components.fidoodle || 1; break;
+                case 'value': aVal = a.valuation.value || 0; bVal = b.valuation.value || 0; break;
+                default: aVal = 0; bVal = 0;
+            }
+            if (typeof aVal === 'string') {
+                const cmp = aVal.localeCompare(bVal);
+                return projectsSortDirection === 'asc' ? cmp : -cmp;
+            }
+            return projectsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        });
+    }
 
-            const location = project.state ? `${project.state}, ${project.country}` : project.country;
+    // Update sort indicators
+    document.querySelectorAll('#projects-table th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === projectsSortColumn) {
+            th.classList.add(projectsSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
 
-            // Format energization date for display
-            const energizeDate = project.energization_date ? formatEnergizationDate(project.energization_date) : '-';
+    let rowNum = 0;
+    filteredProjects.forEach(({ project, overrides, valuation }) => {
+        rowNum++;
+        const hasOverrides = Object.keys(overrides).length > 0;
+        const c = valuation.components;
+        const isExpanded = expandedRows.has(project.id);
 
-            // Different display for BTC vs HPC sites
-            if (valuation.isBtcSite) {
-                // BTC Mining Site
-                const convYear = c.conversionYear || 'never';
-                const convDate = c.hpcConversionDate;
-                const yearsToConv = c.yearsToConv;
+        const tr = document.createElement('tr');
+        tr.className = `project-row expandable-row ${isExpanded ? 'expanded' : ''}`;
+        tr.dataset.projectId = project.id;
 
-                // Format conversion display: prefer date, fall back to year
-                let convDisplay = 'Never';
-                if (convDate) {
-                    const d = new Date(convDate + 'T00:00:00Z');
-                    convDisplay = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                    if (yearsToConv !== null && yearsToConv > 0) {
-                        convDisplay += ` (${yearsToConv.toFixed(1)}y)`;
-                    }
-                } else if (convYear !== 'never') {
-                    convDisplay = convYear;
+        // Format energization date for display
+        const energizeDate = project.energization_date ? formatEnergizationDate(project.energization_date) : '-';
+        const itMwRounded = Math.round(project.it_mw || 0);
+
+        // Different display for BTC vs HPC sites
+        if (valuation.isBtcSite) {
+            // BTC Mining Site
+            const convYear = c.conversionYear || 'never';
+            const convDate = c.hpcConversionDate;
+            const yearsToConv = c.yearsToConv;
+
+            // Format conversion display: prefer date, fall back to year
+            let convDisplay = 'Never';
+            if (convDate) {
+                const d = new Date(convDate + 'T00:00:00Z');
+                convDisplay = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                if (yearsToConv !== null && yearsToConv > 0) {
+                    convDisplay += ` (${yearsToConv.toFixed(1)}y)`;
                 }
-
-                // Show remaining BTC value vs perpetual value
-                const miningValueDisplay = c.isPerpetual ?
-                    formatNumber(c.miningValue || 0, 1) :
-                    `${formatNumber(c.miningValue || 0, 1)} / ${formatNumber(c.perpetualMiningValue || 0, 1)}`;
-
-                tr.innerHTML = `
-                    <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
-                    <td class="col-ticker">
-                        <span class="ticker">${project.ticker}</span>
-                        ${hasOverrides ? '<span class="override-dot"></span>' : ''}
-                    </td>
-                    <td class="col-name">${project.name}</td>
-                    <td class="col-location">${location}</td>
-                    <td>${project.it_mw || 0}</td>
-                    <td class="col-status">${project.current_use}</td>
-                    <td class="col-status">
-                        <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
-                    </td>
-                    <td class="col-energize">${energizeDate}</td>
-                    <td class="col-tenant">${project.lessee || '-'}</td>
-                    <td class="conv-date-cell ${convDate ? 'has-date' : ''}" title="${convDate || 'Click to set conversion date'}">
-                        ${convDisplay}
-                    </td>
-                    <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
-                        <span class="fidoodle-value">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</span>
-                        <span class="fidoodle-edit-icon">✎</span>
-                    </td>
-                    <td class="positive">${formatNumber(valuation.value, 1)}</td>
-                    <td class="col-source">${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank" onclick="event.stopPropagation();">Link</a>` : '-'}</td>
-                `;
-            } else {
-                // HPC/AI Site
-                tr.innerHTML = `
-                    <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
-                    <td class="col-ticker">
-                        <span class="ticker">${project.ticker}</span>
-                        ${hasOverrides ? '<span class="override-dot"></span>' : ''}
-                    </td>
-                    <td class="col-name">${project.name}</td>
-                    <td class="col-location">${location}</td>
-                    <td>${project.it_mw || 0}</td>
-                    <td class="col-status">${project.current_use}</td>
-                    <td class="col-status">
-                        <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
-                    </td>
-                    <td class="col-energize">${energizeDate}</td>
-                    <td class="col-tenant">${project.lessee || '-'}</td>
-                    <td>-</td>
-                    <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
-                        <span class="fidoodle-value">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</span>
-                        <span class="fidoodle-edit-icon">✎</span>
-                    </td>
-                    <td class="positive">${formatNumber(valuation.value, 1)}</td>
-                    <td class="col-source">${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank" onclick="event.stopPropagation();">Link</a>` : '-'}</td>
-                `;
+            } else if (convYear !== 'never') {
+                convDisplay = convYear;
             }
 
-            tbody.appendChild(tr);
+            // Show remaining BTC value vs perpetual value
+            const miningValueDisplay = c.isPerpetual ?
+                formatNumber(c.miningValue || 0, 1) :
+                `${formatNumber(c.miningValue || 0, 1)} / ${formatNumber(c.perpetualMiningValue || 0, 1)}`;
 
-            // Create expanded details row
-            const expandedTr = document.createElement('tr');
-            expandedTr.className = `expanded-content project-details-row ${isExpanded ? 'show' : ''}`;
-            expandedTr.dataset.projectId = project.id;
+            tr.innerHTML = `
+                <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
+                <td class="col-row-num">${rowNum}</td>
+                <td class="col-ticker">
+                    <span class="ticker">${project.ticker}</span>
+                    ${hasOverrides ? '<span class="override-dot"></span>' : ''}
+                </td>
+                <td class="col-name">${project.name}</td>
+                <td>${itMwRounded}</td>
+                <td class="col-status">${project.current_use}</td>
+                <td class="col-status">
+                    <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
+                </td>
+                <td class="col-energize">${energizeDate}</td>
+                <td class="col-tenant">${project.lessee || '-'}</td>
+                <td class="conv-date-cell ${convDate ? 'has-date' : ''}" title="${convDate || 'Click to set conversion date'}">
+                    ${convDisplay}
+                </td>
+                <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
+                    <span class="fidoodle-value">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</span>
+                    <span class="fidoodle-edit-icon">✎</span>
+                </td>
+                <td class="positive">${formatNumber(valuation.value, 1)}</td>
+                <td class="col-source">${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank" onclick="event.stopPropagation();">Link</a>` : '-'}</td>
+            `;
+        } else {
+            // HPC/AI Site
+            tr.innerHTML = `
+                <td class="col-expand"><span class="expand-icon">${isExpanded ? '▼' : '▶'}</span></td>
+                <td class="col-row-num">${rowNum}</td>
+                <td class="col-ticker">
+                    <span class="ticker">${project.ticker}</span>
+                    ${hasOverrides ? '<span class="override-dot"></span>' : ''}
+                </td>
+                <td class="col-name">${project.name}</td>
+                <td>${itMwRounded}</td>
+                <td class="col-status">${project.current_use}</td>
+                <td class="col-status">
+                    <span class="status-badge status-${project.status.toLowerCase()}">${project.status}</span>
+                </td>
+                <td class="col-energize">${energizeDate}</td>
+                <td class="col-tenant">${project.lessee || '-'}</td>
+                <td>-</td>
+                <td class="fidoodle-cell ${hasOverrides && overrides.fidoodle ? 'has-override' : ''}" data-project-id="${project.id}">
+                    <span class="fidoodle-value">${(c.fidoodle || factors.fidoodleDefault).toFixed(2)}</span>
+                    <span class="fidoodle-edit-icon">✎</span>
+                </td>
+                <td class="positive">${formatNumber(valuation.value, 1)}</td>
+                <td class="col-source">${project.source_url ? `<a href="${project.source_url}" class="source-link" target="_blank" onclick="event.stopPropagation();">Link</a>` : '-'}</td>
+            `;
+        }
 
-            if (valuation.isBtcSite) {
+        tbody.appendChild(tr);
+
+        // Create expanded details row
+        const expandedTr = document.createElement('tr');
+        expandedTr.className = `expanded-content project-details-row ${isExpanded ? 'show' : ''}`;
+        expandedTr.dataset.projectId = project.id;
+
+        if (valuation.isBtcSite) {
                 // Format HPC conversion date display
                 const convDateDisplay = c.hpcConversionDate ?
                     new Date(c.hpcConversionDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) :
@@ -2450,6 +2603,42 @@ function populateFilters() {
 function formatNumber(num, decimals = 1) {
     if (num === null || num === undefined || isNaN(num)) return '0';
     return num.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function setupResizableColumns() {
+    document.querySelectorAll('.resizable-table').forEach(table => {
+        const headers = table.querySelectorAll('th:not(.no-sort)');
+        headers.forEach(th => {
+            const resizer = document.createElement('div');
+            resizer.className = 'column-resizer';
+            resizer.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;';
+            th.style.position = 'relative';
+            th.appendChild(resizer);
+
+            let startX, startWidth;
+            resizer.addEventListener('mousedown', (e) => {
+                startX = e.pageX;
+                startWidth = th.offsetWidth;
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            function onMouseMove(e) {
+                const width = startWidth + (e.pageX - startX);
+                if (width > 30) {
+                    th.style.width = width + 'px';
+                    th.style.minWidth = width + 'px';
+                }
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+        });
+    });
 }
 
 function formatEnergizationDate(dateStr) {

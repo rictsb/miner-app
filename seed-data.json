@@ -2082,6 +2082,7 @@
       "energization_date": "2026-04-01",
       "lessee": "TBD",
       "source_url": "https://www.globenewswire.com/news-release/2025/01/21/3012652/0/en/IREN-Business-Update.html",
+      "compute_model": "gpu_cloud",
       "hpc_conv_prob": 0.8,
       "lat": 32.471109,
       "lng": -100.406268
@@ -2128,6 +2129,7 @@
       "energization_date": "2027-12-01",
       "lessee": "TBD",
       "source_url": "https://irisenergy.gcs-web.com/news-releases",
+      "compute_model": "gpu_cloud",
       "hpc_conv_prob": 0.5,
       "lat": 32.471109,
       "lng": -100.406268
@@ -2154,6 +2156,7 @@
       "lease_years": 5,
       "annual_rev_m": 1940,
       "noi_pct": 0.32,
+      "compute_model": "gpu_cloud",
       "hpc_conv_prob": 0.8,
       "lat": 34.426427,
       "lng": -100.204444

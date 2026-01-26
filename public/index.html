@@ -134,8 +134,66 @@
             text-align: left;
         }
 
-        .col-ticker, .col-name, .col-location, .col-tenant, .col-status, .col-source, .col-energize {
+        .col-ticker, .col-name, .col-tenant, .col-status, .col-source, .col-energize {
             text-align: left !important;
+        }
+
+        .col-row-num {
+            width: 35px;
+            text-align: center !important;
+            color: #666;
+        }
+
+        /* Sortable table styles */
+        .sortable-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 18px;
+        }
+
+        .sortable-table th.sortable:hover {
+            background: #2a2a2a;
+        }
+
+        .sortable-table th.sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 4px;
+            opacity: 0.3;
+            font-size: 10px;
+        }
+
+        .sortable-table th.sortable.sort-asc::after {
+            content: '▲';
+            opacity: 1;
+            color: #00bfff;
+        }
+
+        .sortable-table th.sortable.sort-desc::after {
+            content: '▼';
+            opacity: 1;
+            color: #00bfff;
+        }
+
+        /* Resizable table styles */
+        .resizable-table th {
+            position: relative;
+        }
+
+        .resizable-table th:not(.no-sort)::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: col-resize;
+            background: transparent;
+        }
+
+        .resizable-table th:not(.no-sort):hover::before {
+            background: #444;
         }
 
         tr:hover {
@@ -1208,24 +1266,24 @@
             </div>
 
             <div class="table-container">
-                <table id="dashboard-table">
+                <table id="dashboard-table" class="sortable-table resizable-table">
                     <thead>
                         <tr>
-                            <th style="width: 30px;"></th>
-                            <th class="col-ticker">Ticker</th>
-                            <th>Price</th>
-                            <th>HPC Leases</th>
-                            <th>HODL Val</th>
-                            <th>Cash</th>
-                            <th>Debt</th>
-                            <th>FD Shares</th>
-                            <th>Mining MW</th>
-                            <th>HPC MW</th>
-                            <th>Mining EV</th>
-                            <th>HPC EV (Contracted)</th>
-                            <th>HPC EV (Pipeline)</th>
-                            <th>Fair Value</th>
-                            <th>Upside</th>
+                            <th style="width: 30px;" class="no-sort"></th>
+                            <th class="col-ticker sortable" data-sort="ticker">Ticker</th>
+                            <th class="sortable" data-sort="price">Price</th>
+                            <th class="sortable" data-sort="hpcLeases">HPC Leases ($M)</th>
+                            <th class="sortable" data-sort="hodlValue">HODL Val</th>
+                            <th class="sortable" data-sort="cash">Cash</th>
+                            <th class="sortable" data-sort="debt">Debt</th>
+                            <th class="sortable" data-sort="fdShares">FD Shares</th>
+                            <th class="sortable" data-sort="miningMw">Mining MW</th>
+                            <th class="sortable" data-sort="hpcMw">HPC MW</th>
+                            <th class="sortable" data-sort="miningEv">Mining EV</th>
+                            <th class="sortable" data-sort="hpcEvContracted">HPC EV (Contracted)</th>
+                            <th class="sortable" data-sort="hpcEvPipeline">HPC EV (Pipeline)</th>
+                            <th class="sortable" data-sort="fairValue">Fair Value</th>
+                            <th class="sortable" data-sort="upside">Upside</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -1273,22 +1331,22 @@
             <p style="color: #666; font-size: 11px; margin-bottom: 15px;">Click any row to expand and see valuation formula. Click the Fidoodle cell to edit per-project adjustment.</p>
 
             <div class="table-container">
-                <table id="projects-table">
+                <table id="projects-table" class="sortable-table resizable-table">
                     <thead>
                         <tr>
-                            <th class="col-expand"></th>
-                            <th class="col-ticker">Ticker</th>
-                            <th class="col-name">Site Name</th>
-                            <th class="col-location">Location</th>
-                            <th>IT MW</th>
-                            <th class="col-status">Use</th>
-                            <th class="col-status">Status</th>
-                            <th>Energize</th>
-                            <th class="col-tenant">Tenant</th>
-                            <th>HPC Conv</th>
-                            <th>Fidoodle</th>
-                            <th>Value ($M)</th>
-                            <th class="col-source">Source</th>
+                            <th class="col-expand no-sort"></th>
+                            <th class="col-row-num no-sort">#</th>
+                            <th class="col-ticker sortable" data-sort="ticker">Ticker</th>
+                            <th class="col-name sortable" data-sort="project">Site Name</th>
+                            <th class="sortable" data-sort="it_mw">IT MW</th>
+                            <th class="col-status sortable" data-sort="current_use">Use</th>
+                            <th class="col-status sortable" data-sort="status">Status</th>
+                            <th class="sortable" data-sort="energization_date">Energize</th>
+                            <th class="col-tenant sortable" data-sort="lessee">Tenant</th>
+                            <th class="sortable" data-sort="hpc_conv_prob">HPC Conv</th>
+                            <th class="sortable" data-sort="fidoodle">Fidoodle</th>
+                            <th class="sortable" data-sort="value">Value ($M)</th>
+                            <th class="col-source no-sort">Source</th>
                         </tr>
                     </thead>
                     <tbody></tbody>

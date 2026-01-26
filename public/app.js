@@ -1619,7 +1619,6 @@ function renderDashboard() {
             <td class="text-left"><span class="expand-icon">&#9654;</span></td>
             <td class="col-ticker">
                 <span class="ticker">${ticker}</span>
-                ${hasHyperscaler ? '<span class="hyperscaler-badge">HPC</span>' : ''}
             </td>
             <td class="${priceChange >= 0 ? 'positive' : 'negative'}">$${stockPrice > 0 ? stockPrice.toFixed(2) : '--'}</td>
             <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? Math.round(totalLeaseValue).toLocaleString() : '--'}</td>
@@ -2023,19 +2022,19 @@ function openProjectModal(project) {
     document.getElementById('project-name').value = project.name;
     document.getElementById('project-country').value = project.country;
     document.getElementById('project-grid').value = project.grid || '';
-    document.getElementById('project-it-mw').value = itMw || '';
+    document.getElementById('project-it-mw').value = itMw ? parseFloat(itMw.toFixed(2)) : '';
 
     // Location multiplier
     const locationMult = getLocationMultiplier(project.country, project.grid);
-    document.getElementById('project-country-mult').value = overrides.locationMult || '';
+    document.getElementById('project-country-mult').value = overrides.locationMult ? parseFloat(overrides.locationMult.toFixed(2)) : '';
     document.getElementById('hint-country-mult').textContent = `(default: ${locationMult.toFixed(2)})`;
 
     // BTC Mining section
     const defaultMiningEbitda = factors.btcMining.ebitdaPerMw * itMw;
-    document.getElementById('project-mining-ebitda').value = overrides.miningEbitdaAnnualM ?? '';
-    document.getElementById('hint-mining-ebitda').textContent = `(default: $${defaultMiningEbitda.toFixed(1)}M)`;
+    document.getElementById('project-mining-ebitda').value = overrides.miningEbitdaAnnualM != null ? parseFloat(overrides.miningEbitdaAnnualM.toFixed(2)) : '';
+    document.getElementById('hint-mining-ebitda').textContent = `(default: $${defaultMiningEbitda.toFixed(2)}M)`;
 
-    document.getElementById('project-btc-multiple').value = overrides.btcEbitdaMultiple ?? '';
+    document.getElementById('project-btc-multiple').value = overrides.btcEbitdaMultiple != null ? parseFloat(overrides.btcEbitdaMultiple.toFixed(2)) : '';
     document.getElementById('hint-btc-multiple').textContent = `(default: ${factors.btcMining.ebitdaMultiple}x)`;
 
     // HPC Conversion section
@@ -2048,17 +2047,17 @@ function openProjectModal(project) {
     document.getElementById('project-conv-prob-display').textContent = convProb + '%';
 
     // HPC lease terms (rent is now $/MW/year)
-    document.getElementById('project-rent-mw').value = overrides.rentMw ?? '';
+    document.getElementById('project-rent-mw').value = overrides.rentMw != null ? parseFloat(overrides.rentMw.toFixed(2)) : '';
     document.getElementById('hint-hpc-rent').textContent = `(default: $${factors.baseNoiPerMw.toFixed(2)}M)`;
 
-    document.getElementById('project-term').value = overrides.term || '';
+    document.getElementById('project-term').value = overrides.term ? parseFloat(overrides.term.toFixed(2)) : '';
     document.getElementById('hint-term').textContent = `(default: ${factors.defaultTerm}y)`;
 
-    document.getElementById('project-escalator').value = overrides.escalator || '';
+    document.getElementById('project-escalator').value = overrides.escalator ? parseFloat(overrides.escalator.toFixed(2)) : '';
     document.getElementById('hint-escalator').textContent = `(default: ${factors.escalator}%)`;
 
-    document.getElementById('project-credit').value = overrides.credit || '';
-    document.getElementById('project-passthrough').value = overrides.passthrough ?? '';
+    document.getElementById('project-credit').value = overrides.credit ? parseFloat(overrides.credit.toFixed(2)) : '';
+    document.getElementById('project-passthrough').value = overrides.passthrough != null ? parseFloat(overrides.passthrough.toFixed(2)) : '';
 
     // Fidoodle
     const fidoodle = overrides.fidoodle ?? factors.fidoodleDefault;
@@ -2067,15 +2066,15 @@ function openProjectModal(project) {
     document.getElementById('project-fidoodle-display').textContent = fidoodle.toFixed(2);
 
     // Cap rate override
-    document.getElementById('project-cap-override').value = overrides.capOverride || '';
+    document.getElementById('project-cap-override').value = overrides.capOverride ? parseFloat(overrides.capOverride.toFixed(2)) : '';
 
     // Advanced overrides
     document.getElementById('project-lease-type').value = overrides.leaseType || '';
-    document.getElementById('project-concentration').value = overrides.tenantMult || '';
-    document.getElementById('project-ownership').value = overrides.ownership || '';
+    document.getElementById('project-concentration').value = overrides.tenantMult ? parseFloat(overrides.tenantMult.toFixed(2)) : '';
+    document.getElementById('project-ownership').value = overrides.ownership ? parseFloat(overrides.ownership.toFixed(2)) : '';
     document.getElementById('project-build-status').value = overrides.buildStatus || '';
-    document.getElementById('project-size-mult').value = overrides.sizeMult || '';
-    document.getElementById('project-noi').value = overrides.noi || '';
+    document.getElementById('project-size-mult').value = overrides.sizeMult ? parseFloat(overrides.sizeMult.toFixed(2)) : '';
+    document.getElementById('project-noi').value = overrides.noi ? parseFloat(overrides.noi.toFixed(2)) : '';
     document.getElementById('project-compute-model').value = overrides.computeModel || project.compute_model || '';
 
     updateValuationPreview();

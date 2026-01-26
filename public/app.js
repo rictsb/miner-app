@@ -1618,7 +1618,7 @@ function renderDashboard() {
         tr.innerHTML = `
             <td class="text-left"><span class="expand-icon">&#9654;</span></td>
             <td class="col-ticker">
-                <span class="ticker">${ticker}</span>
+                <span class="ticker clickable-ticker" data-ticker="${ticker}">${ticker}</span>
             </td>
             <td class="${priceChange >= 0 ? 'positive' : 'negative'}">$${stockPrice > 0 ? stockPrice.toFixed(2) : '--'}</td>
             <td class="has-tooltip" data-tooltip="Total nominal value of known HPC leases">${totalLeaseValue > 0 ? Math.round(totalLeaseValue).toLocaleString() : '--'}</td>
@@ -1671,10 +1671,18 @@ function renderDashboard() {
         `;
         tbody.appendChild(expandedTr);
 
-        // Click to expand
-        tr.addEventListener('click', () => {
+        // Click to expand (but not if clicking the ticker)
+        tr.addEventListener('click', (e) => {
+            // Don't expand if clicking on the ticker (that opens company panel)
+            if (e.target.classList.contains('clickable-ticker')) return;
             tr.classList.toggle('expanded');
             expandedTr.classList.toggle('show');
+        });
+
+        // Click on ticker to open company panel
+        tr.querySelector('.clickable-ticker').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCompanyPanel(ticker);
         });
     });
 
@@ -2083,6 +2091,268 @@ function openProjectModal(project) {
 
 function closeProjectModal() {
     document.getElementById('project-modal').classList.remove('active');
+}
+
+// =====================================================
+// COMPANY VALUATION PANEL FUNCTIONS
+// =====================================================
+
+function openCompanyPanel(ticker) {
+    const miner = MINER_DATA[ticker];
+    if (!miner) return;
+
+    const allProjects = [...ALL_PROJECTS, ...customProjects];
+    const projects = allProjects.filter(p => p.ticker === ticker);
+    const btcPrice = parseFloat(document.getElementById('btc-price').textContent.replace(/[$,]/g, '')) || 100000;
+
+    // Calculate all valuation components
+    let miningMw = 0, contractedMw = 0, pipelineMw = 0;
+    let miningEV = 0, contractedEv = 0, pipelineEv = 0;
+    let miningSites = [], hpcSites = [], pipelineSites = [];
+
+    projects.forEach(p => {
+        const overrides = projectOverrides[p.id] || {};
+        const valuation = calculateProjectValue(p, overrides);
+
+        if (valuation.isBtcSite) {
+            miningMw += p.it_mw || 0;
+            miningEV += valuation.components.miningValue || 0;
+            miningSites.push({ ...p, valuation: valuation.components.miningValue || 0 });
+
+            // HPC conversion option goes to pipeline
+            if (valuation.components.conversionValue > 0) {
+                pipelineEv += valuation.components.conversionValue;
+            }
+        } else {
+            const isContracted = p.status === 'Operational' || p.status === 'Contracted';
+            if (isContracted) {
+                contractedMw += p.it_mw || 0;
+                contractedEv += valuation.value;
+                hpcSites.push({ ...p, valuation: valuation.value });
+            } else {
+                pipelineMw += p.it_mw || 0;
+                pipelineEv += valuation.value;
+                pipelineSites.push({ ...p, valuation: valuation.value });
+            }
+        }
+    });
+
+    const hodlValue = miner.btc * btcPrice / 1e6;
+    const cash = miner.cash;
+    const debt = miner.debt;
+    const fdShares = miner.fdShares;
+
+    // Total equity value (including negative debt)
+    const operatingEV = miningEV + contractedEv + pipelineEv;
+    const equityValue = operatingEV + hodlValue + cash - debt;
+    const fairValue = equityValue / fdShares;
+
+    // Get stock price
+    const stockPrice = stockPrices[ticker]?.price || 0;
+    const priceChange = stockPrices[ticker]?.change || 0;
+    const upside = stockPrice > 0 ? ((fairValue / stockPrice - 1) * 100) : 0;
+
+    // Populate header
+    document.getElementById('company-panel-ticker').textContent = ticker;
+    document.getElementById('company-panel-name').textContent = getCompanyName(ticker);
+
+    // Populate price section
+    document.getElementById('company-current-price').textContent = stockPrice > 0 ? `$${stockPrice.toFixed(2)}` : '--';
+    const priceChangeEl = document.getElementById('company-price-change');
+    priceChangeEl.textContent = stockPrice > 0 ? `${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(1)}%` : '';
+    priceChangeEl.className = `price-change ${priceChange >= 0 ? 'positive' : 'negative'}`;
+
+    document.getElementById('company-fair-value').textContent = `$${fairValue.toFixed(2)}`;
+
+    const upsideBox = document.getElementById('company-upside-box');
+    const upsideEl = document.getElementById('company-upside');
+    upsideEl.textContent = stockPrice > 0 ? `${upside >= 0 ? '+' : ''}${upside.toFixed(0)}%` : '--';
+    upsideBox.className = `upside-box ${upside < 0 ? 'negative' : ''}`;
+
+    // Build valuation bar visualization
+    // Calculate total absolute values for percentage widths (exclude debt from bar, show as subtraction in table)
+    const positives = hodlValue + cash + miningEV + contractedEv + pipelineEv;
+    const barContainer = document.getElementById('company-valuation-bar');
+
+    let barHtml = '';
+    if (hodlValue > 0) {
+        const pct = (hodlValue / positives * 100).toFixed(1);
+        barHtml += `<div class="valuation-bar-segment hodl" style="width: ${pct}%;" title="HODL: $${Math.round(hodlValue)}M">${pct > 8 ? `$${Math.round(hodlValue)}M` : ''}</div>`;
+    }
+    if (cash > 0) {
+        const pct = (cash / positives * 100).toFixed(1);
+        barHtml += `<div class="valuation-bar-segment cash" style="width: ${pct}%;" title="Cash: $${Math.round(cash)}M">${pct > 8 ? `$${Math.round(cash)}M` : ''}</div>`;
+    }
+    if (miningEV > 0) {
+        const pct = (miningEV / positives * 100).toFixed(1);
+        barHtml += `<div class="valuation-bar-segment mining" style="width: ${pct}%;" title="BTC Mining: $${Math.round(miningEV)}M">${pct > 8 ? `$${Math.round(miningEV)}M` : ''}</div>`;
+    }
+    if (contractedEv > 0) {
+        const pct = (contractedEv / positives * 100).toFixed(1);
+        barHtml += `<div class="valuation-bar-segment hpc" style="width: ${pct}%;" title="HPC Contracted: $${Math.round(contractedEv)}M">${pct > 8 ? `$${Math.round(contractedEv)}M` : ''}</div>`;
+    }
+    if (pipelineEv > 0) {
+        const pct = (pipelineEv / positives * 100).toFixed(1);
+        barHtml += `<div class="valuation-bar-segment pipeline" style="width: ${pct}%;" title="Pipeline: $${Math.round(pipelineEv)}M">${pct > 8 ? `$${Math.round(pipelineEv)}M` : ''}</div>`;
+    }
+    barContainer.innerHTML = barHtml;
+
+    // Legend
+    const legendHtml = `
+        ${hodlValue > 0 ? '<span class="legend-item"><span class="legend-dot hodl"></span>HODL (BTC)</span>' : ''}
+        ${cash > 0 ? '<span class="legend-item"><span class="legend-dot cash"></span>Cash</span>' : ''}
+        ${miningEV > 0 ? '<span class="legend-item"><span class="legend-dot mining"></span>BTC Mining</span>' : ''}
+        ${contractedEv > 0 ? '<span class="legend-item"><span class="legend-dot hpc"></span>HPC Contracted</span>' : ''}
+        ${pipelineEv > 0 ? '<span class="legend-item"><span class="legend-dot pipeline"></span>Pipeline</span>' : ''}
+        ${debt > 0 ? '<span class="legend-item"><span class="legend-dot debt"></span>Debt (subtracted)</span>' : ''}
+    `;
+    document.getElementById('company-valuation-legend').innerHTML = legendHtml;
+
+    // Valuation table
+    const tableBody = document.getElementById('company-valuation-tbody');
+    let tableHtml = '';
+
+    const components = [
+        { name: 'BTC Holdings (HODL)', value: hodlValue, perShare: hodlValue / fdShares, pct: hodlValue / equityValue * 100, cls: 'hodl', btcCount: miner.btc },
+        { name: 'Cash & Equivalents', value: cash, perShare: cash / fdShares, pct: cash / equityValue * 100, cls: 'cash' },
+        { name: 'Debt', value: -debt, perShare: -debt / fdShares, pct: -debt / equityValue * 100, cls: 'debt' },
+        { name: 'BTC Mining Operations', value: miningEV, perShare: miningEV / fdShares, pct: miningEV / equityValue * 100, cls: 'mining', mw: miningMw },
+        { name: 'HPC/AI Contracted', value: contractedEv, perShare: contractedEv / fdShares, pct: contractedEv / equityValue * 100, cls: 'hpc', mw: contractedMw },
+        { name: 'Pipeline/Development', value: pipelineEv, perShare: pipelineEv / fdShares, pct: pipelineEv / equityValue * 100, cls: 'pipeline', mw: pipelineMw },
+    ];
+
+    components.forEach(c => {
+        if (c.value === 0 && c.cls !== 'debt') return; // Always show debt row even if 0
+        let label = c.name;
+        if (c.btcCount) label += ` (${c.btcCount.toLocaleString()} BTC)`;
+        if (c.mw) label += ` (${Math.round(c.mw)} MW)`;
+
+        tableHtml += `
+            <tr class="component-${c.cls}">
+                <td>${label}</td>
+                <td class="text-right">${c.value >= 0 ? '' : '-'}$${Math.abs(Math.round(c.value)).toLocaleString()}</td>
+                <td class="text-right">${c.perShare >= 0 ? '' : '-'}$${Math.abs(c.perShare).toFixed(2)}</td>
+                <td class="text-right">${c.pct.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+
+    // Total row
+    tableHtml += `
+        <tr class="total-row">
+            <td>Total Equity Value</td>
+            <td class="text-right">$${Math.round(equityValue).toLocaleString()}</td>
+            <td class="text-right">$${fairValue.toFixed(2)}</td>
+            <td class="text-right">100%</td>
+        </tr>
+    `;
+
+    tableBody.innerHTML = tableHtml;
+
+    // Sites summary
+    const summaryHtml = `
+        <div class="site-summary-box mining">
+            <div class="summary-value">${miningSites.length}</div>
+            <div class="summary-label">BTC Mining Sites</div>
+        </div>
+        <div class="site-summary-box hpc">
+            <div class="summary-value">${hpcSites.length}</div>
+            <div class="summary-label">HPC Contracted</div>
+        </div>
+        <div class="site-summary-box pipeline">
+            <div class="summary-value">${pipelineSites.length}</div>
+            <div class="summary-label">Pipeline</div>
+        </div>
+    `;
+    document.getElementById('company-sites-summary').innerHTML = summaryHtml;
+
+    // Sites list
+    let sitesHtml = '';
+
+    if (miningSites.length > 0) {
+        sitesHtml += `<div class="site-group">
+            <div class="site-group-header">BTC Mining Operations</div>
+            ${miningSites.map(s => `
+                <div class="site-item">
+                    <div class="site-info">
+                        <span class="site-name">${s.name}</span>
+                        <span class="site-mw">${s.it_mw || 0} MW</span>
+                    </div>
+                    <span class="site-value">$${Math.round(s.valuation)}M</span>
+                </div>
+            `).join('')}
+        </div>`;
+    }
+
+    if (hpcSites.length > 0) {
+        sitesHtml += `<div class="site-group">
+            <div class="site-group-header">HPC/AI Contracted</div>
+            ${hpcSites.map(s => `
+                <div class="site-item">
+                    <div class="site-info">
+                        <span class="site-name">${s.name}</span>
+                        <span class="site-mw">${s.it_mw || 0} MW</span>
+                        ${s.lessee ? `<span class="site-tenant">${s.lessee}</span>` : ''}
+                    </div>
+                    <span class="site-value">$${Math.round(s.valuation)}M</span>
+                </div>
+            `).join('')}
+        </div>`;
+    }
+
+    if (pipelineSites.length > 0) {
+        sitesHtml += `<div class="site-group">
+            <div class="site-group-header">Pipeline / Development</div>
+            ${pipelineSites.map(s => `
+                <div class="site-item">
+                    <div class="site-info">
+                        <span class="site-name">${s.name}</span>
+                        <span class="site-mw">${s.it_mw || 0} MW</span>
+                        ${s.lessee ? `<span class="site-tenant">${s.lessee}</span>` : ''}
+                    </div>
+                    <span class="site-value">$${Math.round(s.valuation)}M</span>
+                </div>
+            `).join('')}
+        </div>`;
+    }
+
+    document.getElementById('company-sites-list').innerHTML = sitesHtml;
+
+    // Source
+    document.getElementById('company-source-link').href = miner.sourceUrl;
+    document.getElementById('company-source-link').textContent = miner.source;
+
+    // Show panel
+    document.getElementById('company-panel').classList.add('active');
+    document.getElementById('company-panel-overlay').classList.add('active');
+}
+
+function closeCompanyPanel() {
+    document.getElementById('company-panel').classList.remove('active');
+    document.getElementById('company-panel-overlay').classList.remove('active');
+}
+
+function getCompanyName(ticker) {
+    const names = {
+        'MARA': 'Marathon Digital Holdings',
+        'RIOT': 'Riot Platforms',
+        'CLSK': 'CleanSpark',
+        'CIFR': 'Cipher Mining',
+        'CORZ': 'Core Scientific',
+        'WULF': 'TeraWulf',
+        'HUT': 'Hut 8 Mining',
+        'IREN': 'Iris Energy',
+        'BITF': 'Bitfarms',
+        'HIVE': 'HIVE Digital',
+        'GLXY': 'Galaxy Digital',
+        'APLD': 'Applied Digital',
+        'BTDR': 'Bitdeer Technologies',
+        'ABTC': 'Ault Alliance',
+        'SLNH': 'Soluna Holdings',
+        'FUFU': 'BitFuFu',
+        'BTBT': 'Bit Digital'
+    };
+    return names[ticker] || ticker;
 }
 
 function updateValuationPreview() {

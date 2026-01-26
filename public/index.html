@@ -198,6 +198,18 @@
             font-family: 'Roboto', sans-serif;
         }
 
+        .ticker.clickable-ticker {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+            transition: all 0.15s ease;
+        }
+
+        .ticker.clickable-ticker:hover {
+            background: #003366;
+            color: #4dc3ff;
+        }
+
         .positive {
             color: #00ff00;
         }
@@ -1354,6 +1366,418 @@
             outline: none;
             border-color: #ff8c00;
         }
+
+        /* Company Valuation Panel - Slide-in from right */
+        .company-panel {
+            position: fixed;
+            top: 0;
+            right: -600px;
+            width: 580px;
+            height: 100vh;
+            background: #0a0a0a;
+            border-left: 2px solid #ff8c00;
+            z-index: 1001;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.8);
+        }
+
+        .company-panel.active {
+            right: 0;
+        }
+
+        .company-panel-content {
+            padding: 20px;
+        }
+
+        .company-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+        }
+
+        .company-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .company-ticker {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ff8c00;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .company-name {
+            font-size: 14px;
+            color: #888;
+        }
+
+        .panel-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0 8px;
+            line-height: 1;
+        }
+
+        .panel-close:hover {
+            color: #ff8c00;
+        }
+
+        /* Price Section */
+        .company-price-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #111;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .price-box {
+            text-align: center;
+            padding: 10px 20px;
+        }
+
+        .price-box .price-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .price-box .price-value {
+            font-size: 24px;
+            font-weight: 600;
+            font-family: 'Roboto Mono', monospace;
+            color: #fff;
+        }
+
+        .price-box.target-price .price-value {
+            color: #00ff00;
+        }
+
+        .price-box .price-change {
+            font-size: 12px;
+            margin-top: 4px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .price-box .price-change.positive { color: #00ff00; }
+        .price-box .price-change.negative { color: #ff4444; }
+
+        .price-arrow {
+            font-size: 24px;
+            color: #444;
+        }
+
+        .upside-box {
+            margin-left: auto;
+            text-align: center;
+            padding: 15px 25px;
+            border-radius: 6px;
+            background: #0a2a0a;
+        }
+
+        .upside-box.negative {
+            background: #2a0a0a;
+        }
+
+        .upside-box .upside-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .upside-box .upside-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+            color: #00ff00;
+        }
+
+        .upside-box.negative .upside-value {
+            color: #ff4444;
+        }
+
+        /* Valuation Visual */
+        .company-valuation-visual {
+            margin-bottom: 20px;
+        }
+
+        .company-valuation-visual h3 {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .valuation-bar-container {
+            height: 40px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            display: flex;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .valuation-bar-segment {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 500;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            transition: width 0.3s ease;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .valuation-bar-segment.hodl { background: linear-gradient(90deg, #8a5a00, #cc8800); }
+        .valuation-bar-segment.cash { background: linear-gradient(90deg, #1a5a1a, #2a8a2a); }
+        .valuation-bar-segment.debt { background: linear-gradient(90deg, #5a1a1a, #8a2a2a); }
+        .valuation-bar-segment.mining { background: linear-gradient(90deg, #5a4a00, #8a7a00); }
+        .valuation-bar-segment.hpc { background: linear-gradient(90deg, #005a8a, #0088cc); }
+        .valuation-bar-segment.pipeline { background: linear-gradient(90deg, #3a3a3a, #5a5a5a); }
+
+        .valuation-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #888;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        .legend-dot.hodl { background: #cc8800; }
+        .legend-dot.cash { background: #2a8a2a; }
+        .legend-dot.debt { background: #8a2a2a; }
+        .legend-dot.mining { background: #8a7a00; }
+        .legend-dot.hpc { background: #0088cc; }
+        .legend-dot.pipeline { background: #5a5a5a; }
+
+        /* Valuation Table */
+        .company-valuation-table {
+            margin-bottom: 20px;
+        }
+
+        .company-valuation-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .company-valuation-table th {
+            text-align: left;
+            padding: 8px 10px;
+            background: #111;
+            color: #888;
+            font-weight: 500;
+            border-bottom: 1px solid #333;
+        }
+
+        .company-valuation-table th.text-right {
+            text-align: right;
+        }
+
+        .company-valuation-table td {
+            padding: 10px;
+            border-bottom: 1px solid #222;
+            color: #ccc;
+        }
+
+        .company-valuation-table td.text-right {
+            text-align: right;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .company-valuation-table tr.component-hodl td:first-child { border-left: 3px solid #cc8800; }
+        .company-valuation-table tr.component-cash td:first-child { border-left: 3px solid #2a8a2a; }
+        .company-valuation-table tr.component-debt td:first-child { border-left: 3px solid #8a2a2a; }
+        .company-valuation-table tr.component-mining td:first-child { border-left: 3px solid #8a7a00; }
+        .company-valuation-table tr.component-hpc td:first-child { border-left: 3px solid #0088cc; }
+        .company-valuation-table tr.component-pipeline td:first-child { border-left: 3px solid #5a5a5a; }
+
+        .company-valuation-table tr.total-row {
+            background: #1a1a1a;
+        }
+
+        .company-valuation-table tr.total-row td {
+            font-weight: 600;
+            color: #00ff00;
+            border-bottom: none;
+        }
+
+        .company-valuation-table tr.total-row td:first-child {
+            color: #fff;
+        }
+
+        /* Sites Section */
+        .company-sites-section {
+            margin-bottom: 20px;
+        }
+
+        .company-sites-section h3 {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .sites-summary {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .site-summary-box {
+            flex: 1;
+            padding: 12px;
+            background: #111;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .site-summary-box .summary-value {
+            font-size: 18px;
+            font-weight: 600;
+            font-family: 'Roboto Mono', monospace;
+            color: #fff;
+        }
+
+        .site-summary-box .summary-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .site-summary-box.mining { border-top: 2px solid #8a7a00; }
+        .site-summary-box.hpc { border-top: 2px solid #0088cc; }
+        .site-summary-box.pipeline { border-top: 2px solid #5a5a5a; }
+
+        .sites-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .site-group {
+            margin-bottom: 12px;
+        }
+
+        .site-group-header {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+            padding: 6px 10px;
+            background: #111;
+            border-radius: 3px;
+            margin-bottom: 6px;
+        }
+
+        .site-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 10px;
+            background: #0a0a0a;
+            border-radius: 3px;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .site-item:hover {
+            background: #151515;
+        }
+
+        .site-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .site-name {
+            color: #ccc;
+        }
+
+        .site-mw {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .site-tenant {
+            font-size: 10px;
+            color: #0088cc;
+            background: #001a2a;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .site-value {
+            font-family: 'Roboto Mono', monospace;
+            color: #888;
+        }
+
+        /* Sources */
+        .company-sources {
+            padding-top: 15px;
+            border-top: 1px solid #222;
+            font-size: 11px;
+        }
+
+        .company-sources .source-label {
+            color: #666;
+        }
+
+        .company-sources .source-link {
+            color: #ff8c00;
+            text-decoration: none;
+        }
+
+        .company-sources .source-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Overlay when panel is open */
+        .company-panel-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .company-panel-overlay.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -2267,6 +2691,85 @@
                     <button type="submit" class="btn">Add Project</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Company Panel Overlay -->
+    <div id="company-panel-overlay" class="company-panel-overlay" onclick="closeCompanyPanel()"></div>
+
+    <!-- Company Valuation Panel (Slide-in) -->
+    <div id="company-panel" class="company-panel">
+        <div class="company-panel-content">
+            <div class="company-panel-header">
+                <div class="company-header-left">
+                    <span class="company-ticker" id="company-panel-ticker">MARA</span>
+                    <span class="company-name" id="company-panel-name">Marathon Digital Holdings</span>
+                </div>
+                <button class="panel-close" onclick="closeCompanyPanel()">&times;</button>
+            </div>
+
+            <!-- Price Section -->
+            <div class="company-price-section">
+                <div class="price-box current-price">
+                    <div class="price-label">Current Price</div>
+                    <div class="price-value" id="company-current-price">$18.50</div>
+                    <div class="price-change positive" id="company-price-change">+2.5%</div>
+                </div>
+                <div class="price-arrow">→</div>
+                <div class="price-box target-price">
+                    <div class="price-label">Fair Value</div>
+                    <div class="price-value" id="company-fair-value">$24.30</div>
+                </div>
+                <div class="upside-box" id="company-upside-box">
+                    <div class="upside-label">Upside</div>
+                    <div class="upside-value" id="company-upside">+31%</div>
+                </div>
+            </div>
+
+            <!-- Valuation Waterfall Visual -->
+            <div class="company-valuation-visual">
+                <h3>Equity Value Breakdown</h3>
+                <div class="valuation-bar-container" id="company-valuation-bar">
+                    <!-- Populated by JS -->
+                </div>
+                <div class="valuation-legend" id="company-valuation-legend">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Valuation Table -->
+            <div class="company-valuation-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th class="text-right">Value ($M)</th>
+                            <th class="text-right">Per Share</th>
+                            <th class="text-right">% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="company-valuation-tbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Sites Breakdown -->
+            <div class="company-sites-section">
+                <h3>Project Portfolio</h3>
+                <div class="sites-summary" id="company-sites-summary">
+                    <!-- Summary stats -->
+                </div>
+                <div class="sites-list" id="company-sites-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Data Sources -->
+            <div class="company-sources">
+                <span class="source-label">Source:</span>
+                <a href="#" id="company-source-link" target="_blank" class="source-link">Q3 2024 10-Q Filing</a>
+            </div>
         </div>
     </div>
 

@@ -230,298 +230,253 @@
             font-size: 12px;
         }
 
-        /* Hierarchical Project List */
+        /* Projects Table View */
         .hierarchy-container {
             background: #0a0a0a;
             border: 1px solid #333;
             border-radius: 4px;
+            overflow-x: auto;
         }
 
-        .hierarchy-company {
-            border-bottom: 1px solid #333;
-        }
-
-        .hierarchy-company:last-child {
-            border-bottom: none;
-        }
-
-        .hierarchy-company-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 15px;
-            background: #111;
-            transition: background 0.15s;
-        }
-
-        .hierarchy-company-header:hover {
-            background: #1a1a1a;
-        }
-
-        .hierarchy-company-header .company-ticker {
-            color: #ff8c00;
-            font-weight: 600;
-            font-size: 14px;
-            min-width: 50px;
-        }
-
-        .hierarchy-company-header .company-name {
-            color: #888;
+        .projects-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 13px;
-            flex: 1;
+            min-width: 1100px;
         }
 
-        .hierarchy-company-header .company-stats {
-            color: #666;
-            font-size: 12px;
-            font-family: 'Roboto Mono', monospace;
+        .projects-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
-        .hierarchy-sites {
-            padding-left: 20px;
+        .projects-table th {
+            text-align: left;
+            padding: 12px 10px;
+            background: #111;
+            color: #888;
+            font-weight: 500;
+            border-bottom: 2px solid #333;
+            white-space: nowrap;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .hierarchy-sites.collapsed {
-            display: none;
+        .projects-table th.sortable {
+            cursor: pointer;
+            user-select: none;
         }
 
-        .hierarchy-site {
-            border-left: 2px solid #333;
-            margin-left: 10px;
+        .projects-table th.sortable:hover {
+            color: #ff8c00;
         }
 
-        .hierarchy-site-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 15px;
-            transition: background 0.15s;
+        .projects-table th.sortable::after {
+            content: '';
+            display: inline-block;
+            margin-left: 6px;
+            opacity: 0.3;
         }
 
-        .hierarchy-site-header:hover {
+        .projects-table th.sorted-asc::after {
+            content: '▲';
+            opacity: 1;
+            color: #ff8c00;
+        }
+
+        .projects-table th.sorted-desc::after {
+            content: '▼';
+            opacity: 1;
+            color: #ff8c00;
+        }
+
+        .projects-table td {
+            padding: 10px;
+            border-bottom: 1px solid #1a1a1a;
+            color: #ccc;
+            vertical-align: middle;
+        }
+
+        .projects-table tbody tr:hover {
             background: #151515;
         }
 
-        .hierarchy-site-header .site-name {
-            color: #ccc;
-            font-weight: 500;
-            min-width: 200px;
+        .projects-table tbody tr.potential-row {
+            opacity: 0.6;
+            background: #0d0d0d;
         }
 
-        .hierarchy-site-header .site-location {
-            color: #666;
+        .projects-table tbody tr.potential-row:hover {
+            opacity: 0.8;
+        }
+
+        .projects-table .col-ticker .ticker {
+            color: #00bfff;
+            font-weight: 600;
             font-size: 12px;
-            min-width: 100px;
         }
 
-        .hierarchy-site-header .site-grid {
-            color: #555;
+        .projects-table .col-site {
+            color: #ddd;
+            font-weight: 500;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .projects-table .col-location {
+            color: #777;
             font-size: 11px;
-            min-width: 60px;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .hierarchy-site-header .site-power {
+        .projects-table .col-phase {
             color: #888;
             font-size: 12px;
+        }
+
+        .projects-table .col-mw {
             font-family: 'Roboto Mono', monospace;
-            min-width: 70px;
-        }
-
-        .hierarchy-site-header .site-value {
-            color: #00ff00;
-            font-size: 12px;
-            font-family: 'Roboto Mono', monospace;
-            margin-left: auto;
-        }
-
-        .hierarchy-phases {
-            display: block;
-            padding-left: 20px;
-        }
-
-        .hierarchy-phases.collapsed {
-            display: none;
-        }
-
-        .hierarchy-phase {
-            border-left: 2px solid #444;
-            margin-left: 10px;
-        }
-
-        .hierarchy-phase-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 15px;
-            transition: background 0.15s;
-        }
-
-        .hierarchy-phase-header:hover {
-            background: #181818;
-        }
-
-        .hierarchy-phase-header .phase-name {
             color: #aaa;
-            font-size: 13px;
-            min-width: 100px;
         }
 
-        .hierarchy-phase-header .phase-status {
+        .projects-table .col-energization {
+            font-size: 12px;
+            color: #aa8800;
+        }
+
+        .projects-table .col-tenant {
+            color: #4dc3ff;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .projects-table .col-tenant.dim {
+            color: #555;
+        }
+
+        .projects-table .col-contract {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .projects-table .col-value {
+            font-family: 'Roboto Mono', monospace;
+            color: #00ff00;
+            font-weight: 500;
+        }
+
+        .projects-table .col-value.potential {
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-block;
             font-size: 10px;
-            padding: 2px 8px;
+            padding: 3px 8px;
             border-radius: 3px;
             text-transform: uppercase;
+            font-weight: 500;
+            letter-spacing: 0.3px;
         }
 
-        .phase-status.status-operational {
+        .status-badge.status-operational {
             background: #0a2a0a;
             color: #00ff00;
         }
 
-        .phase-status.status-under-construction {
+        .status-badge.status-under-construction {
             background: #2a2a0a;
             color: #ffaa00;
         }
 
-        .phase-status.status-permitted {
+        .status-badge.status-permitted {
             background: #1a1a2a;
             color: #8888ff;
         }
 
-        .hierarchy-phase-header .phase-capacity {
+        .status-badge.status-pipeline {
+            background: #1a1a1a;
             color: #666;
-            font-size: 12px;
-            font-family: 'Roboto Mono', monospace;
         }
 
-        .hierarchy-phase-header .phase-energization {
-            font-size: 11px;
-            color: #aa8800;
-            background: #1a1500;
-            padding: 2px 6px;
-            border-radius: 3px;
+        .status-badge.status-conversion {
+            background: #2a1a2a;
+            color: #cc88ff;
         }
 
-        .hierarchy-phase-header .phase-value {
-            color: #00cc00;
-            font-size: 12px;
-            font-family: 'Roboto Mono', monospace;
-            margin-left: auto;
-        }
-
-        .hierarchy-tenancies {
-            display: block;
-            padding-left: 15px;
-        }
-
-        .hierarchy-tenancies.collapsed {
-            display: none;
-        }
-
-        .hierarchy-tenancy {
-            padding: 8px 15px;
-            border-left: 2px solid #555;
-            margin-left: 10px;
-            background: #0d0d0d;
-        }
-
-        .hierarchy-tenancy.potential {
-            border-left-color: #555;
-            opacity: 0.7;
-        }
-
-        .tenancy-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 12px;
-        }
-
-        .tenancy-tenant {
-            color: #00bfff;
-            min-width: 120px;
-        }
-
-        .tenancy-use {
-            font-size: 10px;
+        /* Use type badges */
+        .use-badge {
+            display: inline-block;
+            font-size: 9px;
             padding: 2px 6px;
             border-radius: 3px;
             text-transform: uppercase;
+            font-weight: 500;
         }
 
-        .tenancy-use.use-btc_mining {
+        .use-badge.use-btc-mining,
+        .use-badge.use-btc-hosting {
             background: #2a1a00;
             color: #ffaa00;
         }
 
-        .tenancy-use.use-hpc_lease {
+        .use-badge.use-hpc-lease {
             background: #001a2a;
             color: #00aaff;
         }
 
-        .tenancy-use.use-gpu_cloud {
+        .use-badge.use-hpc-option {
+            background: #1a102a;
+            color: #aa88ff;
+        }
+
+        .use-badge.use-gpu-cloud {
             background: #1a002a;
             color: #aa00ff;
         }
 
-        .tenancy-use.use-development {
+        .use-badge.use-development,
+        .use-badge.use-mixed {
             background: #1a1a1a;
             color: #888;
         }
 
-        .tenancy-mw {
-            color: #888;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .tenancy-contract {
-            color: #666;
-            font-size: 10px;
-        }
-
-        .tenancy-term {
-            color: #666;
-            font-size: 11px;
-        }
-
-        .tenancy-revenue {
-            color: #00aa00;
-            font-size: 11px;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .tenancy-value {
-            color: #00ff00;
-            font-family: 'Roboto Mono', monospace;
-            margin-left: auto;
-        }
-
-        .tenancy-value.potential {
-            color: #888;
-            font-style: italic;
-        }
-
+        /* Edit button */
         .btn-edit-tenancy {
-            background: #222;
-            border: 1px solid #444;
-            color: #888;
-            padding: 2px 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #666;
+            padding: 4px 8px;
             border-radius: 3px;
             cursor: pointer;
             font-size: 11px;
+            transition: all 0.15s;
         }
 
         .btn-edit-tenancy:hover {
-            background: #333;
+            background: #2a2a2a;
+            border-color: #ff8c00;
             color: #ff8c00;
         }
 
-        .conversion-note {
-            font-size: 10px;
+        /* Projects summary footer */
+        .projects-summary {
+            padding: 12px 15px;
+            background: #111;
+            border-top: 1px solid #333;
+            font-size: 12px;
             color: #666;
-            font-style: italic;
-            margin-top: 4px;
-            padding-left: 132px;
         }
 
         /* Company Panel - Slide-in */

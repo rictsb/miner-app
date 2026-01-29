@@ -658,7 +658,7 @@ function renderDashboard() {
 }
 
 // =====================================================
-// HIERARCHICAL PROJECT LIST (FLAT VIEW)
+// PROJECTS TABLE VIEW
 // =====================================================
 
 /**
@@ -671,158 +671,252 @@ function formatLocation(state, country) {
 }
 
 /**
- * Format energization date
+ * Format energization date from phase object
  */
-function formatEnergizationDate(dateStr) {
+function formatEnergizationDate(phase) {
+    // Try different possible field locations
+    const dateStr = phase?.energization?.date_normalized ||
+                    phase?.energization_date ||
+                    phase?.timeline?.energization ||
+                    phase?.energization?.target;
+
     if (!dateStr) return '';
-    // Handle various date formats
+
     try {
         const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr; // Return as-is if can't parse
+        if (isNaN(date.getTime())) return dateStr;
         return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     } catch (e) {
         return dateStr;
     }
 }
 
+/**
+ * Get status CSS class
+ */
+function getStatusClass(status) {
+    if (!status) return '';
+    return 'status-' + status.toLowerCase().replace(/\s+/g, '-');
+}
+
+/**
+ * Projects sort state
+ */
+let projectsTableSort = { column: 'ticker', direction: 'asc' };
+
 function renderProjectsHierarchy() {
     const container = document.getElementById('projects-hierarchy');
     if (!container) return;
-
-    container.innerHTML = '';
 
     // Get filter values
     const tickerFilter = document.getElementById('project-ticker-filter')?.value || '';
     const statusFilter = document.getElementById('project-status-filter')?.value || '';
     const useFilter = document.getElementById('project-use-filter')?.value || '';
 
-    // Group by company
-    const tickers = [...new Set(DATA.sites.map(s => s.ticker))].sort();
+    // Build flat list of all rows (one per active tenancy)
+    const rows = [];
 
-    tickers.forEach(ticker => {
-        if (tickerFilter && ticker !== tickerFilter) return;
+    DATA.sites.forEach(site => {
+        if (tickerFilter && site.ticker !== tickerFilter) return;
 
-        const sites = SITES_BY_COMPANY[ticker] || [];
-        if (sites.length === 0) return;
+        const phases = PHASES_BY_SITE[site.id] || [];
 
-        // Company header
-        const companyVal = calculateCompanyValuation(ticker);
-        const companyDiv = document.createElement('div');
-        companyDiv.className = 'hierarchy-company';
-        companyDiv.innerHTML = `
-            <div class="hierarchy-company-header" data-ticker="${ticker}">
-                <span class="company-ticker">${ticker}</span>
-                <span class="company-name">${COMPANY_MAP[ticker]?.name || ticker}</span>
-                <span class="company-stats">
-                    ${sites.length} sites · ${Math.round(companyVal?.totalMw || 0)} MW · $${Math.round(companyVal?.equityValue || 0).toLocaleString()}M
-                </span>
-            </div>
-            <div class="hierarchy-sites expanded" id="sites-${ticker}"></div>
-        `;
+        phases.forEach(phase => {
+            if (statusFilter && phase.status !== statusFilter) return;
 
-        const sitesContainer = companyDiv.querySelector('.hierarchy-sites');
+            const tenancies = TENANCIES_BY_PHASE[phase.id] || [];
+            const activeTenancies = tenancies.filter(t => t.status === 'active');
 
-        // Render sites for this company
-        sites.forEach(site => {
-            const phases = PHASES_BY_SITE[site.id] || [];
+            // If no active tenancies, still show the phase if it has capacity
+            if (activeTenancies.length === 0 && phase.capacity?.it_mw > 0) {
+                if (useFilter) return; // Skip if filtering by use type
 
-            // Apply filters
-            let hasMatchingTenancy = false;
-            phases.forEach(phase => {
-                const tenancies = TENANCIES_BY_PHASE[phase.id] || [];
-                tenancies.forEach(t => {
-                    if (t.status !== 'active') return;
-                    if (statusFilter && phase.status !== statusFilter) return;
-                    if (useFilter && t.use_type !== useFilter) return;
-                    hasMatchingTenancy = true;
+                rows.push({
+                    ticker: site.ticker,
+                    siteName: site.name,
+                    location: formatLocation(site.location?.state, site.location?.country),
+                    phaseName: phase.name,
+                    status: phase.status,
+                    itMw: phase.capacity?.it_mw || 0,
+                    energization: formatEnergizationDate(phase),
+                    tenant: '—',
+                    useType: '—',
+                    contractType: '—',
+                    term: null,
+                    revenue: null,
+                    value: 0,
+                    tenancyId: null,
+                    isPotential: false,
+                    phase: phase,
+                    site: site
+                });
+                return;
+            }
+
+            activeTenancies.forEach(tenancy => {
+                if (useFilter && tenancy.use_type !== useFilter) return;
+
+                const overrides = tenancyOverrides[tenancy.id] || {};
+                const tenancyVal = calculateTenancyValue(tenancy, overrides);
+
+                rows.push({
+                    ticker: site.ticker,
+                    siteName: site.name,
+                    location: formatLocation(site.location?.state, site.location?.country),
+                    phaseName: phase.name,
+                    status: phase.status,
+                    itMw: tenancy.contract?.mw_allocated || phase.capacity?.it_mw || 0,
+                    energization: formatEnergizationDate(phase),
+                    tenant: tenancy.tenant || 'Self',
+                    useType: tenancy.use_type,
+                    contractType: tenancy.contract?.type || '',
+                    term: tenancy.contract?.term_years || null,
+                    revenue: tenancy.contract?.annual_revenue_m || null,
+                    value: tenancyVal.value,
+                    tenancyId: tenancy.id,
+                    isPotential: false,
+                    phase: phase,
+                    site: site
                 });
             });
 
-            if (!hasMatchingTenancy && (statusFilter || useFilter)) return;
+            // Also add potential (HPC conversion) tenancies
+            const potentialTenancies = tenancies.filter(t => t.status === 'potential');
+            potentialTenancies.forEach(tenancy => {
+                if (useFilter && useFilter !== 'HPC_LEASE') return; // Show HPC conversions when filtering for HPC
 
-            const siteVal = calculateSiteValue(site);
-            const locationStr = formatLocation(site.location?.state, site.location?.country);
+                const overrides = tenancyOverrides[tenancy.id] || {};
+                const tenancyVal = calculateTenancyValue(tenancy, overrides);
 
-            const siteDiv = document.createElement('div');
-            siteDiv.className = 'hierarchy-site';
-            siteDiv.innerHTML = `
-                <div class="hierarchy-site-header" data-site-id="${site.id}">
-                    <span class="site-name">${site.name}</span>
-                    <span class="site-location">${locationStr}</span>
-                    <span class="site-grid">${site.grid || ''}</span>
-                    <span class="site-power">${Math.round(site.power?.total_site_capacity_mw || 0)} MW</span>
-                    <span class="site-value">$${Math.round(siteVal.totalValue).toLocaleString()}M</span>
-                </div>
-                <div class="hierarchy-phases expanded" id="phases-${site.id}"></div>
-            `;
-
-            const phasesContainer = siteDiv.querySelector('.hierarchy-phases');
-
-            // Render phases (always visible)
-            phases.forEach(phase => {
-                const tenancies = TENANCIES_BY_PHASE[phase.id] || [];
-                const activeTenancies = tenancies.filter(t => t.status === 'active');
-
-                // Apply filters
-                if (statusFilter && phase.status !== statusFilter) return;
-
-                const phaseVal = calculatePhaseValue(phase);
-                const energizationStr = formatEnergizationDate(phase.energization_date || phase.timeline?.energization);
-
-                const phaseDiv = document.createElement('div');
-                phaseDiv.className = 'hierarchy-phase';
-                phaseDiv.innerHTML = `
-                    <div class="hierarchy-phase-header" data-phase-id="${phase.id}">
-                        <span class="phase-name">${phase.name}</span>
-                        <span class="phase-status status-${phase.status.toLowerCase().replace(' ', '-')}">${phase.status}</span>
-                        <span class="phase-capacity">${Math.round(phase.capacity?.it_mw || 0)} MW IT</span>
-                        ${energizationStr ? `<span class="phase-energization">⚡ ${energizationStr}</span>` : ''}
-                        <span class="phase-value">$${Math.round(phaseVal.totalValue).toLocaleString()}M</span>
-                    </div>
-                    <div class="hierarchy-tenancies expanded" id="tenancies-${phase.id}"></div>
-                `;
-
-                const tenanciesContainer = phaseDiv.querySelector('.hierarchy-tenancies');
-
-                // Render tenancies (always visible)
-                tenancies.forEach(tenancy => {
-                    if (useFilter && tenancy.use_type !== useFilter) return;
-
-                    const overrides = tenancyOverrides[tenancy.id] || {};
-                    const tenancyVal = calculateTenancyValue(tenancy, overrides);
-
-                    const tenancyDiv = document.createElement('div');
-                    tenancyDiv.className = `hierarchy-tenancy ${tenancy.status === 'potential' ? 'potential' : ''}`;
-                    tenancyDiv.innerHTML = `
-                        <div class="tenancy-row">
-                            <span class="tenancy-tenant">${tenancy.tenant || 'Self'}</span>
-                            <span class="tenancy-use use-${tenancy.use_type.toLowerCase()}">${formatUseType(tenancy.use_type)}</span>
-                            <span class="tenancy-mw">${Math.round(tenancy.contract?.mw_allocated || 0)} MW</span>
-                            <span class="tenancy-contract">${tenancy.contract?.type || ''}</span>
-                            ${tenancy.contract?.term_years ? `<span class="tenancy-term">${tenancy.contract.term_years}y</span>` : ''}
-                            ${tenancy.contract?.annual_revenue_m ? `<span class="tenancy-revenue">$${Math.round(tenancy.contract.annual_revenue_m)}M/yr</span>` : ''}
-                            <span class="tenancy-value ${tenancy.status === 'potential' ? 'potential' : ''}">$${Math.round(tenancyVal.value).toLocaleString()}M</span>
-                            <button class="btn-edit-tenancy" data-tenancy-id="${tenancy.id}" title="Edit overrides">⚙</button>
-                        </div>
-                        ${tenancy.status === 'potential' ? `<div class="conversion-note">HPC Conversion Option (${Math.round((tenancy.conversion?.conversion_probability || 0.5) * 100)}% prob)</div>` : ''}
-                    `;
-
-                    // Add edit button handler
-                    tenancyDiv.querySelector('.btn-edit-tenancy').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        openTenancyModal(tenancy.id);
-                    });
-
-                    tenanciesContainer.appendChild(tenancyDiv);
+                rows.push({
+                    ticker: site.ticker,
+                    siteName: site.name,
+                    location: formatLocation(site.location?.state, site.location?.country),
+                    phaseName: phase.name,
+                    status: 'Conversion',
+                    itMw: phase.capacity?.it_mw || 0,
+                    energization: tenancy.conversion?.target_date ? formatEnergizationDate({ energization: { date_normalized: tenancy.conversion.target_date }}) : '—',
+                    tenant: tenancy.conversion?.potential_tenant || 'TBD',
+                    useType: 'HPC_OPTION',
+                    contractType: `${Math.round((tenancy.conversion?.conversion_probability || 0.5) * 100)}% prob`,
+                    term: null,
+                    revenue: null,
+                    value: tenancyVal.value,
+                    tenancyId: tenancy.id,
+                    isPotential: true,
+                    phase: phase,
+                    site: site
                 });
-
-                phasesContainer.appendChild(phaseDiv);
             });
-
-            sitesContainer.appendChild(siteDiv);
         });
+    });
 
-        container.appendChild(companyDiv);
+    // Sort rows
+    rows.sort((a, b) => {
+        let aVal, bVal;
+        switch (projectsTableSort.column) {
+            case 'ticker': aVal = a.ticker; bVal = b.ticker; break;
+            case 'site': aVal = a.siteName; bVal = b.siteName; break;
+            case 'location': aVal = a.location; bVal = b.location; break;
+            case 'status': aVal = a.status; bVal = b.status; break;
+            case 'mw': aVal = a.itMw; bVal = b.itMw; break;
+            case 'energization': aVal = a.energization || 'z'; bVal = b.energization || 'z'; break;
+            case 'tenant': aVal = a.tenant; bVal = b.tenant; break;
+            case 'use': aVal = a.useType; bVal = b.useType; break;
+            case 'value': aVal = a.value; bVal = b.value; break;
+            default: aVal = a.ticker; bVal = b.ticker;
+        }
+
+        if (typeof aVal === 'string') {
+            const cmp = aVal.localeCompare(bVal);
+            return projectsTableSort.direction === 'asc' ? cmp : -cmp;
+        }
+        return projectsTableSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    // Render table
+    let html = `
+        <table class="projects-table">
+            <thead>
+                <tr>
+                    <th class="sortable ${projectsTableSort.column === 'ticker' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="ticker">Ticker</th>
+                    <th class="sortable ${projectsTableSort.column === 'site' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="site">Site</th>
+                    <th class="sortable ${projectsTableSort.column === 'location' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="location">Location</th>
+                    <th>Bldg</th>
+                    <th class="sortable ${projectsTableSort.column === 'status' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="status">Status</th>
+                    <th class="sortable ${projectsTableSort.column === 'mw' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="mw" style="text-align:right">MW</th>
+                    <th class="sortable ${projectsTableSort.column === 'energization' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="energization">Energized</th>
+                    <th class="sortable ${projectsTableSort.column === 'tenant' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="tenant">Tenant</th>
+                    <th class="sortable ${projectsTableSort.column === 'use' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="use">Use</th>
+                    <th>Contract</th>
+                    <th class="sortable ${projectsTableSort.column === 'value' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="value" style="text-align:right">Value</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    rows.forEach(row => {
+        const statusClass = getStatusClass(row.status);
+        const useTypeLabel = formatUseType(row.useType);
+        const useClass = row.useType ? 'use-' + row.useType.toLowerCase().replace('_', '-') : '';
+
+        html += `
+            <tr class="${row.isPotential ? 'potential-row' : ''}">
+                <td class="col-ticker"><span class="ticker">${row.ticker}</span></td>
+                <td class="col-site">${row.siteName}</td>
+                <td class="col-location">${row.location}</td>
+                <td class="col-phase">${row.phaseName}</td>
+                <td class="col-status"><span class="status-badge ${statusClass}">${row.status}</span></td>
+                <td class="col-mw" style="text-align:right">${Math.round(row.itMw)}</td>
+                <td class="col-energization">${row.energization || '—'}</td>
+                <td class="col-tenant ${row.tenant === 'Self' || row.tenant === '—' ? 'dim' : ''}">${row.tenant}</td>
+                <td class="col-use"><span class="use-badge ${useClass}">${useTypeLabel}</span></td>
+                <td class="col-contract">
+                    ${row.contractType || ''}
+                    ${row.term ? ` · ${row.term}y` : ''}
+                    ${row.revenue ? ` · $${Math.round(row.revenue)}M/yr` : ''}
+                </td>
+                <td class="col-value ${row.isPotential ? 'potential' : ''}" style="text-align:right">$${Math.round(row.value).toLocaleString()}M</td>
+                <td class="col-actions">
+                    ${row.tenancyId ? `<button class="btn-edit-tenancy" data-tenancy-id="${row.tenancyId}" title="Edit overrides">⚙</button>` : ''}
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+        <div class="projects-summary">
+            Showing ${rows.length} entries ·
+            Total: ${Math.round(rows.reduce((sum, r) => sum + r.itMw, 0)).toLocaleString()} MW ·
+            $${Math.round(rows.reduce((sum, r) => sum + r.value, 0)).toLocaleString()}M
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Add sort handlers
+    container.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const sortKey = th.dataset.sort;
+            if (projectsTableSort.column === sortKey) {
+                projectsTableSort.direction = projectsTableSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                projectsTableSort.column = sortKey;
+                projectsTableSort.direction = 'asc';
+            }
+            renderProjectsHierarchy();
+        });
+    });
+
+    // Add edit button handlers
+    container.querySelectorAll('.btn-edit-tenancy').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openTenancyModal(btn.dataset.tenancyId);
+        });
     });
 }
 

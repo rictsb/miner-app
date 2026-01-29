@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BTC Miner Valuation Terminal v8</title>
+    <title>BTC Miner Valuation Terminal v9</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -21,6 +21,7 @@
             min-height: 100vh;
         }
 
+        /* Header */
         .header {
             background: linear-gradient(180deg, #1a1a1a 0%, #000 100%);
             padding: 10px 20px;
@@ -58,6 +59,7 @@
             font-family: 'Roboto Mono', monospace;
         }
 
+        /* Tabs */
         .tabs {
             display: flex;
             background: #111;
@@ -87,6 +89,7 @@
             background: #1a1a1a;
         }
 
+        /* Content */
         .content {
             padding: 20px;
         }
@@ -99,93 +102,79 @@
             display: block;
         }
 
+        /* Summary Cards */
+        .summary-cards {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px 20px;
+            flex: 1;
+        }
+
+        .summary-card .card-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .summary-card .card-value {
+            font-size: 20px;
+            font-weight: 600;
+            font-family: 'Roboto Mono', monospace;
+            color: #fff;
+            margin-top: 4px;
+        }
+
+        .summary-card .card-value.positive { color: #00ff00; }
+        .summary-card .card-value.btc { color: #ff8c00; }
+        .summary-card .card-value.hpc { color: #00bfff; }
+
+        /* Dashboard Table */
+        .table-container {
+            overflow-x: auto;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 12px;
+            font-size: 13px;
         }
 
-        th, td {
-            padding: 8px 12px;
-            border-bottom: 1px solid #222;
-        }
-
-        /* Column alignment */
         th {
+            text-align: left;
+            padding: 12px 10px;
             background: #111;
-            color: #ff8c00;
+            color: #888;
             font-weight: 500;
-            text-transform: uppercase;
-            font-size: 11px;
-            text-align: right;
+            border-bottom: 1px solid #333;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th.sortable {
+            cursor: pointer;
+        }
+
+        th.sortable:hover {
+            color: #ff8c00;
         }
 
         td {
-            text-align: right;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        /* Left-align text columns */
-        th:first-child, td:first-child,
-        th.text-left, td.text-left {
-            text-align: left;
-        }
-
-        .col-ticker, .col-name, .col-tenant, .col-status, .col-source, .col-energize {
-            text-align: left !important;
-        }
-
-        .col-row-num {
-            width: 35px;
-            text-align: center !important;
-            color: #666;
-        }
-
-        /* Sortable table styles */
-        .sortable-table th.sortable {
-            cursor: pointer;
-            user-select: none;
-            padding-right: 18px;
-        }
-
-        .sortable-table th.sortable:hover {
-            background: #2a2a2a;
-        }
-
-        .sortable-table th.sortable::after {
-            content: '⇅';
-            position: absolute;
-            right: 4px;
-            opacity: 0.3;
-            font-size: 10px;
-        }
-
-        .sortable-table th.sortable.sort-asc::after {
-            content: '▲';
-            opacity: 1;
-            color: #00bfff;
-        }
-
-        .sortable-table th.sortable.sort-desc::after {
-            content: '▼';
-            opacity: 1;
-            color: #00bfff;
-        }
-
-        /* Resizable table styles */
-        .resizable-table th:not(.no-sort)::before {
-            content: '';
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            cursor: col-resize;
-            background: transparent;
-        }
-
-        .resizable-table th:not(.no-sort):hover::before {
-            background: #444;
+            padding: 10px;
+            border-bottom: 1px solid #222;
+            color: #ccc;
         }
 
         tr:hover {
@@ -195,7 +184,6 @@
         .ticker {
             color: #00bfff;
             font-weight: 500;
-            font-family: 'Roboto', sans-serif;
         }
 
         .ticker.clickable-ticker {
@@ -210,1164 +198,361 @@
             color: #4dc3ff;
         }
 
-        .positive {
-            color: #00ff00;
-        }
+        .positive { color: #00ff00; }
+        .negative { color: #ff4444; }
+        .neutral { color: #888; }
 
-        .negative {
-            color: #ff4444;
-        }
-
-        .neutral {
-            color: #888;
-        }
-
-        .source-link {
-            color: #00bfff;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        .source-link:hover {
-            text-decoration: underline;
-        }
-
-        /* Tooltip styles */
-        .has-tooltip {
-            position: relative;
-            cursor: help;
-            border-bottom: 1px dotted #666;
-        }
-
-        .has-tooltip:hover::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #222;
-            color: #fff;
-            padding: 10px 14px;
-            border-radius: 4px;
-            font-size: 11px;
-            white-space: pre-wrap;
-            max-width: 400px;
-            z-index: 1000;
-            border: 1px solid #ff8c00;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            font-family: 'Roboto', sans-serif;
-        }
-
-        .btn {
-            background: #ff8c00;
-            color: #000;
-            border: none;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-            font-size: 12px;
-            font-weight: 500;
-            margin: 5px;
-            border-radius: 3px;
-        }
-
-        .btn:hover {
-            background: #ffaa00;
-        }
-
-        .btn-secondary {
-            background: #333;
-            color: #ff8c00;
-            border: 1px solid #ff8c00;
-        }
-
-        .btn-secondary:hover {
-            background: #444;
-        }
-
-        .btn-small {
-            padding: 4px 8px;
-            font-size: 10px;
-        }
-
-        .btn-tiny {
-            padding: 3px 8px;
-            font-size: 10px;
-            background: #1a1a1a;
-            border: 1px solid #00aaff;
-            color: #00aaff;
-            font-weight: 500;
-        }
-
-        .btn-tiny:hover {
-            background: #002244;
-            border-color: #00ddff;
-            color: #00ddff;
-        }
-
-        input, select {
-            background: #111;
-            border: 1px solid #333;
-            color: #ff8c00;
-            padding: 6px 10px;
-            font-family: 'Roboto', sans-serif;
-            font-size: 12px;
-            border-radius: 3px;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: #ff8c00;
-        }
-
-        input[type="number"] {
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .controls {
-            margin-bottom: 20px;
+        /* Filters */
+        .filters {
             display: flex;
             gap: 15px;
-            align-items: center;
+            margin-bottom: 20px;
             flex-wrap: wrap;
         }
 
-        .control-group {
+        .filter-group {
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .control-group label {
+        .filter-group label {
+            font-size: 12px;
             color: #888;
+        }
+
+        .filter-group select {
+            background: #111;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* Hierarchical Project List */
+        .hierarchy-container {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+        }
+
+        .hierarchy-company {
+            border-bottom: 1px solid #333;
+        }
+
+        .hierarchy-company:last-child {
+            border-bottom: none;
+        }
+
+        .hierarchy-company-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            background: #111;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .hierarchy-company-header:hover {
+            background: #1a1a1a;
+        }
+
+        .hierarchy-company-header .expand-icon {
+            color: #666;
+            font-size: 10px;
+            width: 12px;
+        }
+
+        .hierarchy-company-header .company-ticker {
+            color: #ff8c00;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 50px;
+        }
+
+        .hierarchy-company-header .company-name {
+            color: #888;
+            font-size: 13px;
+            flex: 1;
+        }
+
+        .hierarchy-company-header .company-stats {
+            color: #666;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .hierarchy-sites {
+            padding-left: 20px;
+        }
+
+        .hierarchy-sites.collapsed {
+            display: none;
+        }
+
+        .hierarchy-site {
+            border-left: 2px solid #333;
+            margin-left: 10px;
+        }
+
+        .hierarchy-site-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .hierarchy-site-header:hover {
+            background: #151515;
+        }
+
+        .hierarchy-site-header .expand-icon {
+            color: #555;
+            font-size: 10px;
+            width: 12px;
+        }
+
+        .hierarchy-site-header .site-name {
+            color: #ccc;
+            font-weight: 500;
+            min-width: 200px;
+        }
+
+        .hierarchy-site-header .site-location {
+            color: #666;
+            font-size: 12px;
+            min-width: 100px;
+        }
+
+        .hierarchy-site-header .site-grid {
+            color: #555;
+            font-size: 11px;
+            min-width: 60px;
+        }
+
+        .hierarchy-site-header .site-power {
+            color: #888;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+            min-width: 70px;
+        }
+
+        .hierarchy-site-header .site-value {
+            color: #00ff00;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+            margin-left: auto;
+        }
+
+        .hierarchy-phases {
+            display: none;
+            padding-left: 20px;
+        }
+
+        .hierarchy-phases.expanded {
+            display: block;
+        }
+
+        .hierarchy-phase {
+            border-left: 2px solid #444;
+            margin-left: 10px;
+        }
+
+        .hierarchy-phase-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .hierarchy-phase-header:hover {
+            background: #181818;
+        }
+
+        .hierarchy-phase-header .expand-icon {
+            color: #444;
+            font-size: 10px;
+            width: 12px;
+        }
+
+        .hierarchy-phase-header .phase-name {
+            color: #aaa;
+            font-size: 13px;
+            min-width: 100px;
+        }
+
+        .hierarchy-phase-header .phase-status {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .phase-status.status-operational {
+            background: #0a2a0a;
+            color: #00ff00;
+        }
+
+        .phase-status.status-under-construction {
+            background: #2a2a0a;
+            color: #ffaa00;
+        }
+
+        .phase-status.status-permitted {
+            background: #1a1a2a;
+            color: #8888ff;
+        }
+
+        .hierarchy-phase-header .phase-capacity {
+            color: #666;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .hierarchy-phase-header .phase-value {
+            color: #00cc00;
+            font-size: 12px;
+            font-family: 'Roboto Mono', monospace;
+            margin-left: auto;
+        }
+
+        .hierarchy-tenancies {
+            display: none;
+            padding-left: 15px;
+        }
+
+        .hierarchy-tenancies.expanded {
+            display: block;
+        }
+
+        .hierarchy-tenancy {
+            padding: 8px 15px;
+            border-left: 2px solid #555;
+            margin-left: 10px;
+            background: #0d0d0d;
+        }
+
+        .hierarchy-tenancy.potential {
+            border-left-color: #555;
+            opacity: 0.7;
+        }
+
+        .tenancy-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+        }
+
+        .tenancy-tenant {
+            color: #00bfff;
+            min-width: 120px;
+        }
+
+        .tenancy-use {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .tenancy-use.use-btc_mining {
+            background: #2a1a00;
+            color: #ffaa00;
+        }
+
+        .tenancy-use.use-hpc_lease {
+            background: #001a2a;
+            color: #00aaff;
+        }
+
+        .tenancy-use.use-gpu_cloud {
+            background: #1a002a;
+            color: #aa00ff;
+        }
+
+        .tenancy-use.use-development {
+            background: #1a1a1a;
+            color: #888;
+        }
+
+        .tenancy-mw {
+            color: #888;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .tenancy-contract {
+            color: #666;
+            font-size: 10px;
+        }
+
+        .tenancy-term {
+            color: #666;
             font-size: 11px;
         }
 
-        /* Modal styles */
-        .modal {
+        .tenancy-revenue {
+            color: #00aa00;
+            font-size: 11px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .tenancy-value {
+            color: #00ff00;
+            font-family: 'Roboto Mono', monospace;
+            margin-left: auto;
+        }
+
+        .tenancy-value.potential {
+            color: #888;
+            font-style: italic;
+        }
+
+        .btn-edit-tenancy {
+            background: #222;
+            border: 1px solid #444;
+            color: #888;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .btn-edit-tenancy:hover {
+            background: #333;
+            color: #ff8c00;
+        }
+
+        .conversion-note {
+            font-size: 10px;
+            color: #666;
+            font-style: italic;
+            margin-top: 4px;
+            padding-left: 132px;
+        }
+
+        /* Company Panel - Slide-in */
+        .company-panel-overlay {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.85);
+            background: rgba(0,0,0,0.5);
             z-index: 1000;
-            justify-content: center;
-            align-items: flex-start;
-            padding-top: 40px;
-            overflow-y: auto;
         }
 
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: #111;
-            border: 2px solid #ff8c00;
-            padding: 20px;
-            max-width: 900px;
-            width: 95%;
-            max-height: 90vh;
-            overflow-y: auto;
-            border-radius: 4px;
-        }
-
-        .modal-content.modal-wide {
-            max-width: 1100px;
-        }
-
-        .modal-body-with-preview {
-            display: flex;
-            gap: 20px;
-        }
-
-        .modal-form-section {
-            flex: 1;
-            min-width: 0;
-        }
-
-        /* Valuation Preview Sidebar */
-        .valuation-preview-sidebar {
-            width: 280px;
-            flex-shrink: 0;
-            background: #0a0a0a;
-            border: 1px solid #333;
-            border-radius: 4px;
-            padding: 15px;
-            position: sticky;
-            top: 0;
-            max-height: calc(90vh - 100px);
-            overflow-y: auto;
-        }
-
-        .valuation-preview-sidebar h4 {
-            color: #ff8c00;
-            font-size: 14px;
-            margin-bottom: 15px;
-            font-weight: 600;
-            text-align: center;
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
-        }
-
-        .preview-section {
-            margin-bottom: 15px;
-        }
-
-        .preview-section-header {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 6px 8px;
-            border-radius: 3px;
-            margin-bottom: 8px;
-        }
-
-        .preview-section-header.btc-header {
-            background: #2a1a00;
-            color: #ffaa00;
-        }
-
-        .preview-section-header.hpc-header {
-            background: #001a2a;
-            color: #00aaff;
-        }
-
-        .valuation-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-            font-size: 12px;
-        }
-
-        .valuation-row .label {
-            color: #888;
-        }
-
-        .valuation-row .value {
-            color: #fff;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .valuation-subtotal {
-            border-top: 1px solid #333;
-            margin-top: 6px;
-            padding-top: 6px;
-        }
-
-        .valuation-subtotal .value.btc-value {
-            color: #ffaa00;
-            font-weight: 500;
-        }
-
-        .valuation-subtotal .value.hpc-value {
-            color: #00aaff;
-            font-weight: 500;
-        }
-
-        .preview-total-section {
-            background: #1a1a1a;
-            padding: 12px;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-
-        .valuation-total {
-            padding: 8px 0 4px 0;
-        }
-
-        .valuation-total .label {
-            color: #fff;
-            font-weight: 600;
-        }
-
-        .valuation-total .value {
-            color: #00ff00;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .valuation-breakdown {
-            font-size: 10px;
-            color: #666;
-            text-align: center;
-            margin-top: 4px;
-        }
-
-        /* Section styling */
-        .form-section-btc {
-            border-left: 3px solid #ffaa00;
-            padding-left: 15px;
-        }
-
-        .form-section-hpc {
-            border-left: 3px solid #00aaff;
-            padding-left: 15px;
-        }
-
-        .form-section-advanced {
-            border-left: 3px solid #666;
-            padding-left: 15px;
-        }
-
-        .form-section-advanced summary {
-            cursor: pointer;
-            color: #888;
-        }
-
-        .form-section-advanced summary:hover {
-            color: #fff;
-        }
-
-        .section-tag {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 3px;
-            margin-left: 8px;
-            font-weight: 400;
-        }
-
-        .section-tag.btc-tag {
-            background: #2a1a00;
-            color: #ffaa00;
-        }
-
-        .section-tag.hpc-tag {
-            background: #001a2a;
-            color: #00aaff;
-        }
-
-        .default-hint {
-            color: #666;
-            font-size: 10px;
-            font-weight: 400;
-        }
-
-        .hint-text {
-            color: #666;
-            font-size: 10px;
-            margin-top: 4px;
+        .company-panel-overlay.active {
             display: block;
         }
 
-        .computed-value {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-family: 'Roboto Mono', monospace;
-            color: #00ff00;
-            font-size: 14px;
-        }
-
-        @media (max-width: 900px) {
-            .modal-body-with-preview {
-                flex-direction: column;
-            }
-            .valuation-preview-sidebar {
-                width: 100%;
-                position: relative;
-                max-height: none;
-            }
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
-        }
-
-        .modal-header h2 {
-            color: #ff8c00;
-            font-size: 16px;
-            font-weight: 500;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: #ff8c00;
-            font-size: 24px;
-            cursor: pointer;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            color: #888;
-            font-size: 11px;
-            margin-bottom: 5px;
-        }
-
-        .form-group input, .form-group select {
-            width: 100%;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        .form-row-3 {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-        }
-
-        .form-section {
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #222;
-        }
-
-        .form-section h3 {
-            color: #ff8c00;
-            font-size: 13px;
-            margin-bottom: 15px;
-            font-weight: 500;
-        }
-
-        /* Summary cards */
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .summary-card {
-            background: #111;
-            border: 1px solid #333;
-            padding: 15px;
-            border-radius: 4px;
-        }
-
-        .summary-card .label {
-            color: #888;
-            font-size: 11px;
-            margin-bottom: 5px;
-        }
-
-        .summary-card .value {
-            color: #ff8c00;
-            font-size: 24px;
-            font-weight: 500;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .summary-card .sub {
-            color: #666;
-            font-size: 11px;
-            margin-top: 5px;
-        }
-
-        /* Status badges */
-        .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            font-size: 10px;
-            border-radius: 3px;
-            font-family: 'Roboto', sans-serif;
-        }
-
-        .status-operational {
-            background: #003300;
-            color: #00ff00;
-        }
-
-        .status-contracted {
-            background: #333300;
-            color: #ffff00;
-        }
-
-        .status-pipeline, .status-development {
-            background: #330033;
-            color: #ff88ff;
-        }
-
-        .table-container {
-            overflow-x: auto;
-            overflow-y: auto;
-            max-height: calc(100vh - 300px);
-            position: relative;
-        }
-
-        /* Sticky headers for tables */
-        .table-container thead {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        .table-container thead th {
-            position: sticky;
-            top: 0;
-            background: #111;
-            z-index: 10;
-            box-shadow: 0 1px 0 #333;
-        }
-
-        /* Expandable rows */
-        .expandable-row {
-            cursor: pointer;
-        }
-
-        .expandable-row:hover {
-            background: #1a1a1a;
-        }
-
-        .expand-icon {
-            display: inline-block;
-            width: 16px;
-            transition: transform 0.2s;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .expandable-row.expanded .expand-icon {
-            transform: rotate(90deg);
-        }
-
-        .expanded-content {
-            display: none;
-            background: #0a0a0a;
-        }
-
-        .expanded-content.show {
-            display: table-row;
-        }
-
-        .expanded-content td {
-            padding: 15px 20px;
-            border-bottom: 2px solid #333;
-        }
-
-        .project-summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 10px;
-        }
-
-        .project-item {
-            background: #151515;
-            padding: 10px;
-            border-left: 3px solid #333;
-            font-size: 11px;
-            border-radius: 0 3px 3px 0;
-        }
-
-        .project-item.contracted {
-            border-left-color: #00ff00;
-        }
-
-        .project-item.pipeline {
-            border-left-color: #ff8c00;
-        }
-
-        .project-item .project-name {
-            color: #fff;
-            font-weight: 500;
-            margin-bottom: 5px;
-            font-family: 'Roboto', sans-serif;
-        }
-
-        .project-item .project-details {
-            color: #888;
-            font-family: 'Roboto', sans-serif;
-        }
-
-        /* Hyperscaler badge */
-        .hyperscaler-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #00bfff, #0066cc);
-            color: #fff;
-            padding: 2px 6px;
-            font-size: 9px;
-            border-radius: 3px;
-            margin-left: 5px;
-            font-weight: 500;
-        }
-
-        /* Map styles */
-        #map {
-            height: calc(100vh - 280px);
-            min-height: 500px;
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 4px;
-        }
-
-        .map-legend {
-            background: #111;
-            border: 1px solid #333;
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 4px;
-        }
-
-        .map-legend-item {
-            display: inline-flex;
-            align-items: center;
-            margin-right: 20px;
-            font-size: 11px;
-        }
-
-        .map-legend-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 6px;
-        }
-
-        /* Factors page */
-        .factors-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 25px;
-        }
-
-        .factors-section {
-            background: #0a0a0a;
-            border: 1px solid #222;
-            padding: 20px;
-            border-radius: 4px;
-        }
-
-        .factors-section h3 {
-            color: #ff8c00;
-            font-size: 14px;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #333;
-            font-weight: 500;
-        }
-
-        .factors-section p.description {
-            color: #666;
-            font-size: 11px;
-            margin-bottom: 12px;
-            line-height: 1.4;
-        }
-
-        .factor-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #1a1a1a;
-        }
-
-        .factor-row:last-child {
-            border-bottom: none;
-        }
-
-        .factor-label {
-            color: #ccc;
-            font-size: 12px;
-        }
-
-        .factor-input {
-            width: 80px;
-            text-align: right;
-        }
-
-        .btn-remove {
-            background: #ff4444;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            width: 22px;
-            height: 22px;
-            font-size: 14px;
-            cursor: pointer;
-            margin-left: 8px;
-            line-height: 1;
-        }
-
-        .btn-remove:hover {
-            background: #ff6666;
-        }
-
-        .factor-unit {
-            color: #666;
-            font-size: 11px;
-            margin-left: 4px;
-            width: 30px;
-        }
-
-        /* Editable input in table */
-        .editable-input {
-            background: transparent;
-            border: none;
-            color: #ff8c00;
-            width: 70px;
-            text-align: right;
-            padding: 2px 4px;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .editable-input:focus {
-            background: #222;
-            border: 1px solid #ff8c00;
-            outline: none;
-        }
-
-        /* Slider styling */
-        input[type="range"] {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 6px;
-            background: #333;
-            border-radius: 3px;
-            outline: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #ff8c00;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-
-        .slider-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .slider-container input[type="range"] {
-            flex: 1;
-        }
-
-        .slider-value {
-            min-width: 50px;
-            text-align: right;
-            font-family: 'Roboto Mono', monospace;
-            color: #ff8c00;
-        }
-
-        /* Leaflet popup styling */
-        .leaflet-popup-content-wrapper {
-            background: #111;
-            color: #ff8c00;
-            border: 1px solid #ff8c00;
-            border-radius: 4px;
-        }
-
-        .leaflet-popup-tip {
-            background: #111;
-        }
-
-        .leaflet-popup-content {
-            font-family: 'Roboto', sans-serif;
-            font-size: 12px;
-        }
-
-        .popup-ticker {
-            color: #00bfff;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        /* Clickable project row */
-        .project-row {
-            cursor: pointer;
-        }
-
-        .project-row:hover {
-            background: #1a1a1a;
-        }
-
-        /* Override indicator */
-        .has-override {
-            color: #00bfff !important;
-        }
-
-        .override-dot {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            background: #00bfff;
-            border-radius: 50%;
-            margin-left: 4px;
-        }
-
-        /* HPC Conversion dropdown in table */
-        .hpc-conversion-select {
-            background: #1a1a1a;
-            border: 1px solid #444;
-            color: #ff8c00;
-            padding: 2px 6px;
-            font-size: 11px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-        }
-
-        .hpc-conversion-select:hover {
-            border-color: #ff8c00;
-        }
-
-        .hpc-conversion-select:focus {
-            outline: none;
-            border-color: #ff8c00;
-        }
-
-        /* BTC site styling */
-        .btc-site {
-            background: rgba(255, 140, 0, 0.05);
-        }
-
-        /* Expandable rows for Projects table */
-        .col-expand {
-            width: 30px;
-            text-align: center;
-        }
-
-        .expand-icon {
-            cursor: pointer;
-            color: #666;
-            font-size: 10px;
-            transition: color 0.2s;
-        }
-
-        .expandable-row:hover .expand-icon {
-            color: #ff8c00;
-        }
-
-        .expandable-row.expanded .expand-icon {
-            color: #ff8c00;
-        }
-
-        .project-details-row {
-            display: none;
-        }
-
-        .project-details-row.show {
-            display: table-row;
-        }
-
-        .project-details-row td {
-            background: #0a0a0a;
-            border-top: none;
-            padding: 0;
-        }
-
-        .valuation-details {
-            padding: 15px 20px;
-            border-left: 3px solid #ff8c00;
-            margin: 10px 0;
-        }
-
-        .valuation-section {
-            margin-bottom: 15px;
-        }
-
-        .valuation-section h4 {
-            color: #ff8c00;
-            font-size: 12px;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-
-        .formula-display {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 6px;
-            font-family: 'Roboto Mono', monospace;
-            font-size: 11px;
-            color: #ccc;
-        }
-
-        .formula-label {
-            color: #888;
-        }
-
-        .formula-part {
-            background: #1a1a1a;
-            padding: 3px 8px;
-            border-radius: 3px;
-            border: 1px solid #333;
-        }
-
-        .formula-op {
-            color: #666;
-            padding: 0 2px;
-        }
-
-        .formula-result {
-            color: #00ff00;
-            font-weight: 500;
-            margin-left: 10px;
-        }
-
-        .multipliers-breakdown {
-            margin-top: 10px;
-        }
-
-        .multiplier-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-
-        .mult-item {
-            background: #1a1a1a;
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-        }
-
-        .mult-label {
-            color: #888;
-        }
-
-        .mult-value {
-            color: #ff8c00;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .valuation-total {
-            margin-top: 12px;
-            padding-top: 10px;
-            border-top: 1px solid #333;
-            color: #00ff00;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .btn-small {
-            padding: 4px 12px;
-            font-size: 11px;
-        }
-
-        /* Simple valuation display */
-        .simple-valuation {
-            padding: 10px 0;
-        }
-
-        .formula-box {
-            background: #0a0a0a;
-            border: 1px solid #333;
-            border-radius: 4px;
-            padding: 12px 15px;
-            margin-bottom: 15px;
-        }
-
-        .formula-equation {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 8px;
-            font-family: 'Roboto Mono', monospace;
-            font-size: 13px;
-        }
-
-        .formula-part {
-            background: #1a1a1a;
-            padding: 4px 10px;
-            border-radius: 4px;
-            color: #fff;
-        }
-
-        .formula-part .formula-label {
-            color: #888;
-            font-size: 10px;
-            margin-right: 6px;
-        }
-
-        .formula-op {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .formula-result {
-            color: #00ff00;
-            font-weight: 600;
-            font-size: 15px;
-            padding: 4px 12px;
-            background: #1a2a1a;
-            border-radius: 4px;
-        }
-
-        .formula-result.btc { color: #ffaa00; background: #2a2a1a; }
-        .formula-result.hpc { color: #00aaff; background: #1a1a2a; }
-
-        /* Value bar visualization */
-        .value-bar-container {
-            margin: 15px 0;
-        }
-
-        .value-bar-wrapper {
-            display: flex;
-            height: 32px;
-            border-radius: 4px;
-            overflow: hidden;
-            background: #1a1a1a;
-        }
-
-        .value-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 80px;
-            font-size: 12px;
-            font-family: 'Roboto Mono', monospace;
-            color: #fff;
-            font-weight: 500;
-        }
-
-        .value-bar.btc-bar {
-            background: linear-gradient(90deg, #8a5a00, #ffaa00);
-        }
-
-        .value-bar.hpc-bar {
-            background: linear-gradient(90deg, #005a8a, #00aaff);
-        }
-
-        .value-bar.gpu-bar {
-            background: linear-gradient(90deg, #5a008a, #aa00ff);
-        }
-
-        .value-bar-label {
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        }
-
-        .value-bar-total {
-            text-align: right;
-            margin-top: 8px;
-            font-size: 14px;
-            color: #888;
-        }
-
-        .value-bar-total strong {
-            color: #00ff00;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        /* Multiplier chips */
-        .multiplier-summary {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 12px;
-        }
-
-        .mult-chip {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            color: #888;
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        .mult-chip.gpu {
-            border-color: #aa00ff55;
-            color: #aa00ff;
-        }
-
-        .edit-project-btn {
-            margin-left: auto;
-        }
-
-        /* Fidoodle cell styling */
-        .fidoodle-cell {
-            cursor: pointer;
-            position: relative;
-        }
-
-        .fidoodle-cell:hover {
-            background: rgba(255, 140, 0, 0.1);
-        }
-
-        .fidoodle-edit-icon {
-            opacity: 0;
-            margin-left: 4px;
-            font-size: 10px;
-            color: #ff8c00;
-            transition: opacity 0.2s;
-        }
-
-        .fidoodle-cell:hover .fidoodle-edit-icon {
-            opacity: 1;
-        }
-
-        .fidoodle-cell.has-override .fidoodle-value {
-            color: #00bfff;
-        }
-
-        /* Fidoodle popup editor */
-        .fidoodle-popup {
-            position: fixed;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.5);
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-        }
-
-        .fidoodle-popup-content {
-            position: absolute;
-            background: #1a1a1a;
-            border: 1px solid #ff8c00;
-            border-radius: 6px;
-            padding: 15px;
-            min-width: 300px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        }
-
-        .fidoodle-popup-content h4 {
-            color: #ff8c00;
-            font-size: 13px;
-            margin-bottom: 5px;
-        }
-
-        .fidoodle-desc {
-            color: #888;
-            font-size: 11px;
-            margin-bottom: 12px;
-        }
-
-        .fidoodle-input-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .fidoodle-input-row input {
-            width: 80px;
-            background: #0a0a0a;
-            border: 1px solid #444;
-            color: #ff8c00;
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-family: 'Roboto Mono', monospace;
-            font-size: 13px;
-        }
-
-        .fidoodle-input-row input:focus {
-            outline: none;
-            border-color: #ff8c00;
-        }
-
-        /* Company Valuation Panel - Slide-in from right */
         .company-panel {
             position: fixed;
             top: 0;
@@ -1471,9 +656,6 @@
             margin-top: 4px;
             font-family: 'Roboto Mono', monospace;
         }
-
-        .price-box .price-change.positive { color: #00ff00; }
-        .price-box .price-change.negative { color: #ff4444; }
 
         .price-arrow {
             font-size: 24px;
@@ -1636,7 +818,7 @@
             color: #fff;
         }
 
-        /* Sites Section */
+        /* Sites Section in Panel */
         .company-sites-section {
             margin-bottom: 20px;
         }
@@ -1686,21 +868,6 @@
             overflow-y: auto;
         }
 
-        .site-group {
-            margin-bottom: 12px;
-        }
-
-        .site-group-header {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #666;
-            padding: 6px 10px;
-            background: #111;
-            border-radius: 3px;
-            margin-bottom: 6px;
-        }
-
         .site-item {
             display: flex;
             justify-content: space-between;
@@ -1721,24 +888,16 @@
             gap: 10px;
         }
 
-        .site-name {
+        .site-info .site-name {
             color: #ccc;
         }
 
-        .site-mw {
+        .site-info .site-mw {
             color: #666;
             font-size: 11px;
         }
 
-        .site-tenant {
-            font-size: 10px;
-            color: #0088cc;
-            background: #001a2a;
-            padding: 2px 6px;
-            border-radius: 3px;
-        }
-
-        .site-value {
+        .site-item .site-value {
             font-family: 'Roboto Mono', monospace;
             color: #888;
         }
@@ -1763,38 +922,453 @@
             text-decoration: underline;
         }
 
-        /* Overlay when panel is open */
-        .company-panel-overlay {
+        /* Tenancy Edit Modal */
+        .modal {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.85);
             z-index: 1000;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 60px;
+            overflow-y: auto;
         }
 
-        .company-panel-overlay.active {
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #111;
+            border: 2px solid #ff8c00;
+            padding: 20px;
+            max-width: 500px;
+            width: 95%;
+            border-radius: 4px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .modal-header h2 {
+            font-size: 16px;
+            color: #ff8c00;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal-close:hover {
+            color: #ff8c00;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
             display: block;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 10px;
+            background: #0a0a0a;
+            border: 1px solid #444;
+            color: #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #ff8c00;
+        }
+
+        .form-group input:disabled {
+            background: #1a1a1a;
+            color: #666;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .form-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #0a0a0a;
+            border-radius: 4px;
+        }
+
+        .form-section-title {
+            font-size: 12px;
+            color: #ff8c00;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+
+        .preview-box {
+            background: #0a2a0a;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .preview-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .preview-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #00ff00;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #ff8c00;
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            background: #ffaa00;
+        }
+
+        .btn-secondary {
+            background: #333;
+            color: #ccc;
+        }
+
+        .btn-secondary:hover {
+            background: #444;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* Map */
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #1a1a1a;
+            color: #ccc;
+            border-radius: 4px;
+        }
+
+        .leaflet-popup-tip {
+            background: #1a1a1a;
+        }
+
+        /* Data Quality Styles */
+        .dq-summary {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .dq-summary-card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .dq-summary-card .dq-count {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .dq-summary-card .dq-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .dq-summary-card.p0 { border-top: 3px solid #ff4444; }
+        .dq-summary-card.p0 .dq-count { color: #ff4444; }
+
+        .dq-summary-card.p1 { border-top: 3px solid #ffaa00; }
+        .dq-summary-card.p1 .dq-count { color: #ffaa00; }
+
+        .dq-summary-card.p2 { border-top: 3px solid #4488ff; }
+        .dq-summary-card.p2 .dq-count { color: #4488ff; }
+
+        .dq-summary-card.ignored { border-top: 3px solid #666; }
+        .dq-summary-card.ignored .dq-count { color: #666; }
+
+        .dq-run-info {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .dq-run-date {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .dq-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .dq-filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dq-filter-group label {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .dq-filter-group select,
+        .dq-filter-group input[type="checkbox"] {
+            background: #111;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .dq-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-dq {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .btn-dq-primary {
+            background: #ff8c00;
+            color: #000;
+        }
+
+        .btn-dq-primary:hover {
+            background: #ffaa00;
+        }
+
+        .btn-dq-secondary {
+            background: #333;
+            color: #ccc;
+        }
+
+        .btn-dq-secondary:hover {
+            background: #444;
+        }
+
+        .dq-results {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .dq-no-issues {
+            padding: 40px;
+            text-align: center;
+            color: #00ff00;
+            font-size: 16px;
+        }
+
+        .dq-issue {
+            border-bottom: 1px solid #222;
+            padding: 12px 15px;
+        }
+
+        .dq-issue:last-child {
+            border-bottom: none;
+        }
+
+        .dq-issue.ignored {
+            opacity: 0.5;
+            background: #0d0d0d;
+        }
+
+        .dq-issue.severity-p0 {
+            border-left: 3px solid #ff4444;
+        }
+
+        .dq-issue.severity-p1 {
+            border-left: 3px solid #ffaa00;
+        }
+
+        .dq-issue.severity-p2 {
+            border-left: 3px solid #4488ff;
+        }
+
+        .dq-issue-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .dq-severity {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .dq-severity.p0 {
+            background: #3a0a0a;
+            color: #ff4444;
+        }
+
+        .dq-severity.p1 {
+            background: #2a1a0a;
+            color: #ffaa00;
+        }
+
+        .dq-severity.p2 {
+            background: #0a1a3a;
+            color: #4488ff;
+        }
+
+        .dq-test-id {
+            font-size: 11px;
+            color: #888;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .dq-ticker {
+            font-size: 12px;
+            color: #00bfff;
+            font-weight: 500;
+        }
+
+        .dq-location {
+            font-size: 12px;
+            color: #666;
+            flex: 1;
+        }
+
+        .dq-issue-actions {
+            margin-left: auto;
+        }
+
+        .btn-dq-action {
+            padding: 4px 10px;
+            font-size: 11px;
+            background: #222;
+            border: 1px solid #444;
+            color: #888;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .btn-dq-action:hover {
+            background: #333;
+            color: #ff8c00;
+        }
+
+        .dq-issue-body {
+            font-size: 12px;
+            color: #888;
+            padding-left: 10px;
+        }
+
+        .dq-issue-body > div {
+            margin-bottom: 4px;
+        }
+
+        .dq-issue-body strong {
+            color: #aaa;
+        }
+
+        .dq-field {
+            color: #666;
+        }
+
+        .dq-current {
+            color: #ff8888;
+        }
+
+        .dq-issue-text {
+            color: #ffaa88;
+        }
+
+        .dq-recommendation {
+            color: #88ff88;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>BTC MINER VALUATION TERMINAL v8</h1>
+        <h1>BTC MINER VALUATION TERMINAL v9</h1>
         <div class="prices">
             <div class="price-item">
                 <span class="price-label">BTC:</span>
                 <span class="price-value" id="btc-price">$---</span>
-            </div>
-            <div class="price-item">
-                <span class="price-label">ETH:</span>
-                <span class="price-value" id="eth-price">$---</span>
-            </div>
-            <div class="price-item">
-                <span class="price-label">Last Update:</span>
-                <span class="price-value neutral" id="last-update">--:--:--</span>
             </div>
         </div>
     </div>
@@ -1802,8 +1376,8 @@
     <div class="tabs">
         <button class="tab active" data-tab="dashboard">Dashboard</button>
         <button class="tab" data-tab="projects">Projects</button>
-        <button class="tab" data-tab="factors">Factors</button>
-        <button class="tab" data-tab="map">Map</button>
+        <button class="tab" data-tab="map-view">Map</button>
+        <button class="tab" data-tab="data-quality">Data Quality</button>
     </div>
 
     <div class="content">
@@ -1811,886 +1385,149 @@
         <div id="dashboard" class="tab-content active">
             <div class="summary-cards">
                 <div class="summary-card">
-                    <div class="label">TOTAL HPC LEASES</div>
-                    <div class="value" id="total-mcap">$0B</div>
-                    <div class="sub">Nominal lease value</div>
+                    <div class="card-label">Total BTC Holdings</div>
+                    <div class="card-value btc" id="total-btc">--</div>
                 </div>
                 <div class="summary-card">
-                    <div class="label">TOTAL BTC HELD</div>
-                    <div class="value" id="total-btc">0</div>
-                    <div class="sub" id="total-btc-value">$0M</div>
+                    <div class="card-label">Mining EV</div>
+                    <div class="card-value" id="total-mining-ev">--</div>
                 </div>
                 <div class="summary-card">
-                    <div class="label">CONTRACTED HPC EV</div>
-                    <div class="value" id="total-hpc-contracted">$0B</div>
-                    <div class="sub">Rule-of-thumb value</div>
+                    <div class="card-label">HPC Contracted EV</div>
+                    <div class="card-value hpc" id="total-hpc-contracted">--</div>
                 </div>
                 <div class="summary-card">
-                    <div class="label">PIPELINE HPC EV</div>
-                    <div class="value" id="total-hpc-pipeline">$0B</div>
-                    <div class="sub">Risk-adjusted</div>
+                    <div class="card-label">Pipeline EV</div>
+                    <div class="card-value" id="total-pipeline">--</div>
                 </div>
-                <div class="summary-card">
-                    <div class="label">AGGREGATE FAIR VALUE</div>
-                    <div class="value" id="total-fair-value">$0B</div>
-                    <div class="sub">Equity value</div>
-                </div>
-            </div>
-
-            <div class="controls">
-                <button class="btn btn-secondary" onclick="resetAllOverrides()">Reset All Overrides</button>
-                <button class="btn" onclick="exportDashboard()">Export CSV</button>
             </div>
 
             <div class="table-container">
-                <table id="dashboard-table" class="sortable-table resizable-table">
+                <table id="dashboard-table">
                     <thead>
                         <tr>
-                            <th style="width: 30px;" class="no-sort"></th>
-                            <th class="col-ticker sortable" data-sort="ticker">Ticker</th>
+                            <th class="sortable" data-sort="ticker">Ticker</th>
                             <th class="sortable" data-sort="price">Price</th>
-                            <th class="sortable" data-sort="hpcLeases">HPC Leases ($M)</th>
-                            <th class="sortable" data-sort="hodlValue">HODL Val ($M)</th>
+                            <th class="sortable" data-sort="hodlValue">HODL ($M)</th>
                             <th class="sortable" data-sort="cash">Cash ($M)</th>
                             <th class="sortable" data-sort="debt">Debt ($M)</th>
-                            <th class="sortable" data-sort="fdShares">FD Shares (M)</th>
-                            <th class="sortable" data-sort="miningMw">Mining (MW)</th>
-                            <th class="sortable" data-sort="hpcMw">HPC (MW)</th>
+                            <th>Mining MW</th>
+                            <th>HPC MW</th>
                             <th class="sortable" data-sort="miningEv">Mining EV ($M)</th>
-                            <th class="sortable" data-sort="hpcEvContracted">HPC EV Contracted ($M)</th>
-                            <th class="sortable" data-sort="hpcEvPipeline">HPC EV Pipeline ($M)</th>
+                            <th class="sortable" data-sort="hpcEvContracted">HPC Contracted ($M)</th>
+                            <th class="sortable" data-sort="hpcEvPipeline">Pipeline ($M)</th>
                             <th class="sortable" data-sort="fairValue">Fair Value</th>
                             <th class="sortable" data-sort="upside">Upside</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody id="dashboard-tbody">
+                    </tbody>
                 </table>
             </div>
         </div>
 
         <!-- Projects Tab -->
         <div id="projects" class="tab-content">
-            <div class="controls">
-                <div class="control-group">
-                    <label>Ticker:</label>
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Company:</label>
                     <select id="project-ticker-filter">
-                        <option value="">All</option>
+                        <option value="">All Companies</option>
                     </select>
                 </div>
-                <div class="control-group">
+                <div class="filter-group">
                     <label>Status:</label>
                     <select id="project-status-filter">
-                        <option value="">All</option>
+                        <option value="">All Statuses</option>
                         <option value="Operational">Operational</option>
-                        <option value="Contracted">Contracted</option>
-                        <option value="In Development">In Development</option>
                         <option value="Under Construction">Under Construction</option>
-                        <option value="Pipeline">Pipeline</option>
-                        <option value="Option">Option</option>
-                        <option value="LOI">LOI</option>
+                        <option value="Permitted">Permitted</option>
                     </select>
                 </div>
-                <div class="control-group">
+                <div class="filter-group">
                     <label>Use Type:</label>
                     <select id="project-use-filter">
-                        <option value="">All</option>
-                        <option value="BTC">BTC Mining</option>
-                        <option value="AI/HPC">AI/HPC</option>
-                        <option value="Mixed">Mixed</option>
+                        <option value="">All Types</option>
+                        <option value="BTC_MINING">BTC Mining</option>
+                        <option value="HPC_LEASE">HPC Lease</option>
+                        <option value="GPU_CLOUD">GPU Cloud</option>
+                        <option value="DEVELOPMENT">Development</option>
                     </select>
                 </div>
-                <div class="control-group">
-                    <label>Country:</label>
-                    <select id="project-country-filter">
-                        <option value="">All</option>
-                    </select>
-                </div>
-                <button class="btn" onclick="exportProjects()">Export Projects</button>
             </div>
 
-            <p style="color: #666; font-size: 11px; margin-bottom: 15px;">Click any row to expand and see valuation formula. Click the Fidoodle cell to edit per-project adjustment.</p>
-
-            <div class="table-container">
-                <table id="projects-table" class="sortable-table resizable-table">
-                    <thead>
-                        <tr>
-                            <th class="col-expand no-sort"></th>
-                            <th class="col-row-num no-sort">#</th>
-                            <th class="col-ticker sortable" data-sort="ticker">Ticker</th>
-                            <th class="col-name sortable" data-sort="project">Site Name</th>
-                            <th class="sortable" data-sort="it_mw">IT MW</th>
-                            <th class="col-status sortable" data-sort="current_use">Use</th>
-                            <th class="col-status sortable" data-sort="status">Status</th>
-                            <th class="sortable" data-sort="energization_date">Energize</th>
-                            <th class="col-tenant sortable" data-sort="lessee">Tenant</th>
-                            <th class="sortable" data-sort="hpc_conv_prob">HPC Conv</th>
-                            <th class="sortable" data-sort="fidoodle">Fidoodle</th>
-                            <th class="sortable" data-sort="value">Value ($M)</th>
-                            <th class="col-source no-sort">Source</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Factors Tab -->
-        <div id="factors" class="tab-content">
-            <div class="controls" style="margin-bottom: 25px;">
-                <button class="btn" onclick="saveAllFactors()">Save All Factors</button>
-                <button class="btn btn-secondary" onclick="resetAllFactors()">Reset to Defaults</button>
-            </div>
-
-            <div class="factors-grid">
-                <!-- Global Valuation Parameters -->
-                <div class="factors-section">
-                    <h3>Global Valuation Parameters</h3>
-                    <p class="description">Core inputs for the rule-of-thumb valuation formula</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Base NOI per MW per Year</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-base-noi" value="1.40" step="0.1">
-                            <span class="factor-unit">$M</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Base Cap Rate</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-base-cap" value="12.0" step="0.5">
-                            <span class="factor-unit">%</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Hyperscaler Premium</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-hyperscaler-premium" value="1.10" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Default Lease Term (T)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-default-term" value="15" step="1">
-                            <span class="factor-unit">yrs</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Rent Escalator (g)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-escalator" value="2.5" step="0.5">
-                            <span class="factor-unit">%</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Gross-to-IT MW Conversion (PUE)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-pue" value="1.30" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Global Fidoodle Default</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-fidoodle-default" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BTC Mining Valuation -->
-                <div class="factors-section">
-                    <h3>BTC Mining Valuation</h3>
-                    <p class="description">Parameters for valuing BTC mining sites (not HPC leases)</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Mining EBITDA per MW per Year</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-btc-ebitda-mw" value="0.35" step="0.05">
-                            <span class="factor-unit">$M</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Mining EBITDA Multiple</span>
-                        <div>
-                            <input type="number" class="factor-input" id="factor-btc-multiple" value="5.0" step="0.5">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- HPC Conversion Option -->
-                <div class="factors-section">
-                    <h3>HPC Conversion Option</h3>
-                    <p class="description">Discount factors for BTC sites with potential HPC conversion. Represents probability-weighted present value.</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2025</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2025" value="0.80" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2026</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2026" value="0.65" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2027</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2027" value="0.50" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2028</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2028" value="0.40" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2029</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2029" value="0.30" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2030</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2030" value="0.25" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Convert 2031</span>
-                        <div>
-                            <input type="number" class="factor-input" id="conv-2031" value="0.20" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Credit Quality Adjustments -->
-                <div class="factors-section">
-                    <h3>Credit Quality (Cap Rate Adders)</h3>
-                    <p class="description">Adjustments to base cap rate based on tenant creditworthiness</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Hyperscaler (AAA)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="credit-hyperscaler" value="-2.0" step="0.5">
-                            <span class="factor-unit">%</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Investment Grade (IG)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="credit-ig" value="-1.0" step="0.5">
-                            <span class="factor-unit">%</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Speculative Grade</span>
-                        <div>
-                            <input type="number" class="factor-input" id="credit-spec" value="1.0" step="0.5">
-                            <span class="factor-unit">%</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Unrated / Startup</span>
-                        <div>
-                            <input type="number" class="factor-input" id="credit-unrated" value="2.0" step="0.5">
-                            <span class="factor-unit">%</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Lease Structure Multipliers -->
-                <div class="factors-section">
-                    <h3>Lease Structure Multipliers (F_lease)</h3>
-                    <p class="description">Adjustment for lease type (NNN, gross, hosting/SLA)</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Triple Net (NNN)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="lease-nnn" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Modified Gross</span>
-                        <div>
-                            <input type="number" class="factor-input" id="lease-gross" value="0.95" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Hosting / SLA</span>
-                        <div>
-                            <input type="number" class="factor-input" id="lease-hosting" value="0.85" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Ownership Multipliers -->
-                <div class="factors-section">
-                    <h3>Ownership Multipliers (F_ownership)</h3>
-                    <p class="description">Adjustment for ownership structure and residual control</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Fee Simple (full ownership)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="own-fee" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Ground Lease (owns building)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="own-ground" value="0.90" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">JV / Partial Ownership</span>
-                        <div>
-                            <input type="number" class="factor-input" id="own-jv" value="0.80" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">No Substation/Interconnect</span>
-                        <div>
-                            <input type="number" class="factor-input" id="own-nopower" value="0.70" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Build/Energization Multipliers -->
-                <div class="factors-section">
-                    <h3>Build / Energization Multipliers (F_build)</h3>
-                    <p class="description">Probability and timing adjustments by project status</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">Operational</span>
-                        <div>
-                            <input type="number" class="factor-input" id="build-operational" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Contracted (under construction)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="build-contracted" value="0.85" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Development</span>
-                        <div>
-                            <input type="number" class="factor-input" id="build-development" value="0.60" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">Pipeline / LOI</span>
-                        <div>
-                            <input type="number" class="factor-input" id="build-pipeline" value="0.40" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tenant Multipliers -->
-                <div class="factors-section">
-                    <h3>Tenant Multipliers (F_tenant)</h3>
-                    <p class="description">Credit quality adjustment by tenant. Add/remove tenants as needed.</p>
-
-                    <div id="tenant-factors-container"></div>
-                    <button class="btn btn-small btn-secondary" onclick="addTenantFactor()" style="margin-top: 10px;">+ Add Tenant</button>
-                </div>
-
-                <!-- Size Band Multipliers -->
-                <div class="factors-section">
-                    <h3>Size Band Multipliers (F_size)</h3>
-                    <p class="description">Premium/discount based on IT MW capacity</p>
-
-                    <div class="factor-row">
-                        <span class="factor-label">500+ MW (hyperscale)</span>
-                        <div>
-                            <input type="number" class="factor-input" id="size-500" value="1.15" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">250-499 MW</span>
-                        <div>
-                            <input type="number" class="factor-input" id="size-250" value="1.05" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">100-249 MW</span>
-                        <div>
-                            <input type="number" class="factor-input" id="size-100" value="1.00" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">50-99 MW</span>
-                        <div>
-                            <input type="number" class="factor-input" id="size-50" value="0.90" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                    <div class="factor-row">
-                        <span class="factor-label">&lt;50 MW</span>
-                        <div>
-                            <input type="number" class="factor-input" id="size-0" value="0.80" step="0.05">
-                            <span class="factor-unit">x</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Location Multipliers (combined Country + Grid) -->
-                <div class="factors-section">
-                    <h3>Location Multipliers (F_location)</h3>
-                    <p class="description">US locations use grid (ERCOT, PJM, etc.), international use country. Add/remove as needed.</p>
-
-                    <div id="location-factors-container"></div>
-                    <button class="btn btn-small btn-secondary" onclick="addLocationFactor()" style="margin-top: 10px;">+ Add Location</button>
-                </div>
+            <div id="projects-hierarchy" class="hierarchy-container">
+                <!-- Populated by JS -->
             </div>
         </div>
 
         <!-- Map Tab -->
-        <div id="map-tab" class="tab-content">
-            <div class="controls">
-                <div class="control-group">
-                    <label>Ticker:</label>
-                    <select id="map-ticker-filter">
-                        <option value="">All</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Status:</label>
-                    <select id="map-status-filter">
-                        <option value="">All</option>
-                        <option value="contracted">Contracted HPC</option>
-                        <option value="pipeline">Pipeline/Development</option>
-                        <option value="btc">BTC Mining</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Min MW:</label>
-                    <input type="number" id="map-mw-filter" value="0" min="0" style="width: 80px;">
-                </div>
-                <button class="btn btn-secondary" onclick="resetMapFilters()">Reset Filters</button>
-            </div>
-
+        <div id="map-view" class="tab-content">
             <div id="map"></div>
-
-            <div class="map-legend">
-                <span class="map-legend-item"><span class="map-legend-dot" style="background: #00ff00;"></span>Contracted HPC</span>
-                <span class="map-legend-item"><span class="map-legend-dot" style="background: #ff8c00;"></span>Pipeline/Development</span>
-                <span class="map-legend-item"><span class="map-legend-dot" style="background: #00bfff;"></span>BTC Mining</span>
-                <span class="map-legend-item"><span class="map-legend-dot" style="background: #888;"></span>Mixed/Other</span>
-            </div>
         </div>
-    </div>
 
-    <!-- Project Override Modal -->
-    <div id="project-modal" class="modal">
-        <div class="modal-content modal-wide">
-            <div class="modal-header">
-                <h2 id="project-modal-title">Project Valuation Overrides</h2>
-                <button class="modal-close" onclick="closeProjectModal()">&times;</button>
-            </div>
-
-            <div class="modal-body-with-preview">
-                <form id="project-form" class="modal-form-section">
-                    <input type="hidden" id="project-id">
-
-                    <!-- Section 1: Site Basics -->
-                    <div class="form-section">
-                        <h3>Site Basics</h3>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Ticker</label>
-                                <input type="text" id="project-ticker" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label>Site Name</label>
-                                <input type="text" id="project-name" readonly>
-                            </div>
-                        </div>
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>IT MW</label>
-                                <input type="number" id="project-it-mw" step="1">
-                            </div>
-                            <div class="form-group">
-                                <label>Country <span class="default-hint" id="hint-country-mult"></span></label>
-                                <input type="text" id="project-country" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label>Country Multiplier</label>
-                                <input type="number" id="project-country-mult" step="0.05" placeholder="Auto">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Section 2: BTC Mining Value -->
-                    <div class="form-section form-section-btc">
-                        <h3>BTC Mining Value <span class="section-tag btc-tag">Current State</span></h3>
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>Mining EBITDA <span class="default-hint" id="hint-mining-ebitda"></span></label>
-                                <input type="number" id="project-mining-ebitda" step="0.1" placeholder="$M/year">
-                            </div>
-                            <div class="form-group">
-                                <label>EBITDA Multiple <span class="default-hint" id="hint-btc-multiple"></span></label>
-                                <input type="number" id="project-btc-multiple" step="0.5" placeholder="x">
-                            </div>
-                            <div class="form-group">
-                                <label>BTC Mining Value</label>
-                                <div class="computed-value" id="preview-btc-value">$0.0M</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Section 3: HPC Conversion -->
-                    <div class="form-section form-section-hpc">
-                        <h3>HPC/AI Conversion <span class="section-tag hpc-tag">Future State</span></h3>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Conversion Date</label>
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <input type="date" id="project-hpc-conversion-date" style="flex: 1;">
-                                    <button type="button" class="btn btn-small btn-secondary" onclick="setConversionDateNever()">Never</button>
-                                </div>
-                                <div style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(1)">+1y</button>
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(2)">+2y</button>
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateOffset(3)">+3y</button>
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2025)">End '25</button>
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2026)">End '26</button>
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2027)">End '27</button>
-                                    <button type="button" class="btn btn-tiny" onclick="setConversionDateEnd(2028)">End '28</button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Conversion Probability <span class="default-hint">(default: 50%)</span></label>
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <input type="range" id="project-conv-prob-slider" min="0" max="100" step="5" value="50" style="flex: 1;">
-                                    <span class="slider-value" id="project-conv-prob-display">50%</span>
-                                </div>
-                                <input type="number" id="project-conv-prob" step="5" min="0" max="100" placeholder="%" style="margin-top: 6px;">
-                            </div>
-                        </div>
-
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>HPC Rent <span class="default-hint" id="hint-hpc-rent"></span></label>
-                                <input type="number" id="project-rent-mw" step="0.1" placeholder="$M/MW/year">
-                            </div>
-                            <div class="form-group">
-                                <label>Lease Term <span class="default-hint" id="hint-term"></span></label>
-                                <input type="number" id="project-term" step="1" placeholder="years">
-                            </div>
-                            <div class="form-group">
-                                <label>Escalator <span class="default-hint" id="hint-escalator"></span></label>
-                                <input type="number" id="project-escalator" step="0.5" placeholder="%/year">
-                            </div>
-                        </div>
-
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>Tenant Credit</label>
-                                <select id="project-credit">
-                                    <option value="">Auto-detect</option>
-                                    <option value="hyperscaler">Hyperscaler (AAA)</option>
-                                    <option value="ig">Investment Grade</option>
-                                    <option value="spec">Speculative Grade</option>
-                                    <option value="unrated">Unrated/Startup</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>NOI Margin <span class="default-hint">(default: 85%)</span></label>
-                                <input type="number" id="project-passthrough" step="1" placeholder="%">
-                            </div>
-                            <div class="form-group">
-                                <label>HPC Conversion Value</label>
-                                <div class="computed-value" id="preview-hpc-value">$0.0M</div>
-                            </div>
-                        </div>
-
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>Fidoodle Factor <span class="default-hint">(default: 1.00)</span></label>
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <input type="range" id="project-fidoodle-slider" min="0" max="2" step="0.05" value="1.0" style="flex: 1;">
-                                    <span class="slider-value" id="project-fidoodle-display">1.00</span>
-                                </div>
-                                <input type="number" id="project-fidoodle" step="0.05" placeholder="0.0 - 2.0" style="margin-top: 6px;">
-                            </div>
-                            <div class="form-group">
-                                <label>Cap Rate Override</label>
-                                <input type="number" id="project-cap-override" step="0.5" placeholder="Auto-calculated %">
-                                <small class="hint-text" id="hint-cap-rate"></small>
-                            </div>
-                            <div class="form-group">
-                                <label>Compute Model</label>
-                                <select id="project-compute-model">
-                                    <option value="">Auto (colo 1.0x)</option>
-                                    <option value="colo">Colo (1.00x)</option>
-                                    <option value="gpu_cloud">GPU Cloud (1.75x)</option>
-                                </select>
-                                <small class="hint-text">GPU cloud = selling FLOPs</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Section: Advanced Overrides (collapsed by default) -->
-                    <details class="form-section form-section-advanced">
-                        <summary><h3 style="display: inline;">Advanced Overrides</h3></summary>
-
-                        <div class="form-row-3" style="margin-top: 15px;">
-                            <div class="form-group">
-                                <label>Lease Structure</label>
-                                <select id="project-lease-type">
-                                    <option value="">Auto</option>
-                                    <option value="nnn">Triple Net (NNN)</option>
-                                    <option value="gross">Modified Gross</option>
-                                    <option value="hosting">Hosting/SLA</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Tenant Mult Override</label>
-                                <input type="number" id="project-concentration" step="0.05" min="0" max="2" placeholder="Auto from tenant">
-                            </div>
-                            <div class="form-group">
-                                <label>Ownership</label>
-                                <select id="project-ownership">
-                                    <option value="">Auto</option>
-                                    <option value="fee">Fee Simple</option>
-                                    <option value="ground">Ground Lease</option>
-                                    <option value="jv">JV / Partial</option>
-                                    <option value="nopower">No Substation</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>Build Status</label>
-                                <select id="project-build-status">
-                                    <option value="">Use Project Status</option>
-                                    <option value="operational">Operational</option>
-                                    <option value="contracted">Contracted</option>
-                                    <option value="development">Development</option>
-                                    <option value="pipeline">Pipeline</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Size Multiplier</label>
-                                <input type="number" id="project-size-mult" step="0.05" placeholder="Auto">
-                            </div>
-                            <div class="form-group">
-                                <label>Grid Multiplier</label>
-                                <input type="number" id="project-grid-mult" step="0.05" placeholder="Auto">
-                            </div>
-                        </div>
-
-                        <div class="form-row-3">
-                            <div class="form-group">
-                                <label>Grid</label>
-                                <input type="text" id="project-grid" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label>NOI Override ($M)</label>
-                                <input type="number" id="project-noi" step="0.1" placeholder="Auto-calculated">
-                            </div>
-                            <div class="form-group"></div>
-                        </div>
-                    </details>
-
-                    <div style="margin-top: 20px; text-align: right;">
-                        <button type="button" class="btn btn-secondary" onclick="clearProjectOverrides()">Clear All</button>
-                        <button type="button" class="btn btn-secondary" onclick="closeProjectModal()">Cancel</button>
-                        <button type="submit" class="btn">Save & Apply</button>
-                    </div>
-                </form>
-
-                <!-- Live Valuation Preview - Always Visible Sidebar -->
-                <div class="valuation-preview-sidebar" id="valuation-preview">
-                    <h4 id="preview-title">Live Valuation</h4>
-
-                    <div class="preview-section" id="preview-btc-section">
-                        <div class="preview-section-header btc-header">BTC Mining</div>
-                        <div class="valuation-row">
-                            <span class="label">EBITDA</span>
-                            <span class="value" id="preview-mining-ebitda">$0.0M/yr</span>
-                        </div>
-                        <div class="valuation-row">
-                            <span class="label">Multiple</span>
-                            <span class="value" id="preview-mining-multiple">0.0x</span>
-                        </div>
-                        <div class="valuation-row">
-                            <span class="label">Mining Period</span>
-                            <span class="value" id="preview-mining-period">Perpetual</span>
-                        </div>
-                        <div class="valuation-row valuation-subtotal">
-                            <span class="label">Mining Value</span>
-                            <span class="value btc-value" id="preview-mining-value">$0.0M</span>
-                        </div>
-                    </div>
-
-                    <div class="preview-section" id="preview-hpc-section">
-                        <div class="preview-section-header hpc-header" id="preview-hpc-header">HPC Conversion</div>
-                        <div class="valuation-row">
-                            <span class="label">Conversion Date</span>
-                            <span class="value" id="preview-conv-date">Never</span>
-                        </div>
-                        <div class="valuation-row">
-                            <span class="label">Probability</span>
-                            <span class="value" id="preview-conv-prob">0%</span>
-                        </div>
-                        <div class="valuation-row">
-                            <span class="label">HPC NOI</span>
-                            <span class="value" id="preview-hpc-noi">$0.0M/yr</span>
-                        </div>
-                        <div class="valuation-row">
-                            <span class="label">Cap Rate</span>
-                            <span class="value" id="preview-cap">0.0%</span>
-                        </div>
-                        <div class="valuation-row">
-                            <span class="label">Fidoodle</span>
-                            <span class="value" id="preview-fidoodle">1.00</span>
-                        </div>
-                        <div class="valuation-row valuation-subtotal">
-                            <span class="label">HPC Option Value</span>
-                            <span class="value hpc-value" id="preview-hpc-option">$0.0M</span>
-                        </div>
-                    </div>
-
-                    <div class="preview-section preview-total-section">
-                        <div class="valuation-row valuation-total">
-                            <span class="label">TOTAL SITE VALUE</span>
-                            <span class="value" id="preview-value">$0.0M</span>
-                        </div>
-                        <div class="valuation-breakdown" id="preview-breakdown">
-                            Mining + HPC Option
-                        </div>
-                    </div>
+        <!-- Data Quality Tab -->
+        <div id="data-quality" class="tab-content">
+            <div class="dq-summary">
+                <div class="dq-summary-card p0">
+                    <div class="dq-count" id="dq-p0-count">0</div>
+                    <div class="dq-label">P0 Critical</div>
+                </div>
+                <div class="dq-summary-card p1">
+                    <div class="dq-count" id="dq-p1-count">0</div>
+                    <div class="dq-label">P1 Review</div>
+                </div>
+                <div class="dq-summary-card p2">
+                    <div class="dq-count" id="dq-p2-count">0</div>
+                    <div class="dq-label">P2 Hygiene</div>
+                </div>
+                <div class="dq-summary-card ignored">
+                    <div class="dq-count" id="dq-ignored-count">0</div>
+                    <div class="dq-label">Ignored</div>
+                </div>
+                <div class="dq-run-info">
+                    <div class="dq-run-date">Last run: <span id="dq-run-date">--</span></div>
+                    <button class="btn-dq btn-dq-primary" onclick="runAllTests()">Run Tests</button>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Add Country Modal -->
-    <div id="country-modal" class="modal">
-        <div class="modal-content" style="max-width: 400px;">
-            <div class="modal-header">
-                <h2>Add Country Factor</h2>
-                <button class="modal-close" onclick="closeCountryModal()">&times;</button>
+            <div class="dq-controls">
+                <div class="dq-filter-group">
+                    <label>Severity:</label>
+                    <select id="dq-severity-filter" onchange="renderDataQualityResults()">
+                        <option value="">All</option>
+                        <option value="P0">P0 - Critical</option>
+                        <option value="P1">P1 - Review</option>
+                        <option value="P2">P2 - Hygiene</option>
+                    </select>
+                </div>
+                <div class="dq-filter-group">
+                    <label>Test:</label>
+                    <select id="dq-test-filter" onchange="renderDataQualityResults()">
+                        <option value="">All Tests</option>
+                        <option value="T1">T1 - MW Validation</option>
+                        <option value="T2">T2 - Status Consistency</option>
+                        <option value="T3">T3 - HPC Site Validation</option>
+                        <option value="T4">T4 - Financial Sanity</option>
+                        <option value="T5">T5 - Geographic Validation</option>
+                        <option value="T6">T6 - Company Reconciliation</option>
+                        <option value="T7">T7 - Provenance Check</option>
+                    </select>
+                </div>
+                <div class="dq-filter-group">
+                    <label>
+                        <input type="checkbox" id="dq-show-ignored" onchange="renderDataQualityResults()">
+                        Show Ignored
+                    </label>
+                </div>
+                <div class="dq-actions">
+                    <button class="btn-dq btn-dq-secondary" onclick="exportDataQualityReport()">Export Report</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Country Name</label>
-                <input type="text" id="new-country-name" placeholder="e.g., Ethiopia">
-            </div>
-            <div class="form-group">
-                <label>Factor (0-2)</label>
-                <input type="number" id="new-country-factor" value="1.0" min="0" max="2" step="0.1">
-            </div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button class="btn btn-secondary" onclick="closeCountryModal()">Cancel</button>
-                <button class="btn" onclick="saveNewCountryFactor()">Add</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Add HPC Project Modal -->
-    <div id="add-project-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Add New HPC Project</h2>
-                <button class="modal-close" onclick="closeAddProjectModal()">&times;</button>
+            <div class="dq-results" id="data-quality-results">
+                <!-- Populated by JS -->
             </div>
-            <form id="add-project-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Ticker</label>
-                        <select id="add-ticker" required></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Project Name</label>
-                        <input type="text" id="add-name" required>
-                    </div>
-                </div>
-                <div class="form-row-3">
-                    <div class="form-group">
-                        <label>Country</label>
-                        <input type="text" id="add-country" value="United States">
-                    </div>
-                    <div class="form-group">
-                        <label>Grid</label>
-                        <select id="add-grid">
-                            <option value="ERCOT">ERCOT</option>
-                            <option value="PJM">PJM</option>
-                            <option value="MISO">MISO</option>
-                            <option value="NYISO">NYISO</option>
-                            <option value="SPP">SPP</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>IT MW</label>
-                        <input type="number" id="add-it-mw" required>
-                    </div>
-                </div>
-                <div class="form-row-3">
-                    <div class="form-group">
-                        <label>Tenant</label>
-                        <input type="text" id="add-tenant" placeholder="e.g., CoreWeave">
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select id="add-status">
-                            <option value="Operational">Operational</option>
-                            <option value="Contracted">Contracted</option>
-                            <option value="Development">Development</option>
-                            <option value="Pipeline">Pipeline</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Lease Term (years)</label>
-                        <input type="number" id="add-term" value="15">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Annual NOI ($M)</label>
-                        <input type="number" id="add-noi" step="0.1" placeholder="Optional - will calculate">
-                    </div>
-                    <div class="form-group">
-                        <label>Source URL</label>
-                        <input type="url" id="add-source" placeholder="https://...">
-                    </div>
-                </div>
-                <div style="margin-top: 20px; text-align: right;">
-                    <button type="button" class="btn btn-secondary" onclick="closeAddProjectModal()">Cancel</button>
-                    <button type="submit" class="btn">Add Project</button>
-                </div>
-            </form>
         </div>
     </div>
 
@@ -2703,41 +1540,34 @@
             <div class="company-panel-header">
                 <div class="company-header-left">
                     <span class="company-ticker" id="company-panel-ticker">MARA</span>
-                    <span class="company-name" id="company-panel-name">Marathon Digital Holdings</span>
+                    <span class="company-name" id="company-panel-name">Company Name</span>
                 </div>
                 <button class="panel-close" onclick="closeCompanyPanel()">&times;</button>
             </div>
 
-            <!-- Price Section -->
             <div class="company-price-section">
                 <div class="price-box current-price">
                     <div class="price-label">Current Price</div>
-                    <div class="price-value" id="company-current-price">$18.50</div>
-                    <div class="price-change positive" id="company-price-change">+2.5%</div>
+                    <div class="price-value" id="company-current-price">$--</div>
+                    <div class="price-change positive" id="company-price-change">+0%</div>
                 </div>
                 <div class="price-arrow">→</div>
                 <div class="price-box target-price">
                     <div class="price-label">Fair Value</div>
-                    <div class="price-value" id="company-fair-value">$24.30</div>
+                    <div class="price-value" id="company-fair-value">$--</div>
                 </div>
                 <div class="upside-box" id="company-upside-box">
                     <div class="upside-label">Upside</div>
-                    <div class="upside-value" id="company-upside">+31%</div>
+                    <div class="upside-value" id="company-upside">--%</div>
                 </div>
             </div>
 
-            <!-- Valuation Waterfall Visual -->
             <div class="company-valuation-visual">
                 <h3>Equity Value Breakdown</h3>
-                <div class="valuation-bar-container" id="company-valuation-bar">
-                    <!-- Populated by JS -->
-                </div>
-                <div class="valuation-legend" id="company-valuation-legend">
-                    <!-- Populated by JS -->
-                </div>
+                <div class="valuation-bar-container" id="company-valuation-bar"></div>
+                <div class="valuation-legend" id="company-valuation-legend"></div>
             </div>
 
-            <!-- Valuation Table -->
             <div class="company-valuation-table">
                 <table>
                     <thead>
@@ -2748,27 +1578,119 @@
                             <th class="text-right">% of Total</th>
                         </tr>
                     </thead>
-                    <tbody id="company-valuation-tbody">
-                        <!-- Populated by JS -->
-                    </tbody>
+                    <tbody id="company-valuation-tbody"></tbody>
                 </table>
             </div>
 
-            <!-- Sites Breakdown -->
             <div class="company-sites-section">
-                <h3>Project Portfolio</h3>
-                <div class="sites-summary" id="company-sites-summary">
-                    <!-- Summary stats -->
+                <h3>Portfolio Summary</h3>
+                <div class="sites-summary" id="company-sites-summary"></div>
+                <div class="sites-list" id="company-sites-list"></div>
+            </div>
+
+            <div class="company-sources">
+                <span class="source-label">Source:</span>
+                <a href="#" id="company-source-link" target="_blank" class="source-link">Company Records</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tenancy Edit Modal -->
+    <div id="tenancy-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="tenancy-modal-title">Edit Tenancy</h2>
+                <button class="modal-close" onclick="closeTenancyModal()">&times;</button>
+            </div>
+
+            <input type="hidden" id="tenancy-id">
+
+            <div class="preview-box">
+                <div class="preview-label">Valuation</div>
+                <div class="preview-value" id="tenancy-preview-value">$0M</div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-section-title">Basic Info (Read-only)</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Site</label>
+                        <input type="text" id="tenancy-site" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Phase</label>
+                        <input type="text" id="tenancy-phase" disabled>
+                    </div>
                 </div>
-                <div class="sites-list" id="company-sites-list">
-                    <!-- Populated by JS -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tenant</label>
+                        <input type="text" id="tenancy-tenant" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Use Type</label>
+                        <input type="text" id="tenancy-use-type" disabled>
+                    </div>
                 </div>
             </div>
 
-            <!-- Data Sources -->
-            <div class="company-sources">
-                <span class="source-label">Source:</span>
-                <a href="#" id="company-source-link" target="_blank" class="source-link">Q3 2024 10-Q Filing</a>
+            <div class="form-section">
+                <div class="form-section-title">Overrides</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>IT MW</label>
+                        <input type="number" id="tenancy-mw" step="1" oninput="updateTenancyPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>Fidoodle Factor</label>
+                        <input type="number" id="tenancy-fidoodle" step="0.05" min="0" max="3" oninput="updateTenancyPreview()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section" id="btc-overrides-section" style="display: none;">
+                <div class="form-section-title">BTC Mining Overrides</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Mining EBITDA ($M/yr)</label>
+                        <input type="number" id="tenancy-mining-ebitda" step="0.1" oninput="updateTenancyPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>EBITDA Multiple</label>
+                        <input type="number" id="tenancy-btc-multiple" step="0.5" oninput="updateTenancyPreview()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section" id="hpc-overrides-section" style="display: none;">
+                <div class="form-section-title">HPC Lease Overrides</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>NOI ($M/yr)</label>
+                        <input type="number" id="tenancy-noi" step="0.1" oninput="updateTenancyPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>Cap Rate Override</label>
+                        <input type="number" id="tenancy-cap-rate" step="0.005" min="0.04" max="0.15" oninput="updateTenancyPreview()">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Term (years)</label>
+                    <input type="number" id="tenancy-term" step="1" min="1" max="30" oninput="updateTenancyPreview()">
+                </div>
+            </div>
+
+            <div class="form-section" id="conversion-overrides-section" style="display: none;">
+                <div class="form-section-title">Conversion Option</div>
+                <div class="form-group">
+                    <label>Conversion Probability (%)</label>
+                    <input type="number" id="tenancy-conv-prob" step="5" min="0" max="100" oninput="updateTenancyPreview()">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeTenancyModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveTenancyOverrides()">Save</button>
             </div>
         </div>
     </div>

@@ -658,8 +658,32 @@ function renderDashboard() {
 }
 
 // =====================================================
-// HIERARCHICAL PROJECT LIST
+// HIERARCHICAL PROJECT LIST (FLAT VIEW)
 // =====================================================
+
+/**
+ * Format location string - handles country-only locations (no comma)
+ */
+function formatLocation(state, country) {
+    if (!country) return '';
+    if (!state || state.trim() === '') return country;
+    return `${state}, ${country}`;
+}
+
+/**
+ * Format energization date
+ */
+function formatEnergizationDate(dateStr) {
+    if (!dateStr) return '';
+    // Handle various date formats
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr; // Return as-is if can't parse
+        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    } catch (e) {
+        return dateStr;
+    }
+}
 
 function renderProjectsHierarchy() {
     const container = document.getElementById('projects-hierarchy');
@@ -687,14 +711,13 @@ function renderProjectsHierarchy() {
         companyDiv.className = 'hierarchy-company';
         companyDiv.innerHTML = `
             <div class="hierarchy-company-header" data-ticker="${ticker}">
-                <span class="expand-icon">▼</span>
                 <span class="company-ticker">${ticker}</span>
                 <span class="company-name">${COMPANY_MAP[ticker]?.name || ticker}</span>
                 <span class="company-stats">
                     ${sites.length} sites · ${Math.round(companyVal?.totalMw || 0)} MW · $${Math.round(companyVal?.equityValue || 0).toLocaleString()}M
                 </span>
             </div>
-            <div class="hierarchy-sites" id="sites-${ticker}"></div>
+            <div class="hierarchy-sites expanded" id="sites-${ticker}"></div>
         `;
 
         const sitesContainer = companyDiv.querySelector('.hierarchy-sites');
@@ -718,28 +741,24 @@ function renderProjectsHierarchy() {
             if (!hasMatchingTenancy && (statusFilter || useFilter)) return;
 
             const siteVal = calculateSiteValue(site);
+            const locationStr = formatLocation(site.location?.state, site.location?.country);
+
             const siteDiv = document.createElement('div');
             siteDiv.className = 'hierarchy-site';
             siteDiv.innerHTML = `
                 <div class="hierarchy-site-header" data-site-id="${site.id}">
-                    <span class="expand-icon">${expandedSites.has(site.id) ? '▼' : '▶'}</span>
                     <span class="site-name">${site.name}</span>
-                    <span class="site-location">${site.location?.state || ''}, ${site.location?.country || ''}</span>
+                    <span class="site-location">${locationStr}</span>
                     <span class="site-grid">${site.grid || ''}</span>
                     <span class="site-power">${Math.round(site.power?.total_site_capacity_mw || 0)} MW</span>
                     <span class="site-value">$${Math.round(siteVal.totalValue).toLocaleString()}M</span>
                 </div>
-                <div class="hierarchy-phases ${expandedSites.has(site.id) ? 'expanded' : ''}" id="phases-${site.id}"></div>
+                <div class="hierarchy-phases expanded" id="phases-${site.id}"></div>
             `;
-
-            // Add click handler to expand/collapse
-            siteDiv.querySelector('.hierarchy-site-header').addEventListener('click', () => {
-                toggleSiteExpansion(site.id);
-            });
 
             const phasesContainer = siteDiv.querySelector('.hierarchy-phases');
 
-            // Render phases
+            // Render phases (always visible)
             phases.forEach(phase => {
                 const tenancies = TENANCIES_BY_PHASE[phase.id] || [];
                 const activeTenancies = tenancies.filter(t => t.status === 'active');
@@ -748,28 +767,24 @@ function renderProjectsHierarchy() {
                 if (statusFilter && phase.status !== statusFilter) return;
 
                 const phaseVal = calculatePhaseValue(phase);
+                const energizationStr = formatEnergizationDate(phase.energization_date || phase.timeline?.energization);
+
                 const phaseDiv = document.createElement('div');
                 phaseDiv.className = 'hierarchy-phase';
                 phaseDiv.innerHTML = `
                     <div class="hierarchy-phase-header" data-phase-id="${phase.id}">
-                        <span class="expand-icon">${expandedPhases.has(phase.id) ? '▼' : '▶'}</span>
                         <span class="phase-name">${phase.name}</span>
                         <span class="phase-status status-${phase.status.toLowerCase().replace(' ', '-')}">${phase.status}</span>
                         <span class="phase-capacity">${Math.round(phase.capacity?.it_mw || 0)} MW IT</span>
+                        ${energizationStr ? `<span class="phase-energization">⚡ ${energizationStr}</span>` : ''}
                         <span class="phase-value">$${Math.round(phaseVal.totalValue).toLocaleString()}M</span>
                     </div>
-                    <div class="hierarchy-tenancies ${expandedPhases.has(phase.id) ? 'expanded' : ''}" id="tenancies-${phase.id}"></div>
+                    <div class="hierarchy-tenancies expanded" id="tenancies-${phase.id}"></div>
                 `;
-
-                // Add click handler
-                phaseDiv.querySelector('.hierarchy-phase-header').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    togglePhaseExpansion(phase.id);
-                });
 
                 const tenanciesContainer = phaseDiv.querySelector('.hierarchy-tenancies');
 
-                // Render tenancies
+                // Render tenancies (always visible)
                 tenancies.forEach(tenancy => {
                     if (useFilter && tenancy.use_type !== useFilter) return;
 
@@ -807,34 +822,17 @@ function renderProjectsHierarchy() {
             sitesContainer.appendChild(siteDiv);
         });
 
-        // Add company header click handler
-        companyDiv.querySelector('.hierarchy-company-header').addEventListener('click', () => {
-            const sitesDiv = companyDiv.querySelector('.hierarchy-sites');
-            sitesDiv.classList.toggle('collapsed');
-            const icon = companyDiv.querySelector('.expand-icon');
-            icon.textContent = sitesDiv.classList.contains('collapsed') ? '▶' : '▼';
-        });
-
         container.appendChild(companyDiv);
     });
 }
 
+// Legacy functions - kept for backwards compatibility but no longer used
 function toggleSiteExpansion(siteId) {
-    if (expandedSites.has(siteId)) {
-        expandedSites.delete(siteId);
-    } else {
-        expandedSites.add(siteId);
-    }
-    renderProjectsHierarchy();
+    // No-op - flat view always shows all content
 }
 
 function togglePhaseExpansion(phaseId) {
-    if (expandedPhases.has(phaseId)) {
-        expandedPhases.delete(phaseId);
-    } else {
-        expandedPhases.add(phaseId);
-    }
-    renderProjectsHierarchy();
+    // No-op - flat view always shows all content
 }
 
 function formatUseType(useType) {
@@ -1208,9 +1206,10 @@ function renderMap() {
             fillOpacity: 0.6
         });
 
+        const popupLocation = formatLocation(site.location?.state, site.location?.country);
         marker.bindPopup(`
             <strong>${site.ticker}: ${site.name}</strong><br>
-            ${site.location.state}, ${site.location.country}<br>
+            ${popupLocation}<br>
             ${Math.round(site.power?.total_site_capacity_mw || 0)} MW<br>
             Value: $${Math.round(siteVal.totalValue).toLocaleString()}M
         `);

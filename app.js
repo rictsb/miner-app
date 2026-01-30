@@ -634,8 +634,8 @@ function renderDashboard() {
             <td class="col-ticker">
                 <span class="ticker clickable-ticker" data-ticker="${v.ticker}">${v.ticker}</span>
             </td>
-            <td class="${v.priceChange >= 0 ? 'positive' : 'negative'}">$${v.stockPrice > 0 ? v.stockPrice.toFixed(2) : '--'}</td>
-            <td class="net-liquid-cell">
+            <td class="col-right ${v.priceChange >= 0 ? 'positive' : 'negative'}">$${v.stockPrice > 0 ? v.stockPrice.toFixed(2) : '--'}</td>
+            <td class="net-liquid-cell col-right">
                 <span class="${netLiquid >= 0 ? 'positive' : 'negative'}">${Math.round(netLiquid).toLocaleString()}</span>
                 <div class="net-liquid-tooltip">
                     <div class="tooltip-row">
@@ -652,13 +652,13 @@ function renderDashboard() {
                     </div>
                 </div>
             </td>
-            <td class="col-mw">${Math.round(v.miningMw).toLocaleString()}</td>
-            <td class="col-mw">${Math.round(v.hpcMw + v.pipelineMw).toLocaleString()}</td>
-            <td class="col-ev">${Math.round(v.miningEV).toLocaleString()}</td>
-            <td class="col-ev">${Math.round(v.hpcContractedEV).toLocaleString()}</td>
-            <td class="col-ev">${Math.round(v.pipelineEV + v.conversionEV).toLocaleString()}</td>
-            <td class="positive">$${v.fairValue.toFixed(2)}</td>
-            <td class="${v.upside >= 0 ? 'positive' : 'negative'}">${v.stockPrice > 0 ? (v.upside >= 0 ? '+' : '') + v.upside.toFixed(0) + '%' : '--'}</td>
+            <td class="col-mw col-right">${Math.round(v.miningMw).toLocaleString()}</td>
+            <td class="col-mw col-right">${Math.round(v.hpcMw + v.pipelineMw).toLocaleString()}</td>
+            <td class="col-ev col-right">${Math.round(v.miningEV).toLocaleString()}</td>
+            <td class="col-ev col-right">${Math.round(v.hpcContractedEV).toLocaleString()}</td>
+            <td class="col-ev col-right">${Math.round(v.pipelineEV + v.conversionEV).toLocaleString()}</td>
+            <td class="col-right col-fair-value">$${v.fairValue.toFixed(2)}</td>
+            <td class="col-right ${v.upside >= 0 ? 'positive' : 'negative'}">${v.stockPrice > 0 ? (v.upside >= 0 ? '+' : '') + v.upside.toFixed(0) + '%' : '--'}</td>
         `;
 
         // Click on ticker to show company in persistent panel
@@ -816,16 +816,29 @@ function updatePersistentPanel(ticker) {
         </div>
 
         <div class="panel-section">
-            <div class="panel-section-title">Sites (${sites.length})</div>
+            <div class="panel-section-title">Sites & Phases (${sites.length} sites)</div>
             <div class="panel-sites-list">
                 ${sites.map(site => {
                     const siteVal = calculateSiteValue(site);
+                    const phases = PHASES_BY_SITE[site.id] || [];
                     return `
                         <div class="panel-site-item">
                             <span class="panel-site-name">${site.name}</span>
                             <span class="panel-site-mw">${Math.round(site.power?.total_site_capacity_mw || 0)} MW</span>
                             <span class="panel-site-value">$${Math.round(siteVal.totalValue)}M</span>
                         </div>
+                        ${phases.map(phase => {
+                            const energization = phase.energization?.date_normalized;
+                            const energizationStr = energization ? formatEnergizationDate(phase) : '';
+                            return `
+                                <div class="panel-phase-item">
+                                    <span class="panel-phase-name">${phase.name}</span>
+                                    <span class="panel-phase-status status-${phase.status.toLowerCase().replace(/\s+/g, '-')}">${phase.status}</span>
+                                    <span class="panel-phase-mw">${Math.round(phase.capacity?.it_mw || 0)} MW</span>
+                                    ${energizationStr ? `<span class="panel-phase-energization">${energizationStr}</span>` : ''}
+                                </div>
+                            `;
+                        }).join('')}
                     `;
                 }).join('')}
             </div>

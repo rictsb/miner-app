@@ -135,7 +135,7 @@
         .summary-card .card-value.positive { color: #00ff00; }
         .summary-card .card-value.btc { color: #ff8c00; }
         .summary-card .card-value.hpc { color: #00bfff; }
-        .summary-card .card-value.ev { color: #00ff00; }
+        .summary-card .card-value.ev { color: #ff8c00; }
 
         /* Dashboard Layout with Persistent Panel */
         .dashboard-layout {
@@ -260,14 +260,25 @@
         .tooltip-value.cash { color: #00ff00; }
         .tooltip-value.debt { color: #ff6666; }
 
+        /* Right-aligned columns */
+        .col-right {
+            text-align: right;
+        }
+
         /* MW columns styling */
         .col-mw {
             color: #aaa;
             font-family: 'Roboto Mono', monospace;
         }
 
-        /* EV columns styling - all same green color */
+        /* EV columns styling - Bloomberg orange */
         .col-ev {
+            color: #ff8c00;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Fair value column */
+        .col-fair-value {
             color: #00ff00;
             font-family: 'Roboto Mono', monospace;
         }
@@ -425,7 +436,7 @@
         }
 
         .panel-ev-value {
-            color: #00ff00;
+            color: #ff8c00;
             font-family: 'Roboto Mono', monospace;
             font-size: 13px;
         }
@@ -466,6 +477,58 @@
         .panel-site-value {
             font-family: 'Roboto Mono', monospace;
             color: #888;
+        }
+
+        .panel-phase-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px 6px 25px;
+            background: #050505;
+            border-left: 2px solid #333;
+            margin-left: 10px;
+            margin-bottom: 2px;
+            font-size: 11px;
+            gap: 8px;
+        }
+
+        .panel-phase-name {
+            color: #777;
+            min-width: 60px;
+        }
+
+        .panel-phase-status {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .panel-phase-status.status-operational {
+            background: #0a2a0a;
+            color: #00ff00;
+        }
+
+        .panel-phase-status.status-under-construction {
+            background: #2a2a0a;
+            color: #ffaa00;
+        }
+
+        .panel-phase-status.status-permitted {
+            background: #1a1a2a;
+            color: #8888ff;
+        }
+
+        .panel-phase-mw {
+            color: #666;
+            font-family: 'Roboto Mono', monospace;
+            margin-left: auto;
+        }
+
+        .panel-phase-energization {
+            color: #aa8800;
+            font-size: 10px;
+            min-width: 70px;
+            text-align: right;
         }
 
         .panel-source {
@@ -538,7 +601,7 @@
         }
 
         .header-group.ev {
-            color: #00ff00;
+            color: #ff8c00;
         }
 
         .col-mw-header {
@@ -546,7 +609,7 @@
         }
 
         .col-ev-header {
-            color: #00ff00 !important;
+            color: #ff8c00 !important;
         }
 
         td {
@@ -1735,15 +1798,15 @@
                                 </tr>
                                 <tr>
                                     <th class="sortable" data-sort="ticker">Ticker</th>
-                                    <th class="sortable" data-sort="price">Price</th>
-                                    <th class="sortable" data-sort="netLiquid">Net Liquid</th>
-                                    <th class="sortable col-mw-header" data-sort="miningMw">Mining</th>
-                                    <th class="sortable col-mw-header" data-sort="hpcMw">HPC</th>
-                                    <th class="sortable col-ev-header" data-sort="miningEv">Mining</th>
-                                    <th class="sortable col-ev-header" data-sort="hpcEvContracted">Contracted</th>
-                                    <th class="sortable col-ev-header" data-sort="hpcEvPipeline">Pipeline</th>
-                                    <th class="sortable" data-sort="fairValue">Fair Value</th>
-                                    <th class="sortable" data-sort="upside">Upside</th>
+                                    <th class="sortable col-right" data-sort="price">Price</th>
+                                    <th class="sortable col-right" data-sort="netLiquid">Net Liquid</th>
+                                    <th class="sortable col-mw-header col-right" data-sort="miningMw">Mining</th>
+                                    <th class="sortable col-mw-header col-right" data-sort="hpcMw">HPC</th>
+                                    <th class="sortable col-ev-header col-right" data-sort="miningEv">Mining</th>
+                                    <th class="sortable col-ev-header col-right" data-sort="hpcEvContracted">Contracted</th>
+                                    <th class="sortable col-ev-header col-right" data-sort="hpcEvPipeline">Pipeline</th>
+                                    <th class="sortable col-right" data-sort="fairValue">Fair Value</th>
+                                    <th class="sortable col-right" data-sort="upside">Upside</th>
                                 </tr>
                             </thead>
                             <tbody id="dashboard-tbody">

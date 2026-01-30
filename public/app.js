@@ -1034,6 +1034,7 @@ function renderProjectsHierarchy() {
         <table class="projects-table">
             <thead>
                 <tr>
+                    <th class="col-row-num">#</th>
                     <th class="sortable ${projectsTableSort.column === 'ticker' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="ticker">Ticker</th>
                     <th class="sortable ${projectsTableSort.column === 'site' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="site">Site</th>
                     <th class="sortable ${projectsTableSort.column === 'location' ? 'sorted-' + projectsTableSort.direction : ''}" data-sort="location">Location</th>
@@ -1051,13 +1052,14 @@ function renderProjectsHierarchy() {
             <tbody>
     `;
 
-    rows.forEach(row => {
+    rows.forEach((row, index) => {
         const statusClass = getStatusClass(row.status);
         const useTypeLabel = formatUseType(row.useType);
         const useClass = row.useType ? 'use-' + row.useType.toLowerCase().replace('_', '-') : '';
 
         html += `
             <tr class="${row.isPotential ? 'potential-row' : ''}">
+                <td class="col-row-num">${index + 1}</td>
                 <td class="col-ticker"><span class="ticker">${row.ticker}</span></td>
                 <td class="col-site">${row.siteName}</td>
                 <td class="col-location">${row.location}</td>
@@ -1530,6 +1532,9 @@ function initializeTabs() {
 
             if (tabId === 'map-view') {
                 setTimeout(() => map?.invalidateSize(), 100);
+            }
+            if (tabId === 'factors') {
+                renderFactors();
             }
         });
     });
@@ -2245,14 +2250,209 @@ function exportDataQualityReport() {
 }
 
 // =====================================================
+// FACTORS MANAGEMENT
+// =====================================================
+
+// Debounce timer for auto-apply
+let factorDebounceTimer = null;
+
+function renderFactors() {
+    const container = document.getElementById('factors-content');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="factors-grid">
+            <div class="factor-section">
+                <h3>Market Inputs</h3>
+                <div class="factor-row">
+                    <label>BTC Price</label>
+                    <div class="factor-input-wrapper">
+                        <span class="factor-prefix">$</span>
+                        <input type="number" id="factor-btc-price" value="${Math.round(factors.btcPrice)}" class="factor-input" oninput="onFactorChange()">
+                        <button class="btn-refresh-btc" onclick="refreshBtcPrice()" title="Refresh live price">↻</button>
+                    </div>
+                    <span class="factor-note">Live: <span id="live-btc-indicator">${factors.btcPrice > 99000 ? '✓' : '—'}</span></span>
+                </div>
+            </div>
+
+            <div class="factor-section">
+                <h3>HPC/Data Center Valuation</h3>
+                <div class="factor-row">
+                    <label>Base Cap Rate</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-base-cap" value="${(factors.baseCap * 100).toFixed(1)}" step="0.1" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">%</span>
+                    </div>
+                    <span class="factor-note">For investment-grade tenants</span>
+                </div>
+                <div class="factor-row">
+                    <label>Base NOI per MW</label>
+                    <div class="factor-input-wrapper">
+                        <span class="factor-prefix">$</span>
+                        <input type="number" id="factor-base-noi" value="${factors.baseNoiPerMw.toFixed(2)}" step="0.05" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">M/MW</span>
+                    </div>
+                    <span class="factor-note">Annual NOI assumption</span>
+                </div>
+                <div class="factor-row">
+                    <label>Default Lease Term</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-default-term" value="${factors.defaultTerm}" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">years</span>
+                    </div>
+                    <span class="factor-note">When term not specified</span>
+                </div>
+                <div class="factor-row">
+                    <label>Rent Escalator</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-escalator" value="${factors.escalator.toFixed(1)}" step="0.1" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">%/yr</span>
+                    </div>
+                    <span class="factor-note">Annual rent increase</span>
+                </div>
+            </div>
+
+            <div class="factor-section">
+                <h3>BTC Mining Valuation</h3>
+                <div class="factor-row">
+                    <label>EBITDA per MW</label>
+                    <div class="factor-input-wrapper">
+                        <span class="factor-prefix">$</span>
+                        <input type="number" id="factor-btc-ebitda" value="${factors.btcMining.ebitdaPerMw.toFixed(2)}" step="0.05" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">M/MW</span>
+                    </div>
+                    <span class="factor-note">Annual mining EBITDA</span>
+                </div>
+                <div class="factor-row">
+                    <label>EBITDA Multiple</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-btc-multiple" value="${factors.btcMining.ebitdaMultiple}" step="0.5" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                    <span class="factor-note">Valuation multiple</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="factors-actions">
+            <span class="auto-save-indicator" id="auto-save-indicator"></span>
+            <button class="btn-secondary" onclick="resetFactors()">Reset to Defaults</button>
+        </div>
+    `;
+}
+
+// Called on any factor input change - debounces and auto-applies
+function onFactorChange() {
+    // Show "updating..." indicator
+    const indicator = document.getElementById('auto-save-indicator');
+    if (indicator) indicator.textContent = 'Updating...';
+
+    // Clear previous timer
+    if (factorDebounceTimer) clearTimeout(factorDebounceTimer);
+
+    // Set new timer - apply after 300ms of no changes
+    factorDebounceTimer = setTimeout(() => {
+        applyFactorsQuiet();
+    }, 300);
+}
+
+// Apply factors without showing alert
+function applyFactorsQuiet() {
+    factors.btcPrice = parseFloat(document.getElementById('factor-btc-price').value) || 100000;
+    factors.baseCap = (parseFloat(document.getElementById('factor-base-cap').value) || 8) / 100;
+    factors.baseNoiPerMw = parseFloat(document.getElementById('factor-base-noi').value) || 1.2;
+    factors.defaultTerm = parseInt(document.getElementById('factor-default-term').value) || 15;
+    factors.escalator = parseFloat(document.getElementById('factor-escalator').value) || 2.5;
+    factors.btcMining.ebitdaPerMw = parseFloat(document.getElementById('factor-btc-ebitda').value) || 0.75;
+    factors.btcMining.ebitdaMultiple = parseFloat(document.getElementById('factor-btc-multiple').value) || 6;
+
+    // Update header BTC price
+    document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+
+    // Save to localStorage
+    localStorage.setItem('miner-app-v9-factors', JSON.stringify(factors));
+
+    // Refresh all valuations
+    renderDashboard();
+    renderProjectsHierarchy();
+
+    // Show saved indicator
+    const indicator = document.getElementById('auto-save-indicator');
+    if (indicator) {
+        indicator.textContent = '✓ Applied';
+        setTimeout(() => { indicator.textContent = ''; }, 1500);
+    }
+}
+
+async function refreshBtcPrice() {
+    try {
+        document.getElementById('live-btc-indicator').textContent = '...';
+        const btcResponse = await fetch('https://api.coindesk.com/v1/bpi/currentprice.json');
+        const btcData = await btcResponse.json();
+        factors.btcPrice = btcData.bpi.USD.rate_float;
+        document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+        document.getElementById('factor-btc-price').value = Math.round(factors.btcPrice);
+        document.getElementById('live-btc-indicator').textContent = '✓';
+
+        // Refresh valuations
+        renderDashboard();
+        renderProjectsHierarchy();
+    } catch (e) {
+        console.warn('Could not fetch BTC price:', e);
+        document.getElementById('live-btc-indicator').textContent = '✗';
+    }
+}
+
+function resetFactors() {
+    factors = {
+        btcPrice: 100000,
+        baseCap: 0.08,
+        baseNoiPerMw: 1.2,
+        defaultTerm: 15,
+        escalator: 2.5,
+        fidoodleDefault: 1.0,
+        btcMining: {
+            ebitdaPerMw: 0.75,
+            ebitdaMultiple: 6
+        }
+    };
+
+    // Clear localStorage
+    localStorage.removeItem('miner-app-v9-factors');
+
+    // Re-render factors form
+    renderFactors();
+
+    // Update header and re-fetch live BTC price
+    refreshBtcPrice();
+}
+
+function loadFactors() {
+    try {
+        const saved = localStorage.getItem('miner-app-v9-factors');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            factors = { ...factors, ...parsed };
+            if (parsed.btcMining) {
+                factors.btcMining = { ...factors.btcMining, ...parsed.btcMining };
+            }
+        }
+    } catch (e) {
+        console.warn('Could not load factors:', e);
+    }
+}
+
+// =====================================================
 // INITIALIZATION
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeTabs();
     initializeSorting();
+    loadFactors();
     loadData().then(() => {
         initializeFilters();
+        renderFactors();
         // Auto-run tests on load
         setTimeout(runAllTests, 500);
     });

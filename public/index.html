@@ -1892,6 +1892,125 @@
             min-width: 80px;
         }
 
+        /* Factor section wide (for tenant spreads) */
+        .factor-section-wide {
+            grid-column: 1 / -1;
+        }
+
+        .factor-subheader {
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 15px 0 8px 0;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+        }
+
+        .factor-subheader:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .sofr-header {
+            background: #1a1a1a;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .sofr-base {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .sofr-base strong {
+            color: #ff8c00;
+            font-size: 16px;
+        }
+
+        /* Slider row styling */
+        .slider-row {
+            display: grid;
+            grid-template-columns: 140px 1fr 70px 70px;
+            gap: 15px;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+        }
+
+        .slider-row:last-child {
+            border-bottom: none;
+        }
+
+        .tenant-label {
+            color: #ccc;
+            font-size: 13px;
+            flex: 0 0 140px;
+        }
+
+        .slider-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .factor-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(to right, #2a6b2a 0%, #2a6b2a 50%, #333 50%, #333 100%);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .factor-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #ff8c00;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #000;
+        }
+
+        .factor-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #ff8c00;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #000;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #555;
+        }
+
+        .spread-value {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            color: #ff8c00;
+            text-align: right;
+        }
+
+        .implied-rate {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            color: #888;
+            text-align: right;
+        }
+
         /* Row number column for projects table */
         .col-row-num {
             color: #555;
@@ -1908,6 +2027,10 @@
             <div class="price-item">
                 <span class="price-label">BTC:</span>
                 <span class="price-value" id="btc-price">$---</span>
+            </div>
+            <div class="price-item">
+                <span class="price-label">SOFR:</span>
+                <span class="price-value" id="sofr-rate">---%</span>
             </div>
         </div>
     </div>

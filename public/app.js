@@ -34,6 +34,7 @@ let tenancyOverrides = {};
 // Global valuation factors
 let factors = {
     btcPrice: 100000,
+    sofrRate: 4.30,  // Current SOFR rate
     baseCap: 0.08,
     baseNoiPerMw: 1.2,
     defaultTerm: 15,
@@ -42,6 +43,47 @@ let factors = {
     btcMining: {
         ebitdaPerMw: 0.75,
         ebitdaMultiple: 6
+    },
+    // Power Authority multipliers (US grids + international countries)
+    powerAuthorityMults: {
+        // US Power Grids
+        'ERCOT': 1.05,
+        'PJM': 1.0,
+        'MISO': 0.95,
+        'NYISO': 0.95,
+        'SPP': 0.9,
+        'CAISO': 0.9,
+        // International Countries
+        'Canada': 0.95,
+        'Norway': 0.9,
+        'Sweden': 0.9,
+        'UAE': 0.85,
+        'Paraguay': 0.7,
+        'Ethiopia': 0.6,
+        'Bhutan': 0.65
+    },
+    // Size multipliers (MW thresholds)
+    sizeMults: {
+        'small': { threshold: 50, mult: 0.9 },    // < 50 MW
+        'medium': { threshold: 200, mult: 1.0 },  // 50-200 MW
+        'large': { threshold: 500, mult: 1.1 },   // 200-500 MW
+        'mega': { threshold: Infinity, mult: 1.2 } // > 500 MW
+    },
+    // Tenant credit spreads over SOFR (percentage points, e.g., -1.0 = SOFR - 1%)
+    tenantSpreads: {
+        'Microsoft': -1.0,
+        'Amazon': -1.0,
+        'AWS': -1.0,
+        'Google': -1.0,
+        'Meta': -1.0,
+        'Oracle': -1.0,
+        'CoreWeave': 0,
+        'Anthropic': 0,
+        'OpenAI': 0,
+        'Fluidstack': 1.0,
+        'Core42': 1.0,
+        'G42': 1.0,
+        'Self': 3.0
     }
 };
 
@@ -156,16 +198,46 @@ function saveOverrides() {
 // =====================================================
 
 async function fetchPrices() {
-    // Fetch BTC price
+    // Fetch BTC price - try multiple sources
     try {
-        const btcResponse = await fetch('https://api.coindesk.com/v1/bpi/currentprice.json');
+        // Try CoinGecko first (more reliable, no API key needed)
+        const btcResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
         const btcData = await btcResponse.json();
-        factors.btcPrice = btcData.bpi.USD.rate_float;
-        document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+        if (btcData.bitcoin && btcData.bitcoin.usd) {
+            factors.btcPrice = btcData.bitcoin.usd;
+            document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+            console.log('BTC price fetched:', factors.btcPrice);
+        }
     } catch (e) {
-        console.warn('Could not fetch BTC price:', e);
-        document.getElementById('btc-price').textContent = '$100,000';
+        console.warn('CoinGecko failed, trying CoinDesk:', e);
+        try {
+            const btcResponse = await fetch('https://api.coindesk.com/v1/bpi/currentprice.json');
+            const btcData = await btcResponse.json();
+            factors.btcPrice = btcData.bpi.USD.rate_float;
+            document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+        } catch (e2) {
+            console.warn('Could not fetch BTC price:', e2);
+            document.getElementById('btc-price').textContent = '$100,000';
+        }
     }
+
+    // Fetch SOFR rate
+    try {
+        // Using FRED API for SOFR (Federal Reserve Economic Data)
+        // Note: In production, you'd use your own API key
+        const sofrResponse = await fetch('https://api.stlouisfed.org/fred/series/observations?series_id=SOFR&api_key=demo&file_type=json&limit=1&sort_order=desc');
+        const sofrData = await sofrResponse.json();
+        if (sofrData.observations && sofrData.observations[0]) {
+            factors.sofrRate = parseFloat(sofrData.observations[0].value);
+            console.log('SOFR rate fetched:', factors.sofrRate);
+        }
+    } catch (e) {
+        console.warn('Could not fetch SOFR rate, using default:', e);
+        // Keep default SOFR rate
+    }
+
+    // Update header display
+    updateHeaderPrices();
 
     // Fetch stock prices
     const tickers = DATA.companies.map(c => c.ticker);
@@ -180,6 +252,12 @@ async function fetchPrices() {
             stockPrices[ticker] = { price: 0, change: 0 };
         }
     }
+}
+
+function updateHeaderPrices() {
+    document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+    const sofrEl = document.getElementById('sofr-rate');
+    if (sofrEl) sofrEl.textContent = `${factors.sofrRate.toFixed(2)}%`;
 }
 
 function getDefaultStockPrice(ticker) {
@@ -510,32 +588,63 @@ function calculateCompanyValuation(ticker) {
 // =====================================================
 
 function getLocationMultiplier(country, grid) {
-    const countryMults = {
-        'USA': 1.0, 'Canada': 0.95, 'Norway': 0.9, 'Sweden': 0.9,
-        'UAE': 0.85, 'Paraguay': 0.7, 'Ethiopia': 0.6, 'Bhutan': 0.65
-    };
-
-    const gridMults = {
-        'ERCOT': 1.05, 'PJM': 1.0, 'MISO': 0.95, 'NYISO': 0.95,
-        'SPP': 0.9, 'CAISO': 0.9
-    };
-
-    const countryMult = countryMults[country] || 0.8;
-    const gridMult = gridMults[grid] || 1.0;
-
-    return countryMult * gridMult;
+    // For USA, use the grid/power authority multiplier
+    // For other countries, use the country multiplier
+    if (country === 'USA' && grid) {
+        return factors.powerAuthorityMults[grid] || 1.0;
+    }
+    return factors.powerAuthorityMults[country] || 0.8;
 }
 
 function getCreditMultiplier(tenant) {
-    const hyperscalers = ['Microsoft', 'Amazon', 'AWS', 'Google', 'Meta', 'Oracle'];
-    const tier1 = ['CoreWeave', 'Anthropic', 'OpenAI'];
-    const tier2 = ['Fluidstack', 'Core42', 'G42'];
+    // Get spread for this specific tenant (percentage points)
+    let spread = getTenantSpread(tenant);
 
-    if (!tenant || tenant === 'Self' || tenant === 'TBD') return 0.8;
-    if (hyperscalers.some(h => tenant.includes(h))) return 1.25;
-    if (tier1.some(t => tenant.includes(t))) return 1.1;
-    if (tier2.some(t => tenant.includes(t))) return 1.0;
-    return 0.9;
+    // Calculate implied cap rate from SOFR + spread
+    const impliedRate = factors.sofrRate + spread;
+
+    // Convert to multiplier (lower rate = higher multiplier)
+    // Base assumption: 8% cap rate = 1.0 multiplier
+    // Each 1% lower rate increases multiplier by 0.125
+    const rateVsBase = factors.baseCap * 100 - impliedRate;
+    const multiplier = 1.0 + (rateVsBase / 100 * 0.125);
+
+    return Math.max(0.5, Math.min(1.5, multiplier));
+}
+
+function getTenantSpread(tenant) {
+    // Check for exact match first
+    if (factors.tenantSpreads[tenant] !== undefined) {
+        return factors.tenantSpreads[tenant];
+    }
+
+    // Check if tenant name contains a known tenant
+    for (const [knownTenant, spread] of Object.entries(factors.tenantSpreads)) {
+        if (tenant && tenant.includes(knownTenant)) {
+            return spread;
+        }
+    }
+
+    // Default for unknown tenants: Self mining rate
+    if (!tenant || tenant === 'Self' || tenant === 'TBD') {
+        return factors.tenantSpreads['Self'] || 3.0;
+    }
+
+    // Unknown external tenant - use moderate spread
+    return 2.0;
+}
+
+function getKnownTenants() {
+    // Return list of all known tenants from the data
+    const tenants = new Set();
+    DATA.tenancies.forEach(t => {
+        if (t.tenant && t.tenant !== 'Self' && t.tenant !== 'TBD') {
+            tenants.add(t.tenant);
+        }
+    });
+    // Always include Self
+    tenants.add('Self');
+    return Array.from(tenants).sort();
 }
 
 function getBuildStatusMultiplier(status) {
@@ -554,11 +663,11 @@ function getTenantConcentrationMultiplier(tenant) {
 }
 
 function getSizeMultiplier(mw) {
-    if (mw >= 500) return 1.1;
-    if (mw >= 200) return 1.05;
-    if (mw >= 100) return 1.0;
-    if (mw >= 50) return 0.95;
-    return 0.9;
+    const sizes = factors.sizeMults;
+    if (mw >= sizes.large.threshold) return sizes.mega.mult;
+    if (mw >= sizes.medium.threshold) return sizes.large.mult;
+    if (mw >= sizes.small.threshold) return sizes.medium.mult;
+    return sizes.small.mult;
 }
 
 function getTermFactor(years) {
@@ -2260,6 +2369,9 @@ function renderFactors() {
     const container = document.getElementById('factors-content');
     if (!container) return;
 
+    // Get list of known tenants from data
+    const knownTenants = getKnownTenants();
+
     container.innerHTML = `
         <div class="factors-grid">
             <div class="factor-section">
@@ -2272,6 +2384,15 @@ function renderFactors() {
                         <button class="btn-refresh-btc" onclick="refreshBtcPrice()" title="Refresh live price">↻</button>
                     </div>
                     <span class="factor-note">Live: <span id="live-btc-indicator">${factors.btcPrice > 99000 ? '✓' : '—'}</span></span>
+                </div>
+                <div class="factor-row">
+                    <label>SOFR Rate</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-sofr" value="${factors.sofrRate.toFixed(2)}" step="0.01" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">%</span>
+                        <button class="btn-refresh-btc" onclick="refreshSofrRate()" title="Refresh live rate">↻</button>
+                    </div>
+                    <span class="factor-note">Base rate for tenant spreads</span>
                 </div>
             </div>
 
@@ -2332,6 +2453,95 @@ function renderFactors() {
                     <span class="factor-note">Valuation multiple</span>
                 </div>
             </div>
+
+            <div class="factor-section factor-section-wide">
+                <h3>Tenant Credit Spreads (SOFR ± Spread)</h3>
+                <div class="sofr-header">
+                    <span class="sofr-base">Base SOFR: <strong>${factors.sofrRate.toFixed(2)}%</strong></span>
+                </div>
+                ${knownTenants.map(tenant => {
+                    const spread = factors.tenantSpreads[tenant] ?? 2.0;
+                    const impliedRate = factors.sofrRate + spread;
+                    const tenantKey = tenant.replace(/[^a-zA-Z0-9]/g, '_');
+                    return `
+                    <div class="factor-row slider-row">
+                        <label class="tenant-label">${tenant}</label>
+                        <div class="slider-wrapper">
+                            <input type="range"
+                                id="factor-spread-${tenantKey}"
+                                class="factor-slider factor-tenant-spread"
+                                data-tenant="${tenant}"
+                                min="-5" max="5" step="0.5"
+                                value="${spread}"
+                                oninput="onTenantSliderChange(this)">
+                            <div class="slider-labels">
+                                <span>-5%</span>
+                                <span>0</span>
+                                <span>+5%</span>
+                            </div>
+                        </div>
+                        <span class="spread-value" id="spread-val-${tenantKey}">${spread >= 0 ? '+' : ''}${spread.toFixed(1)}%</span>
+                        <span class="implied-rate" id="implied-${tenantKey}">${impliedRate.toFixed(2)}%</span>
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <div class="factor-section">
+                <h3>Power Authority Multipliers</h3>
+                <div class="factor-subheader">US Power Grids</div>
+                ${['ERCOT', 'PJM', 'MISO', 'NYISO', 'SPP', 'CAISO'].map(grid => `
+                <div class="factor-row">
+                    <label>${grid}</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-pa-${grid}" value="${(factors.powerAuthorityMults[grid] || 1.0).toFixed(2)}" step="0.05" class="factor-input factor-pa" data-pa="${grid}" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                </div>
+                `).join('')}
+                <div class="factor-subheader">International</div>
+                ${['Canada', 'Norway', 'Sweden', 'UAE', 'Paraguay', 'Ethiopia', 'Bhutan'].map(country => `
+                <div class="factor-row">
+                    <label>${country}</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-pa-${country}" value="${(factors.powerAuthorityMults[country] || 0.8).toFixed(2)}" step="0.05" class="factor-input factor-pa" data-pa="${country}" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                </div>
+                `).join('')}
+            </div>
+
+            <div class="factor-section">
+                <h3>Size Multipliers</h3>
+                <div class="factor-row">
+                    <label>Small (&lt;${factors.sizeMults.small.threshold} MW)</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-size-small" value="${factors.sizeMults.small.mult.toFixed(2)}" step="0.05" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                </div>
+                <div class="factor-row">
+                    <label>Medium (${factors.sizeMults.small.threshold}-${factors.sizeMults.medium.threshold} MW)</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-size-medium" value="${factors.sizeMults.medium.mult.toFixed(2)}" step="0.05" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                </div>
+                <div class="factor-row">
+                    <label>Large (${factors.sizeMults.medium.threshold}-${factors.sizeMults.large.threshold} MW)</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-size-large" value="${factors.sizeMults.large.mult.toFixed(2)}" step="0.05" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                </div>
+                <div class="factor-row">
+                    <label>Mega (&gt;${factors.sizeMults.large.threshold} MW)</label>
+                    <div class="factor-input-wrapper">
+                        <input type="number" id="factor-size-mega" value="${factors.sizeMults.mega.mult.toFixed(2)}" step="0.05" class="factor-input" oninput="onFactorChange()">
+                        <span class="factor-suffix">x</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="factors-actions">
@@ -2339,6 +2549,22 @@ function renderFactors() {
             <button class="btn-secondary" onclick="resetFactors()">Reset to Defaults</button>
         </div>
     `;
+}
+
+// Handle tenant slider change with immediate visual feedback
+function onTenantSliderChange(slider) {
+    const tenant = slider.dataset.tenant;
+    const tenantKey = tenant.replace(/[^a-zA-Z0-9]/g, '_');
+    const spread = parseFloat(slider.value);
+
+    // Update display values immediately
+    const spreadEl = document.getElementById(`spread-val-${tenantKey}`);
+    const impliedEl = document.getElementById(`implied-${tenantKey}`);
+    if (spreadEl) spreadEl.textContent = `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}%`;
+    if (impliedEl) impliedEl.textContent = `${(factors.sofrRate + spread).toFixed(2)}%`;
+
+    // Trigger debounced factor update
+    onFactorChange();
 }
 
 // Called on any factor input change - debounces and auto-applies
@@ -2358,16 +2584,40 @@ function onFactorChange() {
 
 // Apply factors without showing alert
 function applyFactorsQuiet() {
+    // Market inputs
     factors.btcPrice = parseFloat(document.getElementById('factor-btc-price').value) || 100000;
+    factors.sofrRate = parseFloat(document.getElementById('factor-sofr').value) || 4.30;
+
+    // HPC valuation
     factors.baseCap = (parseFloat(document.getElementById('factor-base-cap').value) || 8) / 100;
     factors.baseNoiPerMw = parseFloat(document.getElementById('factor-base-noi').value) || 1.2;
     factors.defaultTerm = parseInt(document.getElementById('factor-default-term').value) || 15;
     factors.escalator = parseFloat(document.getElementById('factor-escalator').value) || 2.5;
+
+    // BTC Mining
     factors.btcMining.ebitdaPerMw = parseFloat(document.getElementById('factor-btc-ebitda').value) || 0.75;
     factors.btcMining.ebitdaMultiple = parseFloat(document.getElementById('factor-btc-multiple').value) || 6;
 
-    // Update header BTC price
-    document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
+    // Tenant spreads (per individual tenant)
+    document.querySelectorAll('.factor-tenant-spread').forEach(input => {
+        const tenant = input.dataset.tenant;
+        factors.tenantSpreads[tenant] = parseFloat(input.value) || 0;
+    });
+
+    // Power authority multipliers (combined grid + country)
+    document.querySelectorAll('.factor-pa').forEach(input => {
+        const pa = input.dataset.pa;
+        factors.powerAuthorityMults[pa] = parseFloat(input.value) || 1.0;
+    });
+
+    // Size multipliers
+    factors.sizeMults.small.mult = parseFloat(document.getElementById('factor-size-small').value) || 0.9;
+    factors.sizeMults.medium.mult = parseFloat(document.getElementById('factor-size-medium').value) || 1.0;
+    factors.sizeMults.large.mult = parseFloat(document.getElementById('factor-size-large').value) || 1.1;
+    factors.sizeMults.mega.mult = parseFloat(document.getElementById('factor-size-mega').value) || 1.2;
+
+    // Update header prices
+    updateHeaderPrices();
 
     // Save to localStorage
     localStorage.setItem('miner-app-v9-factors', JSON.stringify(factors));
@@ -2386,26 +2636,59 @@ function applyFactorsQuiet() {
 
 async function refreshBtcPrice() {
     try {
-        document.getElementById('live-btc-indicator').textContent = '...';
-        const btcResponse = await fetch('https://api.coindesk.com/v1/bpi/currentprice.json');
-        const btcData = await btcResponse.json();
-        factors.btcPrice = btcData.bpi.USD.rate_float;
-        document.getElementById('btc-price').textContent = `$${Math.round(factors.btcPrice).toLocaleString()}`;
-        document.getElementById('factor-btc-price').value = Math.round(factors.btcPrice);
-        document.getElementById('live-btc-indicator').textContent = '✓';
+        const indicator = document.getElementById('live-btc-indicator');
+        if (indicator) indicator.textContent = '...';
 
-        // Refresh valuations
-        renderDashboard();
-        renderProjectsHierarchy();
+        // Try CoinGecko first
+        const btcResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+        const btcData = await btcResponse.json();
+
+        if (btcData.bitcoin && btcData.bitcoin.usd) {
+            factors.btcPrice = btcData.bitcoin.usd;
+            updateHeaderPrices();
+            const priceInput = document.getElementById('factor-btc-price');
+            if (priceInput) priceInput.value = Math.round(factors.btcPrice);
+            if (indicator) indicator.textContent = '✓';
+
+            // Refresh valuations
+            renderDashboard();
+            renderProjectsHierarchy();
+        }
     } catch (e) {
         console.warn('Could not fetch BTC price:', e);
-        document.getElementById('live-btc-indicator').textContent = '✗';
+        const indicator = document.getElementById('live-btc-indicator');
+        if (indicator) indicator.textContent = '✗';
+    }
+}
+
+async function refreshSofrRate() {
+    try {
+        // Note: FRED API requires API key in production
+        // For demo, we'll use a reasonable current estimate
+        const response = await fetch('https://api.stlouisfed.org/fred/series/observations?series_id=SOFR&api_key=demo&file_type=json&limit=1&sort_order=desc');
+        const data = await response.json();
+
+        if (data.observations && data.observations[0]) {
+            factors.sofrRate = parseFloat(data.observations[0].value);
+            updateHeaderPrices();
+            const sofrInput = document.getElementById('factor-sofr');
+            if (sofrInput) sofrInput.value = factors.sofrRate.toFixed(2);
+
+            // Refresh valuations
+            renderDashboard();
+            renderProjectsHierarchy();
+            // Re-render factors to update the spread notes
+            renderFactors();
+        }
+    } catch (e) {
+        console.warn('Could not fetch SOFR rate:', e);
     }
 }
 
 function resetFactors() {
     factors = {
         btcPrice: 100000,
+        sofrRate: 4.30,
         baseCap: 0.08,
         baseNoiPerMw: 1.2,
         defaultTerm: 15,
@@ -2414,6 +2697,33 @@ function resetFactors() {
         btcMining: {
             ebitdaPerMw: 0.75,
             ebitdaMultiple: 6
+        },
+        powerAuthorityMults: {
+            'ERCOT': 1.05, 'PJM': 1.0, 'MISO': 0.95, 'NYISO': 0.95,
+            'SPP': 0.9, 'CAISO': 0.9,
+            'Canada': 0.95, 'Norway': 0.9, 'Sweden': 0.9,
+            'UAE': 0.85, 'Paraguay': 0.7, 'Ethiopia': 0.6, 'Bhutan': 0.65
+        },
+        sizeMults: {
+            'small': { threshold: 50, mult: 0.9 },
+            'medium': { threshold: 200, mult: 1.0 },
+            'large': { threshold: 500, mult: 1.1 },
+            'mega': { threshold: Infinity, mult: 1.2 }
+        },
+        tenantSpreads: {
+            'Microsoft': -1.0,
+            'Amazon': -1.0,
+            'AWS': -1.0,
+            'Google': -1.0,
+            'Meta': -1.0,
+            'Oracle': -1.0,
+            'CoreWeave': 0,
+            'Anthropic': 0,
+            'OpenAI': 0,
+            'Fluidstack': 1.0,
+            'Core42': 1.0,
+            'G42': 1.0,
+            'Self': 3.0
         }
     };
 
@@ -2423,7 +2733,7 @@ function resetFactors() {
     // Re-render factors form
     renderFactors();
 
-    // Update header and re-fetch live BTC price
+    // Update header and re-fetch live prices
     refreshBtcPrice();
 }
 
@@ -2432,9 +2742,27 @@ function loadFactors() {
         const saved = localStorage.getItem('miner-app-v9-factors');
         if (saved) {
             const parsed = JSON.parse(saved);
-            factors = { ...factors, ...parsed };
+            // Merge top-level simple values
+            factors.btcPrice = parsed.btcPrice ?? factors.btcPrice;
+            factors.sofrRate = parsed.sofrRate ?? factors.sofrRate;
+            factors.baseCap = parsed.baseCap ?? factors.baseCap;
+            factors.baseNoiPerMw = parsed.baseNoiPerMw ?? factors.baseNoiPerMw;
+            factors.defaultTerm = parsed.defaultTerm ?? factors.defaultTerm;
+            factors.escalator = parsed.escalator ?? factors.escalator;
+            factors.fidoodleDefault = parsed.fidoodleDefault ?? factors.fidoodleDefault;
+
+            // Merge nested objects
             if (parsed.btcMining) {
                 factors.btcMining = { ...factors.btcMining, ...parsed.btcMining };
+            }
+            if (parsed.powerAuthorityMults) {
+                factors.powerAuthorityMults = { ...factors.powerAuthorityMults, ...parsed.powerAuthorityMults };
+            }
+            if (parsed.sizeMults) {
+                factors.sizeMults = { ...factors.sizeMults, ...parsed.sizeMults };
+            }
+            if (parsed.tenantSpreads) {
+                factors.tenantSpreads = { ...factors.tenantSpreads, ...parsed.tenantSpreads };
             }
         }
     } catch (e) {

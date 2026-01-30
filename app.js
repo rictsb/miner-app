@@ -579,6 +579,9 @@ function isHyperscaler(tenant) {
 // DASHBOARD RENDERING
 // =====================================================
 
+// Track selected company for persistent panel
+let selectedTicker = null;
+
 function renderDashboard() {
     const tbody = document.getElementById('dashboard-tbody');
     if (!tbody) return;
@@ -594,9 +597,9 @@ function renderDashboard() {
         switch (dashboardSortColumn) {
             case 'ticker': aVal = a.ticker; bVal = b.ticker; break;
             case 'price': aVal = a.stockPrice; bVal = b.stockPrice; break;
-            case 'hodlValue': aVal = a.hodlValue; bVal = b.hodlValue; break;
-            case 'cash': aVal = a.cash; bVal = b.cash; break;
-            case 'debt': aVal = a.debt; bVal = b.debt; break;
+            case 'netLiquid': aVal = a.hodlValue + a.cash - a.debt; bVal = b.hodlValue + b.cash - b.debt; break;
+            case 'miningMw': aVal = a.miningMw; bVal = b.miningMw; break;
+            case 'hpcMw': aVal = a.hpcMw + a.pipelineMw; bVal = b.hpcMw + b.pipelineMw; break;
             case 'miningEv': aVal = a.miningEV; bVal = b.miningEV; break;
             case 'hpcEvContracted': aVal = a.hpcContractedEV; bVal = b.hpcContractedEV; break;
             case 'hpcEvPipeline': aVal = a.pipelineEV; bVal = b.pipelineEV; break;
@@ -620,8 +623,11 @@ function renderDashboard() {
         totalPipeline += v.pipelineEV + v.conversionEV;
         totalEquity += v.equityValue;
 
+        // Calculate Net Liquid Assets
+        const netLiquid = v.hodlValue + v.cash - v.debt;
+
         const tr = document.createElement('tr');
-        tr.className = 'dashboard-row';
+        tr.className = `dashboard-row ${selectedTicker === v.ticker ? 'selected' : ''}`;
         tr.dataset.ticker = v.ticker;
 
         tr.innerHTML = `
@@ -629,22 +635,41 @@ function renderDashboard() {
                 <span class="ticker clickable-ticker" data-ticker="${v.ticker}">${v.ticker}</span>
             </td>
             <td class="${v.priceChange >= 0 ? 'positive' : 'negative'}">$${v.stockPrice > 0 ? v.stockPrice.toFixed(2) : '--'}</td>
-            <td>${Math.round(v.hodlValue).toLocaleString()}</td>
-            <td>${Math.round(v.cash).toLocaleString()}</td>
-            <td>${Math.round(v.debt).toLocaleString()}</td>
-            <td>${Math.round(v.miningMw).toLocaleString()}</td>
-            <td>${Math.round(v.hpcMw + v.pipelineMw).toLocaleString()}</td>
-            <td>${Math.round(v.miningEV).toLocaleString()}</td>
-            <td class="positive">${Math.round(v.hpcContractedEV).toLocaleString()}</td>
-            <td class="neutral">${Math.round(v.pipelineEV + v.conversionEV).toLocaleString()}</td>
+            <td class="net-liquid-cell">
+                <span class="${netLiquid >= 0 ? 'positive' : 'negative'}">${Math.round(netLiquid).toLocaleString()}</span>
+                <div class="net-liquid-tooltip">
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">HODL Value:</span>
+                        <span class="tooltip-value hodl">$${Math.round(v.hodlValue).toLocaleString()}M</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Cash:</span>
+                        <span class="tooltip-value cash">$${Math.round(v.cash).toLocaleString()}M</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Debt:</span>
+                        <span class="tooltip-value debt">($${Math.round(v.debt).toLocaleString()}M)</span>
+                    </div>
+                </div>
+            </td>
+            <td class="col-mw">${Math.round(v.miningMw).toLocaleString()}</td>
+            <td class="col-mw">${Math.round(v.hpcMw + v.pipelineMw).toLocaleString()}</td>
+            <td class="col-ev">${Math.round(v.miningEV).toLocaleString()}</td>
+            <td class="col-ev">${Math.round(v.hpcContractedEV).toLocaleString()}</td>
+            <td class="col-ev">${Math.round(v.pipelineEV + v.conversionEV).toLocaleString()}</td>
             <td class="positive">$${v.fairValue.toFixed(2)}</td>
             <td class="${v.upside >= 0 ? 'positive' : 'negative'}">${v.stockPrice > 0 ? (v.upside >= 0 ? '+' : '') + v.upside.toFixed(0) + '%' : '--'}</td>
         `;
 
-        // Click on ticker to open company panel
+        // Click on ticker to show company in persistent panel
         tr.querySelector('.clickable-ticker').addEventListener('click', (e) => {
             e.stopPropagation();
-            openCompanyPanel(v.ticker);
+            selectCompany(v.ticker);
+        });
+
+        // Also allow clicking anywhere on the row
+        tr.addEventListener('click', () => {
+            selectCompany(v.ticker);
         });
 
         tbody.appendChild(tr);
@@ -655,6 +680,163 @@ function renderDashboard() {
     document.getElementById('total-mining-ev').textContent = '$' + Math.round(totalMiningEV).toLocaleString() + 'M';
     document.getElementById('total-hpc-contracted').textContent = '$' + Math.round(totalHpcContracted).toLocaleString() + 'M';
     document.getElementById('total-pipeline').textContent = '$' + Math.round(totalPipeline).toLocaleString() + 'M';
+
+    // If a company was previously selected, update the panel
+    if (selectedTicker) {
+        updatePersistentPanel(selectedTicker);
+    }
+}
+
+/**
+ * Select a company and show in persistent panel
+ */
+function selectCompany(ticker) {
+    selectedTicker = ticker;
+
+    // Update row highlighting
+    document.querySelectorAll('.dashboard-row').forEach(row => {
+        row.classList.toggle('selected', row.dataset.ticker === ticker);
+    });
+
+    // Update the persistent panel
+    updatePersistentPanel(ticker);
+}
+
+/**
+ * Update the persistent company panel
+ */
+function updatePersistentPanel(ticker) {
+    const val = calculateCompanyValuation(ticker);
+    if (!val) return;
+
+    const company = COMPANY_MAP[ticker];
+    const sites = SITES_BY_COMPANY[ticker] || [];
+
+    // Hide placeholder, show content
+    document.getElementById('panel-placeholder').style.display = 'none';
+    const panelContent = document.getElementById('panel-content');
+    panelContent.style.display = 'block';
+
+    // Build panel HTML
+    let html = `
+        <div class="panel-header">
+            <span class="panel-ticker">${ticker}</span>
+            <span class="panel-name">${company?.name || ticker}</span>
+        </div>
+
+        <div class="panel-price-section">
+            <div class="panel-price-row">
+                <div class="panel-price-item">
+                    <div class="panel-price-label">Price</div>
+                    <div class="panel-price-value">${val.stockPrice > 0 ? '$' + val.stockPrice.toFixed(2) : '--'}</div>
+                </div>
+                <div class="panel-price-arrow">→</div>
+                <div class="panel-price-item">
+                    <div class="panel-price-label">Fair Value</div>
+                    <div class="panel-price-value fair">$${val.fairValue.toFixed(2)}</div>
+                </div>
+                <div class="panel-upside ${val.upside < 0 ? 'negative' : ''}">
+                    ${val.stockPrice > 0 ? (val.upside >= 0 ? '+' : '') + val.upside.toFixed(0) + '%' : '--'}
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-title">Balance Sheet</div>
+            <div class="panel-grid">
+                <div class="panel-stat">
+                    <div class="panel-stat-value hodl">${(company?.btc_holdings || 0).toLocaleString()}</div>
+                    <div class="panel-stat-label">BTC Holdings</div>
+                </div>
+                <div class="panel-stat">
+                    <div class="panel-stat-value hodl">$${Math.round(val.hodlValue).toLocaleString()}M</div>
+                    <div class="panel-stat-label">HODL Value</div>
+                </div>
+                <div class="panel-stat">
+                    <div class="panel-stat-value cash">$${Math.round(val.cash).toLocaleString()}M</div>
+                    <div class="panel-stat-label">Cash</div>
+                </div>
+                <div class="panel-stat">
+                    <div class="panel-stat-value debt">$${Math.round(val.debt).toLocaleString()}M</div>
+                    <div class="panel-stat-label">Debt</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-title">Capacity (MW)</div>
+            <div class="panel-grid">
+                <div class="panel-stat">
+                    <div class="panel-stat-value mw">${Math.round(val.miningMw).toLocaleString()}</div>
+                    <div class="panel-stat-label">Mining</div>
+                </div>
+                <div class="panel-stat">
+                    <div class="panel-stat-value mw">${Math.round(val.hpcMw).toLocaleString()}</div>
+                    <div class="panel-stat-label">HPC Contracted</div>
+                </div>
+                <div class="panel-stat">
+                    <div class="panel-stat-value mw">${Math.round(val.pipelineMw).toLocaleString()}</div>
+                    <div class="panel-stat-label">Pipeline</div>
+                </div>
+                <div class="panel-stat">
+                    <div class="panel-stat-value mw">${Math.round(val.totalMw).toLocaleString()}</div>
+                    <div class="panel-stat-label">Total</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-title">Enterprise Value ($M)</div>
+            <div class="panel-ev-breakdown">
+                <div class="panel-ev-row">
+                    <span class="panel-ev-label">Mining EV</span>
+                    <span class="panel-ev-value">$${Math.round(val.miningEV).toLocaleString()}</span>
+                </div>
+                <div class="panel-ev-row">
+                    <span class="panel-ev-label">HPC Contracted</span>
+                    <span class="panel-ev-value">$${Math.round(val.hpcContractedEV).toLocaleString()}</span>
+                </div>
+                <div class="panel-ev-row">
+                    <span class="panel-ev-label">Pipeline</span>
+                    <span class="panel-ev-value">$${Math.round(val.pipelineEV).toLocaleString()}</span>
+                </div>
+                <div class="panel-ev-row">
+                    <span class="panel-ev-label">Conversion Options</span>
+                    <span class="panel-ev-value">$${Math.round(val.conversionEV).toLocaleString()}</span>
+                </div>
+                <div class="panel-ev-row total">
+                    <span class="panel-ev-label">Total Operating EV</span>
+                    <span class="panel-ev-value">$${Math.round(val.operatingEV).toLocaleString()}</span>
+                </div>
+                <div class="panel-ev-row total equity">
+                    <span class="panel-ev-label">Equity Value</span>
+                    <span class="panel-ev-value">$${Math.round(val.equityValue).toLocaleString()}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-title">Sites (${sites.length})</div>
+            <div class="panel-sites-list">
+                ${sites.map(site => {
+                    const siteVal = calculateSiteValue(site);
+                    return `
+                        <div class="panel-site-item">
+                            <span class="panel-site-name">${site.name}</span>
+                            <span class="panel-site-mw">${Math.round(site.power?.total_site_capacity_mw || 0)} MW</span>
+                            <span class="panel-site-value">$${Math.round(siteVal.totalValue)}M</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+
+        <div class="panel-source">
+            Source: <a href="${company?.source?.url || '#'}" target="_blank">${company?.source?.type || 'Company Records'}</a>
+        </div>
+    `;
+
+    panelContent.innerHTML = html;
 }
 
 // =====================================================
@@ -943,10 +1125,16 @@ function formatUseType(useType) {
 }
 
 // =====================================================
-// COMPANY PANEL
+// COMPANY PANEL (Slide-out - for non-dashboard views)
 // =====================================================
 
 function openCompanyPanel(ticker) {
+    // If on dashboard, use the persistent panel instead
+    if (currentTab === 'dashboard') {
+        selectCompany(ticker);
+        return;
+    }
+
     const val = calculateCompanyValuation(ticker);
     if (!val) return;
 
